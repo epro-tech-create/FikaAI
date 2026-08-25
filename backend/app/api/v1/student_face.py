@@ -66,6 +66,7 @@ async def create_liveness_challenge(
     data = await issue_challenge(db, student=student, session_id=payload.session_id)
     return ChallengeResponse(
         challenge_token=data["challengeToken"],
+        challenge_type=data["challengeType"],
         instruction=data["instruction"],
         expires_at=data["expiresAt"],
     )

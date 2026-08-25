@@ -28,8 +28,8 @@ MIN_SAMPLES = 5
 MAX_SAMPLES = 10
 
 
-def decode_sample(encoded: str) -> bytes:
-    """Accept raw base64 or data URLs; enforce size + image magic bytes."""
+def decode_image(encoded: str, *, max_bytes: int, label: str) -> bytes:
+    """Accept raw base64 or data URLs and enforce the supplied decoded-byte limit."""
     import base64
     import binascii
 
@@ -39,14 +39,22 @@ def decode_sample(encoded: str) -> bytes:
     try:
         blob = base64.b64decode(payload, validate=False)
     except (binascii.Error, ValueError) as exc:
-        raise ApiError(ErrorCode.UNSUPPORTED_MEDIA_TYPE, "Enrolment sample is not valid base64.", 422) from exc
+        raise ApiError(ErrorCode.UNSUPPORTED_MEDIA_TYPE, f"{label} is not valid base64.", 422) from exc
 
-    if len(blob) > settings.max_sample_bytes:
+    if len(blob) > max_bytes:
         raise ApiError(ErrorCode.FILE_TOO_LARGE,
-                       f"Sample {len(blob)} exceeds the size limit of {settings.max_sample_bytes} bytes.", 413)
+                       f"{label} {len(blob)} exceeds the size limit of {max_bytes} bytes.", 413)
     if not (blob[:3] == b"\xff\xd8\xff" or blob[:8] == b"\x89PNG\r\n\x1a\n"):
-        raise ApiError(ErrorCode.UNSUPPORTED_MEDIA_TYPE, "Samples must be JPEG or PNG images.", 415)
+        raise ApiError(ErrorCode.UNSUPPORTED_MEDIA_TYPE, f"{label} must be a JPEG or PNG image.", 415)
     return blob
+
+
+def decode_sample(encoded: str) -> bytes:
+    return decode_image(encoded, max_bytes=settings.max_sample_bytes, label="Sample")
+
+
+def decode_frame(encoded: str) -> bytes:
+    return decode_image(encoded, max_bytes=settings.max_frame_bytes, label="Frame")
 
 
 def _consistency(embeddings: list[np.ndarray]) -> float:

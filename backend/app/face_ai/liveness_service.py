@@ -51,6 +51,7 @@ class LivenessResult:
     best_frame_index: int = 0
     failure_reason: ErrorCode | None = None
     metrics: dict = field(default_factory=dict)
+    candidate_frame_indices: tuple[int, ...] = ()
 
 
 class LivenessAnalyzer(ABC):
@@ -163,12 +164,23 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
                                   {**metrics, "reason": "Face missing at end of sequence"})
 
         from app.face_ai.quality import pick_sharpest
-        sharp_idx = pick_sharpest([f for f, ok in zip(frames, faces_ok) if ok])
 
-        challenge_result = self._evaluate_challenge(signals, challenge)
+        valid_indices = [index for index, ok in enumerate(faces_ok) if ok]
+        filtered_sharp_idx = pick_sharpest([frames[index] for index in valid_indices])
+        sharp_idx = valid_indices[filtered_sharp_idx]
+        near_frontal_indices = tuple(
+            index for index in valid_indices if abs(signals[index].yaw) <= LOOK_STRAIGHT_YAW
+        )
+
+        # A missing face produces zero-valued signals; exclude those frames so
+        # they cannot create blink valleys or neutral-yaw challenge evidence.
+        valid_signals = [signals[index] for index in valid_indices]
+        challenge_result = self._evaluate_challenge(valid_signals, challenge)
         if not challenge_result.passed:
-            return LivenessResult(False, sharp_idx, ErrorCode.LIVENESS_FAILED, {**metrics, **challenge_result.metrics})
-        return LivenessResult(True, sharp_idx, None, {**metrics, **challenge_result.metrics})
+            return LivenessResult(False, sharp_idx, ErrorCode.LIVENESS_FAILED,
+                                  {**metrics, **challenge_result.metrics}, near_frontal_indices)
+        return LivenessResult(True, sharp_idx, None, {**metrics, **challenge_result.metrics},
+                              near_frontal_indices)
 
     def _evaluate_challenge(self, signals: list[_FrameSignals], challenge: LivenessChallengeType) -> LivenessResult:
         blinks = [s.blink for s in signals]

@@ -163,6 +163,7 @@ class ChallengeRequest(CamelModel):
 
 class ChallengeResponse(CamelModel):
     challenge_token: uuid.UUID
+    challenge_type: str
     instruction: str
     expires_at: datetime
 

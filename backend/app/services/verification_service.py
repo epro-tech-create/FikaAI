@@ -34,14 +34,24 @@ from app.models.entities import (
     Student,
 )
 from app.services.audit_service import audit_detached
-from app.services.enrollment_service import decode_sample, load_active_enrollment
+from app.services.enrollment_service import decode_frame, load_active_enrollment
 from app.services.session_service import get_active_assigned_session_or_error
 
 logger = logging.getLogger("fikaai.verify")
 
+MIN_MATCH_FRAMES = 3
+MAX_MATCH_FRAMES = 5
+
 
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def aggregate_match_scores(scores: list[float]) -> float:
+    """Median resists one anomalously good frame and requires majority support."""
+    if len(scores) < MIN_MATCH_FRAMES:
+        raise ValueError(f"At least {MIN_MATCH_FRAMES} scores are required")
+    return float(np.median(np.asarray(scores, dtype=np.float32)))
 
 
 async def issue_challenge(
@@ -128,7 +138,7 @@ async def verify_face(
         raise ApiError(ErrorCode.CHALLENGE_EXPIRED,
                        "The liveness challenge expired. Start a new face scan.", 410)
 
-    blobs = [decode_sample(f) for f in frames_b64]
+    blobs = [decode_frame(f) for f in frames_b64]
 
     import cv2
 
@@ -167,13 +177,49 @@ async def verify_face(
         message = messages.get(reason, "Liveness check failed. Please perform the requested action.")
         raise ApiError(reason, message, 422)
 
-    # ---- 1:1 face match against THIS student's enrolled embedding ----
-    from app.face_ai.quality import pick_sharpest
+    # ---- quality-gated, multi-frame 1:1 match against THIS student ----
+    from app.face_ai.quality import assess_quality, select_temporally_distributed
 
-    best_frame = decoded[pick_sharpest(decoded)]
+    quality_failures = []
+    valid_indices = []
+    for index in result.candidate_frame_indices:
+        quality = assess_quality(decoded[index])
+        if quality.ok:
+            valid_indices.append(index)
+        else:
+            quality_failures.append(quality.reason_code)
+
+    if len(valid_indices) < MIN_MATCH_FRAMES:
+        reason = (
+            ErrorCode.TOO_DARK
+            if quality_failures.count("TOO_DARK") >= quality_failures.count("BLURRED_IMAGE")
+            else ErrorCode.BLURRED_IMAGE
+        )
+        if not quality_failures:
+            reason = ErrorCode.LIVENESS_NOT_COMPLETED
+        messages = {
+            ErrorCode.TOO_DARK: "The scan is too dark or overexposed. Move to even, front-facing light and retry.",
+            ErrorCode.BLURRED_IMAGE: "The scan is blurred. Hold the camera steady and retry.",
+            ErrorCode.LIVENESS_NOT_COMPLETED: "Keep your face centered and looking toward the camera throughout the scan.",
+        }
+        row.completed_at = now
+        row.verified = False
+        row.failure_reason = reason.value
+        await db.commit()
+        raise ApiError(reason, messages[reason], 422,
+                       {"validFrameCount": len(valid_indices), "requiredFrameCount": MIN_MATCH_FRAMES})
+
+    candidate_indices = select_temporally_distributed(valid_indices, MAX_MATCH_FRAMES)
     try:
-        live_embedding = await run_in_threadpool(recognizer.detect_and_embed, best_frame)
         enrollment, enrolled_embedding = await load_active_enrollment(db, student.id, recognizer.provider_name)
+        live_embeddings = []
+        for index in candidate_indices:
+            try:
+                live_embeddings.append(await run_in_threadpool(recognizer.detect_and_embed, decoded[index]))
+            except ApiError as exc:
+                if exc.code == ErrorCode.NO_FACE:
+                    continue
+                raise
     except ApiError as exc:
         row.completed_at = now
         row.verified = False
@@ -181,7 +227,17 @@ async def verify_face(
         await db.commit()
         raise
 
-    similarity = cosine_similarity(live_embedding, enrolled_embedding)
+    if len(live_embeddings) < MIN_MATCH_FRAMES:
+        row.completed_at = now
+        row.verified = False
+        row.failure_reason = ErrorCode.NO_FACE.value
+        await db.commit()
+        raise ApiError(ErrorCode.NO_FACE,
+                       "A face was not consistently detectable. Center your face and retry.", 422,
+                       {"validFrameCount": len(live_embeddings), "requiredFrameCount": MIN_MATCH_FRAMES})
+
+    scores = [cosine_similarity(embedding, enrolled_embedding) for embedding in live_embeddings]
+    similarity = aggregate_match_scores(scores)
     row.similarity_score = round(float(similarity), 4)
     row.face_enrollment_id = enrollment.id
     threshold = settings.face_match_threshold
