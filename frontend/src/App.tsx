@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { api, message } from './services/api'
 import AttendancePage from './pages/student/AttendancePage'
 import FaceEnrollmentPage from './pages/student/FaceEnrollmentPage'
+import LandingPage from './pages/LandingPage'
 import PortalLayout from './components/PortalLayout'
 import DashboardPage from './pages/portal/DashboardPage'
 import DataPage from './pages/portal/DataPage'
@@ -11,7 +12,7 @@ import InstructorPage from './pages/portal/InstructorPage'
 import SessionPage from './pages/portal/SessionPage'
 import { adminPages, instructorPages } from './pages/portal/config'
 import { clearAuthentication, getStoredRole, parseRole, storeAuthentication } from './lib/auth'
-import { applicationConfig, currentApplication, portalTitleForRole, type Application } from './lib/application'
+import { applicationConfig, currentApplication, instructorLoginUrl, portalTitleForRole, type Application } from './lib/application'
 
 function Login({ application }: { application: Application }) {
   const navigate = useNavigate()
@@ -102,6 +103,7 @@ export default function App({ application }: { application?: Application }) {
   return <Routes>
     <Route path="/login" element={<Login application={app}/>}/>
     {app === 'student' && <>
+      <Route path="/" element={<LandingPage instructorLoginUrl={instructorLoginUrl()}/>}/>
       <Route path="/signup" element={<Signup/>}/>
       <Route path="/student/attendance" element={<Guard application={app}><AttendancePage/></Guard>}/>
       <Route path="/student/face-enrollment" element={<Guard application={app}><FaceEnrollmentPage/></Guard>}/>

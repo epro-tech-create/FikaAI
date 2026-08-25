@@ -113,7 +113,7 @@ export default function FaceEnrollmentPage() {
   function reset() { runId.current += 1; monitor.stop(); cam.stop(); setProgress(0); setInstruction(''); setError(''); setStage('intro') }
 
   return <main className="app">
-    <header><div className="brand">Fika<span>AI</span></div><nav><Link to="/student/attendance">Attendance</Link><Link to="/student/face-enrollment">Face enrolment</Link><button className="ghost" onClick={() => { clearAuthentication(); window.location.href = '/login' }}>Sign out</button></nav></header>
+    <header className="student-header"><Link className="brand" to="/">Fika<span>AI</span></Link><nav><Link to="/student/attendance">Attendance</Link><Link to="/student/face-enrollment">Face enrolment</Link><button className="ghost" onClick={() => { clearAuthentication(); window.location.href = '/login' }}>Sign out</button></nav></header>
     <section className="hero compact-hero"><p className="eyebrow">BIOMETRIC IDENTITY SETUP</p><h1>Create your secure Face ID</h1><p className="date">Five verified captures across front, left, right and downward angles generate one encrypted facial profile.</p></section>
     {stage === 'intro' && <label className="consent consent-dark"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)}/><span><b>Biometric consent</b>I consent to encrypted face-embedding storage for attendance verification.</span></label>}
     <FaceScanFlow

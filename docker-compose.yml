@@ -45,6 +45,7 @@ services:
     environment:
       VITE_API_BASE_URL: /api
       VITE_API_PROXY_TARGET: http://backend:8000
+      VITE_INSTRUCTOR_APP_URL: http://localhost:5175
     ports:
       - "5173:5173"
     depends_on:

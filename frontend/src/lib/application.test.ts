@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applicationConfig, parseApplication, resolveApplication, portalTitleForRole } from './application'
+import { applicationConfig, externalLoginUrl, parseApplication, resolveApplication, portalTitleForRole } from './application'
 
 describe('application configuration', () => {
   it('parses valid applications case-insensitively and rejects unknown ones', () => {
@@ -21,5 +21,11 @@ describe('application configuration', () => {
     expect(portalTitleForRole('student')).toBe('Student App')
     expect(portalTitleForRole('admin')).toBe('Administrator Console')
     expect(portalTitleForRole('instructor')).toBe('Instructor Portal')
+  })
+
+  it('normalizes cross-application login URLs', () => {
+    expect(externalLoginUrl('https://instructor.example.com/base/?from=home', 'https://fallback.example.com')).toBe('https://instructor.example.com/login')
+    expect(externalLoginUrl('', 'http://localhost:5175')).toBe('http://localhost:5175/login')
+    expect(() => externalLoginUrl('javascript:alert(1)', 'https://fallback.example.com')).toThrow('HTTP or HTTPS')
   })
 })

@@ -34,3 +34,18 @@ export function applicationConfig(application: Application): ApplicationConfig {
 export function portalTitleForRole(role: Role): string {
   return APPLICATIONS[role].title
 }
+
+export function externalLoginUrl(value: unknown, fallbackOrigin: string): string {
+  const raw = typeof value === 'string' && value.trim() ? value.trim() : fallbackOrigin
+  const url = new URL(raw)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Application URL must use HTTP or HTTPS.')
+  url.pathname = '/login'
+  url.search = ''
+  url.hash = ''
+  return url.toString()
+}
+
+export function instructorLoginUrl(): string {
+  const fallback = import.meta.env.DEV ? 'http://localhost:5175' : 'https://fikaai-instructor.vercel.app'
+  return externalLoginUrl(import.meta.env.VITE_INSTRUCTOR_APP_URL, fallback)
+}

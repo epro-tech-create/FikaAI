@@ -75,6 +75,14 @@ For every project set (Production + Preview):
 VITE_API_BASE_URL=https://<service>.onrender.com/api
 ```
 
+For the student project also set:
+
+```text
+VITE_INSTRUCTOR_APP_URL=https://<instructor>.vercel.app
+```
+
+The student project serves the public landing page at `/`; its instructor sign-in button uses this URL.
+
 All Vite variables are embedded in the browser bundle — never put backend secrets in `VITE_*`.
 
 `frontend/vercel.json` adds the SPA rewrite so deep links like `/admin/dashboard` survive refresh.
