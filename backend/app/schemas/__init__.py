@@ -64,6 +64,36 @@ class StudentRegisterRequest(CamelModel):
         return value
 
 
+class InstructorCreateRequest(CamelModel):
+    full_name: str = Field(min_length=3, max_length=200)
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=8, max_length=200)
+
+    @field_validator("full_name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        return " ".join(value.strip().split())
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if "@" not in normalized or "." not in normalized.rsplit("@", 1)[-1]:
+            raise ValueError("Enter a valid email address.")
+        return normalized
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, value: str) -> str:
+        if not any(char.isupper() for char in value):
+            raise ValueError("Password must contain an uppercase letter.")
+        if not any(char.islower() for char in value):
+            raise ValueError("Password must contain a lowercase letter.")
+        if not any(char.isdigit() for char in value):
+            raise ValueError("Password must contain a number.")
+        return value
+
+
 class TokenPairResponse(CamelModel):
     access_token: str
     refresh_token: str

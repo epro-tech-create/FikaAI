@@ -12,7 +12,8 @@ from app.schemas import SessionCreateRequest
 
 
 def test_management_portal_routes_are_mounted():
-    paths = set(app.openapi()["paths"])
+    openapi_paths = app.openapi()["paths"]
+    paths = set(openapi_paths)
     assert {
         "/api/admin/dashboard",
         "/api/admin/students",
@@ -30,6 +31,7 @@ def test_management_portal_routes_are_mounted():
         "/api/instructor/attendance",
         "/api/instructor/reports/attendance",
     } <= paths
+    assert "post" in openapi_paths["/api/admin/instructors"]
 
 
 @pytest.mark.asyncio

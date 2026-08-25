@@ -23,3 +23,6 @@ backend/models_data/
 .idea/
 .vscode/
 .DS_Store
+.vercel/
+.env.local
+.neon

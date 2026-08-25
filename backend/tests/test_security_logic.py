@@ -4,7 +4,7 @@ from pydantic import ValidationError
 
 from app.face_ai.recognition_service import cosine_similarity
 from app.services.location_service import haversine_meters
-from app.schemas import StudentRegisterRequest
+from app.schemas import InstructorCreateRequest, StudentRegisterRequest
 
 
 def test_haversine_same_point_is_zero():
@@ -43,5 +43,24 @@ def test_student_registration_rejects_weak_password():
             fullName="New Student",
             email="student@example.com",
             registrationNumber="REG-2026-031",
+            password="alllowercase",
+        )
+
+
+def test_instructor_creation_normalizes_identity_fields():
+    request = InstructorCreateRequest(
+        fullName="  New   Instructor  ",
+        email="INSTRUCTOR@EXAMPLE.COM",
+        password="SecurePass9",
+    )
+    assert request.full_name == "New Instructor"
+    assert request.email == "instructor@example.com"
+
+
+def test_instructor_creation_rejects_weak_password():
+    with pytest.raises(ValidationError):
+        InstructorCreateRequest(
+            fullName="New Instructor",
+            email="instructor@example.com",
             password="alllowercase",
         )

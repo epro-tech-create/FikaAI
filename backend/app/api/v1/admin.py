@@ -5,9 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.core.deps import get_db, require_roles
 from app.core.errors import ApiError, ErrorCode
+from app.core.security import hash_password
 from app.models.entities import (
     AttendanceRecord,
     AttendanceSession,
@@ -20,8 +22,9 @@ from app.models.entities import (
     SessionStatus,
     Student,
     User,
+    UserRole,
 )
-from app.schemas import SessionCreateRequest, SessionResponse
+from app.schemas import InstructorCreateRequest, SessionCreateRequest, SessionResponse
 
 router = APIRouter(
     prefix="/admin",
@@ -106,6 +109,52 @@ async def list_instructors(db: AsyncSession = Depends(get_db)) -> list[dict]:
         }
         for instructor in instructors
     ]
+
+
+@router.post("/instructors", response_model=None, status_code=201)
+async def create_instructor(
+    payload: InstructorCreateRequest,
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    if (await db.execute(select(User.id).where(User.email == payload.email))).scalar_one_or_none():
+        raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account already uses this email address.", 409)
+
+    user = User(
+        email=payload.email,
+        full_name=payload.full_name,
+        password_hash=hash_password(payload.password),
+        role=UserRole.INSTRUCTOR,
+        is_active=True,
+    )
+    db.add(user)
+    try:
+        await db.flush()
+        instructor = Instructor(user_id=user.id, user=user)
+        db.add(instructor)
+        await db.flush()
+        db.add(AuditLog(
+            actor_user_id=admin.id,
+            action="instructor_created",
+            entity_type="instructor",
+            entity_id=instructor.id,
+            details={"email": user.email},
+            ip_address=request.client.host if request.client else None,
+        ))
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account already uses this email address.", 409) from exc
+
+    return {
+        "id": instructor.id,
+        "userId": user.id,
+        "fullName": user.full_name,
+        "email": user.email,
+        "isActive": user.is_active,
+        "createdAt": instructor.created_at,
+    }
 
 
 @router.get("/courses", response_model=None)

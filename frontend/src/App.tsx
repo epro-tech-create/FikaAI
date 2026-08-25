@@ -7,6 +7,7 @@ import PortalLayout from './components/PortalLayout'
 import DashboardPage from './pages/portal/DashboardPage'
 import DataPage from './pages/portal/DataPage'
 import InfoPage from './pages/portal/InfoPage'
+import InstructorPage from './pages/portal/InstructorPage'
 import SessionPage from './pages/portal/SessionPage'
 import { adminPages, instructorPages } from './pages/portal/config'
 import { clearAuthentication, getStoredRole, parseRole, storeAuthentication } from './lib/auth'
@@ -110,7 +111,8 @@ export default function App({ application }: { application?: Application }) {
         <Route index element={<Navigate to="dashboard" replace/>}/>
         <Route path="dashboard" element={<DashboardPage role="admin"/>}/>
         <Route path="attendance-sessions" element={<SessionPage role="admin"/>}/>
-        {Object.entries(adminPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
+        <Route path="instructors" element={<InstructorPage/>}/>
+        {Object.entries(adminPages).filter(([path]) => path !== 'instructors').map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
         <Route path="system-settings" element={<InfoPage title="System Settings"/>}/>
         <Route path="profile" element={<InfoPage title="Profile"/>}/>
       </Route>
