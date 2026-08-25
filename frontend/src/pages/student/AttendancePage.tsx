@@ -4,11 +4,10 @@ import FaceScanFlow, { type ScanStage } from '../../components/FaceScanFlow'
 import { api, message } from '../../services/api'
 import { useCameraFrames } from '../../hooks/useCameraFrames'
 import { useFaceMonitor } from '../../hooks/useFaceMonitor'
+import { isContinuousReading, isFreshReading, parseChallengeType, type ChallengeType } from '../../lib/captureQuality'
 
 type Session = { sessionId: string }
 type Summary = { fullName:string; registrationNumber:string; courseTitle:string; classGroupName:string; permanentLocationName:string|null; permanentLocationAddress:string|null }
-type ChallengeType = 'BLINK_TWICE' | 'TURN_LEFT' | 'TURN_RIGHT' | 'SMILE' | 'LOOK_STRAIGHT'
-
 const sleep = (milliseconds:number) => new Promise(resolve => window.setTimeout(resolve,milliseconds))
 
 export default function AttendancePage() {
@@ -45,14 +44,29 @@ export default function AttendancePage() {
 
   async function waitForPosition(activeRun:number) {
     let heldFrom = 0
+    let lastSequence = monitor.current.current.sequence
+    let previousAnalyzedAt = 0
     const deadline = Date.now() + 25000
     while (Date.now() < deadline && runId.current === activeRun) {
+      if (cam.problem.current) throw cam.problem.current
       const face = monitor.current.current
+      const now = performance.now()
+      if (!isFreshReading(face,lastSequence,now)) {
+        if (previousAnalyzedAt && now - previousAnalyzedAt > 350) {
+          heldFrom = 0
+          setScanStatus('Camera paused — hold still while it resumes')
+        }
+        await sleep(70)
+        continue
+      }
+      lastSequence = face.sequence
+      if (!isContinuousReading(face,previousAnalyzedAt)) heldFrom = 0
+      previousAnalyzedAt = face.analyzedAt
       setInstruction('Position your face')
       setScanStatus(face.hint)
       if (face.ready && Math.abs(face.yaw) <= 0.12) {
-        if (!heldFrom) heldFrom = Date.now()
-        const held = Date.now() - heldFrom
+        if (!heldFrom) heldFrom = face.analyzedAt
+        const held = face.analyzedAt - heldFrom
         setProgress(5 + Math.min(13,Math.round(held / 1200 * 13)))
         if (held >= 1200) return
       } else {
@@ -65,55 +79,73 @@ export default function AttendancePage() {
   }
 
   async function captureChallenge(activeRun:number,challengeType:ChallengeType,challengeInstruction:string) {
-    const frames:string[] = [cam.grabFrame()]
-    setSnapshot(frames[0])
-    const startedAt = Date.now()
+    const frames:string[] = []
+    const startedAt = performance.now()
     let lastCapturedAt = 0
+    let lastCapturedVideoTime = -1
+    let lastSequence = monitor.current.current.sequence
+    let previousAnalyzedAt = 0
     let blinkPeaks = 0
     let eyesClosed = false
     let straightHeldFrom = 0
     let actionCompleted = false
-    const captureActionFrame = () => {
-      if (frames.length < 50) frames.push(cam.grabFrame())
-      lastCapturedAt = Date.now()
+    const captureActionFrame = (analyzedAt:number) => {
+      if (frames.length >= 24) return
+      const frame = cam.grabFrame(lastCapturedVideoTime)
+      lastCapturedVideoTime = frame.videoTime
+      frames.push(frame.dataUrl)
+      if (frames.length === 1) setSnapshot(frame.dataUrl)
+      lastCapturedAt = analyzedAt
     }
 
-    while (Date.now() - startedAt < 22000 && runId.current === activeRun) {
+    while (performance.now() - startedAt < 22000 && runId.current === activeRun) {
+      if (cam.problem.current) throw cam.problem.current
       const face = monitor.current.current
-      const elapsed = Date.now() - startedAt
-      if (face.faceCount !== 1 || !face.sizeOk || !face.centered) {
+      const now = performance.now()
+      if (!isFreshReading(face,lastSequence,now)) {
+        if (previousAnalyzedAt && now - previousAnalyzedAt > 350) {
+          straightHeldFrom = 0
+          setScanStatus('Camera paused — hold still while it resumes')
+        }
+        await sleep(70)
+        continue
+      }
+      lastSequence = face.sequence
+      if (!isContinuousReading(face,previousAnalyzedAt)) straightHeldFrom = 0
+      previousAnalyzedAt = face.analyzedAt
+      const elapsed = face.analyzedAt - startedAt
+      if (!face.ready) {
         setScanStatus(face.hint)
         straightHeldFrom = 0
         await sleep(70)
         continue
       }
 
-      if (Date.now() - lastCapturedAt >= 180 && frames.length < 50) {
-        frames.push(cam.grabFrame())
-        lastCapturedAt = Date.now()
+      if (face.analyzedAt - lastCapturedAt >= 220 && frames.length < 24) {
+        captureActionFrame(face.analyzedAt)
       }
 
       if (challengeType === 'BLINK_TWICE') {
-        if (face.blink >= 0.55 && !eyesClosed) { eyesClosed = true; blinkPeaks += 1; captureActionFrame() }
+        if (face.blink >= 0.55 && !eyesClosed) { eyesClosed = true; blinkPeaks += 1; if (face.analyzedAt !== lastCapturedAt) captureActionFrame(face.analyzedAt) }
         if (face.blink <= 0.42) eyesClosed = false
         actionCompleted = blinkPeaks >= 2
         setScanStatus(actionCompleted ? 'Two blinks detected — hold still' : `Blink detected ${blinkPeaks} of 2`)
       } else if (challengeType === 'SMILE') {
-        if (!actionCompleted && face.smile >= 0.45) captureActionFrame()
+        if (!actionCompleted && face.smile >= 0.45 && face.analyzedAt !== lastCapturedAt) captureActionFrame(face.analyzedAt)
         actionCompleted = actionCompleted || face.smile >= 0.45
         setScanStatus(actionCompleted ? 'Smile detected — hold still' : 'Waiting for a clear smile')
       } else if (challengeType === 'TURN_LEFT') {
-        if (!actionCompleted && face.yaw <= -0.12) captureActionFrame()
+        if (!actionCompleted && face.yaw <= -0.12 && face.analyzedAt !== lastCapturedAt) captureActionFrame(face.analyzedAt)
         actionCompleted = actionCompleted || face.yaw <= -0.12
         setScanStatus(actionCompleted ? 'Left turn detected — hold still' : 'Slowly turn your head to your left')
       } else if (challengeType === 'TURN_RIGHT') {
-        if (!actionCompleted && face.yaw >= 0.12) captureActionFrame()
+        if (!actionCompleted && face.yaw >= 0.12 && face.analyzedAt !== lastCapturedAt) captureActionFrame(face.analyzedAt)
         actionCompleted = actionCompleted || face.yaw >= 0.12
         setScanStatus(actionCompleted ? 'Right turn detected — hold still' : 'Slowly turn your head to your right')
       } else {
         if (Math.abs(face.yaw) <= 0.1) {
-          if (!straightHeldFrom) straightHeldFrom = Date.now()
-          actionCompleted = Date.now() - straightHeldFrom >= 1500
+          if (!straightHeldFrom) straightHeldFrom = face.analyzedAt
+          actionCompleted = face.analyzedAt - straightHeldFrom >= 1500
         } else straightHeldFrom = 0
         setScanStatus(actionCompleted ? 'Straight pose confirmed — hold still' : 'Keep looking straight at the camera')
       }
@@ -143,7 +175,11 @@ export default function AttendancePage() {
       })
       setProgress(18); setScanStatus('Face locked')
       const challenge = await api.post('/student/liveness/challenge',{sessionId:session.sessionId})
-      const frames = await captureChallenge(activeRun,challenge.data.challengeType,challenge.data.instruction)
+      const challengeType = parseChallengeType(challenge.data?.challengeType)
+      const challengeInstruction = typeof challenge.data?.instruction === 'string' && challenge.data.instruction.trim()
+        ? challenge.data.instruction
+        : 'Complete the requested face action'
+      const frames = await captureChallenge(activeRun,challengeType,challengeInstruction)
       monitor.stop(); cam.stop(); setInstruction('Verifying liveness and identity…'); setScanStatus('Checking encrypted biometric profile'); setProgress(72)
       processingTimer = window.setInterval(() => setProgress(value => Math.min(93,value + 1)),130)
       const verified = await api.post('/student/attendance/verify-face',{

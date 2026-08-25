@@ -4,6 +4,7 @@ import FaceScanFlow, { type ScanStage } from '../../components/FaceScanFlow'
 import { api, message } from '../../services/api'
 import { useCameraFrames } from '../../hooks/useCameraFrames'
 import { useFaceMonitor, type FaceReading } from '../../hooks/useFaceMonitor'
+import { isContinuousReading, isFreshReading } from '../../lib/captureQuality'
 
 const sleep = (milliseconds:number) => new Promise(resolve => window.setTimeout(resolve,milliseconds))
 
@@ -28,6 +29,7 @@ export default function FaceEnrollmentPage() {
   async function captureGuidedPoses(activeRun:number) {
     const samples:string[] = []
     let baselinePitch = 0
+    let lastVideoTime = -1
     const poses = [
       { instruction:'Look straight at the camera', status:'Hold a straight pose', matches:(face:FaceReading) => Math.abs(face.yaw) <= 0.09 },
       { instruction:'Slowly turn your head to the left', status:'Hold your left profile', matches:(face:FaceReading) => face.yaw <= -0.12 },
@@ -40,21 +42,37 @@ export default function FaceEnrollmentPage() {
       const pose = poses[index]
       const deadline = Date.now() + 30000
       let heldFrom = 0
+      let lastSequence = monitor.current.current.sequence
+      let previousAnalyzedAt = 0
       setInstruction(pose.instruction)
       while (Date.now() < deadline && runId.current === activeRun) {
+        if (cam.problem.current) throw cam.problem.current
         const face = monitor.current.current
+        const now = performance.now()
+        if (!isFreshReading(face,lastSequence,now)) {
+          if (previousAnalyzedAt && now - previousAnalyzedAt > 350) {
+            heldFrom = 0
+            setScanStatus('Camera paused — hold still while it resumes')
+          }
+          await sleep(70)
+          continue
+        }
+        lastSequence = face.sequence
+        if (!isContinuousReading(face,previousAnalyzedAt)) heldFrom = 0
+        previousAnalyzedAt = face.analyzedAt
         const matches = face.ready && pose.matches(face)
         if (!face.ready) setScanStatus(face.hint)
         else setScanStatus(matches ? `${pose.status} — keep still` : pose.status)
 
         if (matches) {
-          if (!heldFrom) heldFrom = Date.now()
-          const held = Date.now() - heldFrom
+          if (!heldFrom) heldFrom = face.analyzedAt
+          const held = face.analyzedAt - heldFrom
           setProgress(7 + index * 13 + Math.min(13,Math.round(held / 1000 * 13)))
           if (held >= 1000) {
-            const sample = cam.grabFrame()
-            samples.push(sample)
-            if (index === 0) { baselinePitch = face.pitch; setSnapshot(sample) }
+            const sample = cam.grabFrame(lastVideoTime)
+            lastVideoTime = sample.videoTime
+            samples.push(sample.dataUrl)
+            if (index === 0) { baselinePitch = face.pitch; setSnapshot(sample.dataUrl) }
             setScanStatus(`Pose ${index + 1} of ${poses.length} captured`)
             await sleep(500)
             break
