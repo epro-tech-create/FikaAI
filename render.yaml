@@ -1,0 +1,34 @@
+# FikaAI production blueprint: Render (backend) + Neon (Postgres) + Vercel (frontends).
+# Frontends are three Vercel projects built from ./frontend with different modes:
+#   student (default), admin, instructor. See DEPLOY.md.
+services:
+  - type: web
+    name: fikaai-backend
+    runtime: docker
+    rootDir: backend
+    plan: pro # 4 GB RAM / 2 CPU - required for InsightFace CPU inference
+    region: frankfurt # closest Render region to Africa/Dar_es_Salaam campus
+    healthCheckPath: /ready
+    disk:
+      name: fikaai-models
+      mountPath: /app/models_data
+      sizeGB: 2
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Neon URL converted to postgresql+asyncpg://...?ssl=require (see DEPLOY.md)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: EMBEDDING_ENCRYPTION_KEY
+        sync: false # persistent Fernet key; back it up or FaceIDs become unreadable on restore
+      - key: CORS_ORIGINS
+        sync: false # the three Vercel origins, comma-separated HTTPS URLs
+      - key: FACE_EMBEDDING_PROVIDER
+        value: insightface
+      - key: FAKE_FACE_ALWAYS_MATCH
+        value: false
+      - key: MODELS_DIR
+        value: /app/models_data
+      - key: WEB_CONCURRENCY
+        value: 1
+      - key: GPS_VERIFICATION_ENABLED
+        value: false # enable only after calibrating real training coordinates

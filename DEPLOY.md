@@ -1,93 +1,126 @@
 # FikaAI Production Deployment
 
-This deployment runs PostgreSQL, FastAPI, the built React application, and Caddy on one Linux VPS. Caddy obtains and renews the HTTPS certificate automatically. HTTPS is required because browsers block camera access on non-secure public origins.
+Managed-cloud split:
 
-FikaAI serves a single student population. Courses and instructors own
-attendance sessions directly, without assigning students to subdivisions.
+| Concern | Provider | Notes |
+| --- | --- | --- |
+| Frontends (student / admin / instructor) | Vercel | three projects from `frontend/`, ports irrelevant, HTTPS + CDN included |
+| FastAPI backend + InsightFace | Render | Docker web service, Pro 4 GB/2 CPU, Frankfurt |
+| PostgreSQL 16 | Neon | fresh production database, free tier to start |
 
-## Prerequisites
+The legacy single-VPS layout (`docker-compose.prod.yml` + Caddy) still works and is documented at the bottom.
 
-- A Linux VPS with at least 4 GB RAM, 2 CPU cores, and 20 GB free disk space
-- Docker Engine with the Compose plugin (Podman Compose is also compatible)
-- A domain name with an `A` record pointing to the VPS IPv4 address
-- Ports `80/tcp`, `443/tcp`, and `443/udp` open in the VPS firewall
+InsightFace `buffalo_l` weights are non-commercial research licensed. Review the license before commercial deployment. Liveness is MVP-level (`docs/LIVENESS_MVP_NOTICE.md`).
 
-InsightFace `buffalo_l` weights are non-commercial research licensed. Review their license before commercial deployment.
+## 1. Neon — create the database
 
-## Configure
+1. Create a project (region: AWS **Frankfurt/eu-central-1**, near Render).
+2. Dashboard → **Connect** → copy the connection string.
+3. Convert it for SQLAlchemy asyncpg before use:
 
-Clone the repository on the VPS, then create the production environment:
-
-```bash
-cp .env.production.example .env.production
-chmod 600 .env.production
+```text
+postgresql://user:pass@ep-xxx-pooler.eu-central-1.aws.neon.tech/db?sslmode=require&channel_binding=require
+```
+becomes
+```text
+postgresql+asyncpg://user:pass@ep-xxx.eu-central-1.aws.neon.tech/db?ssl=require
 ```
 
-Edit `.env.production` and set at least:
+- scheme → `postgresql+asyncpg://`
+- `sslmode=require` → `ssl=require`, drop `channel_binding`
+- start with the **direct** endpoint (no `-pooler`) — the app already pools connections
 
-- `DOMAIN` and `ACME_EMAIL`
-- `CORS_ORIGINS=https://<your-domain>`
-- `POSTGRES_PASSWORD` generated with `openssl rand -hex 24`
-- `JWT_SECRET` generated with `openssl rand -hex 32`
-- `EMBEDDING_ENCRYPTION_KEY` generated with:
+Keep this converted URL; it is the Render `DATABASE_URL`. Migrations run automatically on backend start (`start.sh`). Do **not** run `scripts/seed.py` against it.
 
-```bash
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+## 2. Render — deploy the backend
+
+1. Push this repository to GitHub/GitLab/Bitbucket (it is not yet a git repo).
+2. Render dashboard → **New → Blueprint**, select the repo. `render.yaml` provisions:
+   - web service `fikaai-backend` (Docker, root dir `backend`, plan **pro** 4 GB/2 CPU, region frankfurt)
+   - health check `/ready` (verifies Neon `SELECT 1` + model files)
+   - persistent disk 2 GB at `/app/models_data` (models survive deploys)
+3. When prompted for the `sync: false` variables:
+   - `DATABASE_URL`: paste the converted Neon URL
+   - `EMBEDDING_ENCRYPTION_KEY`: generate with
+     `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` and back it up in a password manager. Losing it makes existing FaceIDs unreadable.
+   - `CORS_ORIGINS`: set after step 3, then save (triggers redeploy):
+     ```text
+     https://<student>.vercel.app,https://<admin>.vercel.app,https://<instructor>.vercel.app
+     ```
+4. First deploy takes several minutes (Docker build + ~330 MB model download into the disk).
+
+Verify: `https://<service>.onrender.com/ready` → `{"status":"ready",...}`.
+
+Notes:
+- `WEB_CONCURRENCY=1` keeps one InsightFace copy in RAM. The attached disk disables autoscaling/zero-downtime deploys (brief swap on release).
+- Admin bootstrap after first successful deploy: Render service → **Shell** →
+  ```bash
+  python scripts/bootstrap_admin.py --email you@example.com --full-name "Admin"
+  ```
+  (interactive password prompt; never use dev seed credentials).
+
+## 3. Vercel — deploy the three frontends
+
+Create **three** projects from the same repo, each with Root Directory `frontend`, Framework preset **Vite**, Install Command `npm ci`:
+
+| Project | Build command | `VITE_APP_ROLE` |
+| --- | --- | --- |
+| fikaai-student | `npm run build:student` | `student` |
+| fikaai-admin | `npm run build:admin` | `admin` |
+| fikaai-instructor | `npm run build:instructor` | `instructor` |
+
+For every project set (Production + Preview):
+
+```text
+VITE_API_BASE_URL=https://<service>.onrender.com/api
 ```
 
-Back up `EMBEDDING_ENCRYPTION_KEY` in a password manager. Losing it makes existing FaceIDs unreadable. Never rotate it without a planned FaceID migration or student re-enrolment.
+All Vite variables are embedded in the browser bundle — never put backend secrets in `VITE_*`.
 
-Set the real training coordinates and radius before enabling GPS. Keep `FAKE_FACE_ALWAYS_MATCH=false` in every production environment.
+`frontend/vercel.json` adds the SPA rewrite so deep links like `/admin/dashboard` survive refresh.
 
-## Launch
+Wrong-role logins are rejected per app (e.g. an instructor token cannot enter the admin build) — users open the app matching their role. Storage is isolated per origin, so sessions are independent across the three apps.
+
+## 4. Initialize & verify
 
 ```bash
+# backend
+curl -fsS https://<service>.onrender.com/health
+curl -fsS https://<service>.onrender.com/ready
+
+# CORS preflight (expect access-control-allow-origin = student origin)
+curl -i -X OPTIONS https://<service>.onrender.com/api/auth/login \
+  -H 'Origin: https://<student>.vercel.app' \
+  -H 'Access-Control-Request-Method: POST' \
+  -H 'Access-Control-Request-Headers: content-type'
+```
+
+Browser checklist (real phone or laptop camera):
+1. Student app → signup → face enrollment → **Continue to check-in** lands on the attendance scan (never back to enrollment).
+2. Liveness challenge completes; attendance records.
+3. Admin console login → dashboards load; direct-route refresh works on all three apps.
+4. Camera/geolocation permissions grant on HTTPS origins.
+
+Warm up the model once before the first real class (first face request loads weights lazily): perform one enrollment or scan, expect a slower first response.
+
+## Costs
+
+- Render Pro ~$85/mo + 2 GB disk ~$0.50/mo
+- Neon: free tier initially (no SLA; scale when needed)
+- Vercel Hobby is non-commercial only; institutional/commercial use needs Vercel Pro
+
+## Backups
+
+- Neon: enable daily backups/PITR (paid) before real attendance data lands; also take periodic `pg_dump`s via the Neon connection string.
+- Store `EMBEDDING_ENCRYPTION_KEY` + database dumps together securely — dumps without the key cannot decrypt FaceIDs.
+
+---
+
+# Legacy single-VPS deployment
+
+```bash
+cp .env.production.example .env.production  # see git history for the VPS-era template
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 ```
 
-The first start downloads approximately 330 MB of face models into the persistent `fikaai_models` volume. The backend remains unhealthy until the download and database migrations finish.
-
-Monitor startup:
-
-```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml ps
-docker compose --env-file .env.production -f docker-compose.prod.yml logs -f backend caddy
-```
-
-Verify these URLs after all services are healthy:
-
-- `https://<your-domain>/health` returns `{"status":"ok",...}`
-- `https://<your-domain>` loads the student application
-- Browser developer tools show the page as a secure context and camera permission can be granted
-
-## Upgrade
-
-```bash
-git pull
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
-```
-
-Alembic migrations run automatically before the backend starts. Existing encrypted FaceIDs and attendance data remain in named volumes.
-
-## Back Up
-
-Database backup:
-
-```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > fikaai-backup.sql
-```
-
-Also back up `.env.production` securely, especially `EMBEDDING_ENCRYPTION_KEY`. Database backups without that key cannot decrypt FaceID embeddings.
-
-Restore into an empty database:
-
-```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml exec -T db sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"' < fikaai-backup.sql
-```
-
-## Operational Notes
-
-- PostgreSQL and the backend have no public host ports; only Caddy exposes ports 80/443.
-- `WEB_CONCURRENCY=1` avoids duplicating the large InsightFace model in RAM. Increase only after measuring VPS memory.
-- Raw face images are processed in memory and are not stored. Encrypted embeddings and stable FaceID UUID references persist in PostgreSQL.
-- Check logs and storage regularly. Add provider-level snapshots or scheduled `pg_dump` backups before accepting real attendance data.
+Requires Docker + Compose on a 4 GB VPS, DNS A record, ports 80/443 open; Caddy terminates HTTPS. Alembic migrations and model downloads run automatically before Uvicorn starts. Back up with `pg_dump` from the `db` service plus `EMBEDDING_ENCRYPTION_KEY`.

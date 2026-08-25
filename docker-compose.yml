@@ -36,15 +36,45 @@ services:
              python scripts/download_models.py &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
-  frontend:
+  frontend-student:
     build:
       context: ./frontend
       target: development
-    container_name: fikaai-frontend
+    container_name: fikaai-frontend-student
+    command: npm run dev -- --mode student --host 0.0.0.0
     environment:
       VITE_API_BASE_URL: /api
+      VITE_API_PROXY_TARGET: http://backend:8000
     ports:
       - "5173:5173"
+    depends_on:
+      - backend
+
+  frontend-admin:
+    build:
+      context: ./frontend
+      target: development
+    container_name: fikaai-frontend-admin
+    command: npm run dev -- --mode admin --host 0.0.0.0
+    environment:
+      VITE_API_BASE_URL: /api
+      VITE_API_PROXY_TARGET: http://backend:8000
+    ports:
+      - "5174:5174"
+    depends_on:
+      - backend
+
+  frontend-instructor:
+    build:
+      context: ./frontend
+      target: development
+    container_name: fikaai-frontend-instructor
+    command: npm run dev -- --mode instructor --host 0.0.0.0
+    environment:
+      VITE_API_BASE_URL: /api
+      VITE_API_PROXY_TARGET: http://backend:8000
+    ports:
+      - "5175:5175"
     depends_on:
       - backend
 

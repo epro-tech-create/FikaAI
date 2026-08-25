@@ -20,8 +20,10 @@ type Props = {
   successText: string
   details?: Detail[]
   disabled?: boolean
+  successLabel?: string
   onStart: () => void
   onReset: () => void
+  onSuccess?: () => void
 }
 
 function FaceMesh() {
@@ -48,7 +50,7 @@ export default function FaceScanFlow(props: Props) {
 
     {props.stage === 'scanning' && <div className="face-id-copy"><p className="scan-kicker pulse-text">LIVE AUTHENTICATION</p><h2>{props.instruction || 'Please wait…'}</h2><div className={`face-signal ${props.faceLocked ? 'locked' : ''}`}><i/>{props.scanStatus || 'Starting face scanner…'}</div><div className="scan-progress-head"><span>Scanning biometric profile</span><b>{progress}%</b></div><div className="scan-progress"><i style={{ width: `${progress}%` }}/></div><small>Progress only advances when your face and requested action are detected.</small></div>}
 
-    {props.stage === 'success' && <div className="face-id-copy"><p className="scan-kicker success-label">AUTHENTICATION DONE</p><h2>{props.successTitle}</h2><p>{props.successText}</p>{props.details?.length ? <div className="scan-details">{props.details.map(detail => <div key={detail.label}><span>{detail.label}</span><b>{detail.value}</b></div>)}</div> : null}<button className="neon-button" onClick={props.onReset}>Continue<span>→</span></button></div>}
+    {props.stage === 'success' && <div className="face-id-copy"><p className="scan-kicker success-label">AUTHENTICATION DONE</p><h2>{props.successTitle}</h2><p>{props.successText}</p>{props.details?.length ? <div className="scan-details">{props.details.map(detail => <div key={detail.label}><span>{detail.label}</span><b>{detail.value}</b></div>)}</div> : null}<button className="neon-button" onClick={props.onSuccess ?? props.onReset}>{props.successLabel || 'Continue'}<span>→</span></button></div>}
 
     {props.stage === 'error' && <div className="face-id-copy"><p className="scan-kicker error-label">AUTHENTICATION FAILED</p><h2>Face scan unsuccessful</h2><p>{props.error || 'We could not verify this scan. Please try again.'}</p><button className="retry-button" onClick={props.onReset}>Try Again</button></div>}
   </section>

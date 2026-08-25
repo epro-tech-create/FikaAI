@@ -5,7 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev:student": "vite --mode student",
+    "dev:admin": "vite --mode admin",
+    "dev:instructor": "vite --mode instructor",
+    "build": "npm run build:all",
+    "build:student": "tsc -b && vite build --mode student",
+    "build:admin": "tsc -b && vite build --mode admin",
+    "build:instructor": "tsc -b && vite build --mode instructor",
+    "build:all": "npm run build:student && npm run build:admin && npm run build:instructor",
     "test": "vitest run"
   },
   "dependencies": {

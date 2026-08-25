@@ -63,6 +63,37 @@ def create_app() -> FastAPI:
     async def health() -> dict:
         return {"status": "ok", "service": "fikaai-backend"}
 
+    @app.get("/ready", tags=["system"])
+    async def ready() -> JSONResponse:
+        from sqlalchemy import text
+
+        problems: list[str] = []
+        try:
+            from app.db.session import engine
+
+            async with engine.connect() as connection:
+                await connection.execute(text("SELECT 1"))
+        except Exception as database_error:  # noqa: BLE001 - readiness must never raise
+            logger.warning("Readiness database check failed: %s", database_error)
+            problems.append("database")
+
+        if settings.face_embedding_provider == "insightface":
+            pack_dir = settings.models_dir / "models" / "buffalo_l"
+            missing = [
+                name
+                for name in ("det_10g.onnx", "w600k_r50.onnx")
+                if not (pack_dir / name).is_file()
+            ]
+            if missing:
+                problems.append("models:" + ",".join(missing))
+
+        if problems:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "unavailable", "service": "fikaai-backend", "problems": problems},
+            )
+        return JSONResponse(content={"status": "ready", "service": "fikaai-backend"})
+
     app.include_router(api_router, prefix="/api")
     return app
 

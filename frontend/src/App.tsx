@@ -9,11 +9,13 @@ import DataPage from './pages/portal/DataPage'
 import InfoPage from './pages/portal/InfoPage'
 import SessionPage from './pages/portal/SessionPage'
 import { adminPages, instructorPages } from './pages/portal/config'
-import { getStoredRole, roleHome, storeAuthentication, type Role } from './lib/auth'
+import { clearAuthentication, getStoredRole, parseRole, storeAuthentication } from './lib/auth'
+import { applicationConfig, currentApplication, portalTitleForRole, type Application } from './lib/application'
 
-function Login() {
+function Login({ application }: { application: Application }) {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('student01@fikaai.dev')
+  const config = applicationConfig(application)
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -24,8 +26,13 @@ function Login() {
     setError('')
     try {
       const response = await api.post('/auth/login', { email, password })
-      const role = storeAuthentication(response.data)
-      navigate(roleHome(role))
+      const role = parseRole(response.data?.role)
+      if (role && role !== config.role) {
+        setError(`This account belongs to the ${portalTitleForRole(role)}. Open that application to sign in.`)
+        return
+      }
+      storeAuthentication(response.data)
+      navigate(config.home)
     } catch (requestError) {
       setError(message(requestError))
     } finally {
@@ -33,7 +40,7 @@ function Login() {
     }
   }
 
-  return <main className="center"><form className="panel login" onSubmit={submit}><div className="brand">Fika<span>AI</span></div><p className="eyebrow">FIELD PRACTICAL ATTENDANCE</p><h1>Sign in to continue</h1><label>Email<input value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="username" required/></label><label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete="current-password" autoFocus required/></label>{error && <div className="error">{error}</div>}<button disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button><small>Enter your password whenever the app is opened or refreshed.</small><p className="auth-switch">New student? <Link to="/signup">Create an account</Link></p></form></main>
+  return <main className="center"><form className="panel login" onSubmit={submit}><div className="brand">Fika<span>AI</span></div><p className="eyebrow">{config.eyebrow}</p><h1>{config.title}</h1><label>Email<input value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="username" required/></label><label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete="current-password" autoFocus required/></label>{error && <div className="error">{error}</div>}<button disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button><small>Enter your password whenever the app is opened or refreshed.</small>{application === 'student' && <p className="auth-switch">New student? <Link to="/signup">Create an account</Link></p>}</form></main>
 }
 
 function Signup() {
@@ -61,8 +68,8 @@ function Signup() {
         registrationNumber,
         password,
       })
-      const role = storeAuthentication(response.data)
-      navigate(role === 'student' ? '/student/face-enrollment' : roleHome(role))
+      storeAuthentication(response.data)
+      navigate('/student/face-enrollment')
     } catch (requestError) {
       setError(message(requestError))
     } finally {
@@ -73,38 +80,51 @@ function Signup() {
   return <main className="center"><form className="panel login signup" onSubmit={submit}><div className="brand">Fika<span>AI</span></div><p className="eyebrow">NEW STUDENT REGISTRATION</p><h1>Create your account</h1><p className="signup-intro">Register for cybersecurity practical attendance. You will enrol your face on the next step.</p><label>Full name<input value={fullName} onChange={event => setFullName(event.target.value)} autoComplete="name" placeholder="Amina Mushi" required/></label><label>Email address<input value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="student@example.com" required/></label><label>Registration number<input value={registrationNumber} onChange={event => setRegistrationNumber(event.target.value)} autoCapitalize="characters" placeholder="REG-2026-031" required/></label><div className="signup-passwords"><label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label><label>Confirm password<input value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label></div><p className="password-hint">Use at least 8 characters with uppercase, lowercase and a number.</p>{error && <div className="error">{error}</div>}<button disabled={busy}>{busy ? 'Creating account…' : 'Create student account'}</button><p className="auth-switch">Already registered? <Link to="/login">Sign in</Link></p></form></main>
 }
 
-function Guard({ role, children }: { role: Role; children: React.ReactNode }) {
+function Guard({ application, children }: { application: Application; children: React.ReactNode }) {
   if (!localStorage.getItem('fikaai.access')) return <Navigate to="/login" replace/>
+  if (getStoredRole() !== applicationConfig(application).role) {
+    clearAuthentication()
+    return <Navigate to="/login" replace/>
+  }
+  return <>{children}</>
+}
+
+function HomeRedirect({ application }: { application: Application }) {
+  const config = applicationConfig(application)
   const signedInRole = getStoredRole()
-  return signedInRole === role ? <>{children}</> : <Navigate to={roleHome(signedInRole)} replace/>
+  const validSession = Boolean(localStorage.getItem('fikaai.access')) && signedInRole === config.role
+  return <Navigate to={validSession ? config.home : '/login'} replace/>
 }
 
-function HomeRedirect() {
-  return <Navigate to={localStorage.getItem('fikaai.access') ? roleHome(getStoredRole()) : '/login'} replace/>
-}
-
-export default function App() {
+export default function App({ application }: { application?: Application }) {
+  const app = application ?? currentApplication()
   return <Routes>
-    <Route path="/login" element={<Login/>}/>
-    <Route path="/signup" element={<Signup/>}/>
-    <Route path="/student/attendance" element={<Guard role="student"><AttendancePage/></Guard>}/>
-    <Route path="/student/face-enrollment" element={<Guard role="student"><FaceEnrollmentPage/></Guard>}/>
-    <Route path="/admin" element={<Guard role="admin"><PortalLayout role="admin"/></Guard>}>
-      <Route index element={<Navigate to="dashboard" replace/>}/>
-      <Route path="dashboard" element={<DashboardPage role="admin"/>}/>
-      <Route path="attendance-sessions" element={<SessionPage role="admin"/>}/>
-      {Object.entries(adminPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
-      <Route path="system-settings" element={<InfoPage title="System Settings"/>}/>
-      <Route path="profile" element={<InfoPage title="Profile"/>}/>
-    </Route>
-    <Route path="/instructor" element={<Guard role="instructor"><PortalLayout role="instructor"/></Guard>}>
-      <Route index element={<Navigate to="dashboard" replace/>}/>
-      <Route path="dashboard" element={<DashboardPage role="instructor"/>}/>
-      <Route path="attendance-sessions" element={<SessionPage role="instructor"/>}/>
-      {Object.entries(instructorPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
-      <Route path="notifications" element={<InfoPage title="Notifications"/>}/>
-      <Route path="profile" element={<InfoPage title="Profile"/>}/>
-    </Route>
-    <Route path="*" element={<HomeRedirect/>}/>
+    <Route path="/login" element={<Login application={app}/>}/>
+    {app === 'student' && <>
+      <Route path="/signup" element={<Signup/>}/>
+      <Route path="/student/attendance" element={<Guard application={app}><AttendancePage/></Guard>}/>
+      <Route path="/student/face-enrollment" element={<Guard application={app}><FaceEnrollmentPage/></Guard>}/>
+    </>}
+    {app === 'admin' && (
+      <Route path="/admin" element={<Guard application={app}><PortalLayout role="admin"/></Guard>}>
+        <Route index element={<Navigate to="dashboard" replace/>}/>
+        <Route path="dashboard" element={<DashboardPage role="admin"/>}/>
+        <Route path="attendance-sessions" element={<SessionPage role="admin"/>}/>
+        {Object.entries(adminPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
+        <Route path="system-settings" element={<InfoPage title="System Settings"/>}/>
+        <Route path="profile" element={<InfoPage title="Profile"/>}/>
+      </Route>
+    )}
+    {app === 'instructor' && (
+      <Route path="/instructor" element={<Guard application={app}><PortalLayout role="instructor"/></Guard>}>
+        <Route index element={<Navigate to="dashboard" replace/>}/>
+        <Route path="dashboard" element={<DashboardPage role="instructor"/>}/>
+        <Route path="attendance-sessions" element={<SessionPage role="instructor"/>}/>
+        {Object.entries(instructorPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
+        <Route path="notifications" element={<InfoPage title="Notifications"/>}/>
+        <Route path="profile" element={<InfoPage title="Profile"/>}/>
+      </Route>
+    )}
+    <Route path="*" element={<HomeRedirect application={app}/>}/>
   </Routes>
 }

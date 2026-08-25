@@ -20,10 +20,10 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --chown=fikaai:fikaai app ./app
 COPY --chown=fikaai:fikaai migrations ./migrations
 COPY --chown=fikaai:fikaai scripts ./scripts
-COPY --chown=fikaai:fikaai alembic.ini pyproject.toml ./
-RUN mkdir -p /app/models_data && chown -R fikaai:fikaai /app
+COPY --chown=fikaai:fikaai alembic.ini pyproject.toml start.sh ./
+RUN chmod +x /app/start.sh && mkdir -p /app/models_data && chown -R fikaai:fikaai /app
 USER fikaai
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)" || exit 1
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+  CMD python -c "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"8000\")}/health', timeout=3)" || exit 1
+CMD ["/app/start.sh"]

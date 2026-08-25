@@ -5,6 +5,7 @@ import { api, message } from '../../services/api'
 import { useCameraFrames } from '../../hooks/useCameraFrames'
 import { useFaceMonitor } from '../../hooks/useFaceMonitor'
 import { isContinuousReading, isFreshReading, parseChallengeType, type ChallengeType } from '../../lib/captureQuality'
+import { clearAuthentication } from '../../lib/auth'
 
 type Session = { sessionId:string; title:string; courseTitle:string; locationName:string }
 type Summary = { fullName:string; registrationNumber:string }
@@ -212,7 +213,7 @@ export default function AttendancePage() {
   const checkedIn = record?.status === 'PRESENT' || record?.status === 'LATE'
 
   return <main className="app">
-    <header><div className="brand">Fika<span>AI</span></div><nav><Link to="/student/attendance">Attendance</Link><Link to="/student/face-enrollment">Face enrolment</Link><button className="ghost" onClick={() => { localStorage.clear(); window.location.reload() }}>Sign out</button></nav></header>
+    <header><div className="brand">Fika<span>AI</span></div><nav><Link to="/student/attendance">Attendance</Link><Link to="/student/face-enrollment">Face enrolment</Link><button className="ghost" onClick={() => { clearAuthentication(); window.location.href = '/login' }}>Sign out</button></nav></header>
     <section className="hero compact-hero"><p className="eyebrow">CYBERSECURITY INDUSTRIAL PRACTICAL TRAINING</p><h1>Good morning, {summary?.fullName || localStorage.getItem('fikaai.name') || 'Student'}</h1><p className="date">{clock.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})} · {clock.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p></section>
     {summary && session && <section className="training-strip"><div><span>DAILY PRESENCE</span><b>{session.courseTitle}</b><small>{session.title} · {summary.registrationNumber}</small></div><div><span>TRAINING AREA</span><b>{session.locationName}</b><small>GPS temporarily disabled</small></div></section>}
     {!enrolled && <div className="error">A compatible Face ID is required. <Link to="/student/face-enrollment">Enrol your face now</Link>.</div>}
