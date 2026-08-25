@@ -1,0 +1,47 @@
+[project]
+name = "fikaai-backend"
+version = "0.1.0"
+description = "FikaAI Attendance System - FastAPI backend (student attendance MVP)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "pyjwt>=2.8",
+    "argon2-cffi>=23.1",
+    "cryptography>=42.0",
+    "slowapi>=0.1.9",
+    # ---- Face AI stack (CPU only) ----
+    "numpy==1.26.4",
+    "opencv-python-headless==4.10.0.84",
+    "onnxruntime==1.19.2",
+    "insightface==0.7.3",
+    "mediapipe==0.10.14",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+]
+
+[tool.uv]
+# insightface ships an sdist that compiles a small C++ extension
+# build requirements are resolved automatically by uv
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

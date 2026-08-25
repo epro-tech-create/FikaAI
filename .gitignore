@@ -1,0 +1,25 @@
+# Environment / secrets
+.env
+.env.production
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+coverage/
+
+# Model weights (downloaded via scripts/download_models.py)
+backend/models_data/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

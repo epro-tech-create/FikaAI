@@ -1,0 +1,213 @@
+"""Pydantic schemas. Wire format is camelCase; internal field names snake_case."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.alias_generators import to_camel
+
+
+class CamelModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True,
+                              from_attributes=True, serialize_by_alias=True)
+
+
+# ------------------------------------------------------------------ auth
+class LoginRequest(CamelModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=200)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
+
+class StudentRegisterRequest(CamelModel):
+    full_name: str = Field(min_length=3, max_length=200)
+    email: str = Field(min_length=5, max_length=255)
+    registration_number: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=8, max_length=200)
+
+    @field_validator("full_name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        return " ".join(value.strip().split())
+
+    @field_validator("email")
+    @classmethod
+    def normalize_registration_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if "@" not in normalized or "." not in normalized.rsplit("@", 1)[-1]:
+            raise ValueError("Enter a valid email address.")
+        return normalized
+
+    @field_validator("registration_number")
+    @classmethod
+    def normalize_registration_number(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not all(char.isalnum() or char in "-/" for char in normalized):
+            raise ValueError("Registration number may contain letters, numbers, hyphens and slashes only.")
+        return normalized
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, value: str) -> str:
+        if not any(char.isupper() for char in value):
+            raise ValueError("Password must contain an uppercase letter.")
+        if not any(char.islower() for char in value):
+            raise ValueError("Password must contain a lowercase letter.")
+        if not any(char.isdigit() for char in value):
+            raise ValueError("Password must contain a number.")
+        return value
+
+
+class TokenPairResponse(CamelModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    role: str
+    full_name: str
+
+
+class RefreshRequest(CamelModel):
+    refresh_token: str
+
+
+class MeResponse(CamelModel):
+    id: uuid.UUID
+    email: str
+    full_name: str
+    role: str
+
+
+# ------------------------------------------------------- active session
+class ActiveSessionResponse(CamelModel):
+    session_id: uuid.UUID
+    title: str
+    course_code: str
+    course_title: str
+    class_group_name: str
+    location_name: str
+    location_address: str
+    session_date: str
+    check_in_open: str
+    check_in_close: str
+    expected_end: str
+    late_threshold_minutes: int
+    status: str
+    allowed_radius_meters: float
+    latitude: float
+    longitude: float
+
+
+class NoActiveSessionResponse(CamelModel):
+    message: str = "There is currently no active attendance session."
+
+
+class StudentSummaryResponse(CamelModel):
+    full_name: str
+    registration_number: str
+    course_title: str
+    class_group_name: str
+    permanent_location_name: str | None = None
+    permanent_location_address: str | None = None
+    allowed_radius_meters: float | None = None
+
+
+# ------------------------------------------------------------ geofencing
+class VerifyLocationRequest(CamelModel):
+    session_id: uuid.UUID
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    accuracy_meters: float = Field(ge=0, le=10_000)
+    captured_at: str  # ISO-8601 with offset
+
+
+class LocationVerificationResponse(CamelModel):
+    verified: bool
+    distance_meters: float
+    allowed_radius_meters: float
+    accuracy_meters: float
+    message: str
+    location_verification_token: str
+    expires_at: datetime
+
+
+# ----------------------------------------------------------------- face
+class EnrollmentStatusResponse(CamelModel):
+    enrolled: bool
+    enrolled_at: datetime | None = None
+    sample_count: int = 0
+    provider: str | None = None
+    consent_given_at: datetime | None = None
+
+
+class FaceEnrollmentRequest(CamelModel):
+    samples: list[str] = Field(min_length=0, max_length=10)
+    consent_granted: bool
+
+    @field_validator("samples")
+    @classmethod
+    def non_empty_samples(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("At least one sample is required.")
+        return v
+
+
+class ChallengeRequest(CamelModel):
+    session_id: uuid.UUID
+
+
+class ChallengeResponse(CamelModel):
+    challenge_token: uuid.UUID
+    instruction: str
+    expires_at: datetime
+
+
+class VerifyFaceRequest(CamelModel):
+    session_id: uuid.UUID
+    challenge_token: str
+    frames: list[str] = Field(min_length=1)
+
+    @field_validator("frames")
+    @classmethod
+    def limit_frame_size(cls, v: list[str]) -> list[str]:
+        # Per-frame byte ceiling enforced again after decode in the service layer
+        return v
+
+
+class FaceVerificationResponse(CamelModel):
+    verified: bool
+    face_verification_token: str | None = None
+    expires_at: datetime | None = None
+    message: str
+
+
+# ------------------------------------------------------------ attendance
+class AttendanceSubmitRequest(CamelModel):
+    session_id: uuid.UUID
+    location_verification_token: str
+    face_verification_token: str
+    idempotency_key: str
+
+
+class AttendanceRecordResponse(CamelModel):
+    session_id: uuid.UUID
+    check_in_at: datetime
+    check_out_at: datetime | None = None
+    status: str
+    minutes_late: int = 0
+    time_spent_minutes: int | None = None
+    replay: bool = False
+
+
+class CurrentAttendanceResponse(CamelModel):
+    has_record: bool
+    record: AttendanceRecordResponse | None = None
+
+
+class MessageResponse(CamelModel):
+    message: str
