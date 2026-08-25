@@ -12,7 +12,7 @@ from app.face_ai.quality import assess_quality, select_temporally_distributed
 from app.models.entities import LivenessChallengeType
 from app.schemas import ChallengeResponse
 from app.services.enrollment_service import decode_frame
-from app.services.verification_service import aggregate_match_scores
+from app.services.verification_service import aggregate_match_scores, is_robust_match
 
 
 class StubSignalAnalyzer(MediaPipeLivenessAnalyzer):
@@ -89,6 +89,8 @@ def test_candidate_selection_spreads_five_frames_across_sequence():
 
 def test_match_aggregation_uses_majority_not_single_best_score():
     assert aggregate_match_scores([0.99, 0.2, 0.3]) == pytest.approx(0.3)
+    assert is_robust_match([0.8, 0.7, 0.6, 0.4], 0.6)
+    assert not is_robust_match([0.9, 0.8, 0.4, 0.3], 0.6)
     with pytest.raises(ValueError):
         aggregate_match_scores([0.9, 0.9])
 

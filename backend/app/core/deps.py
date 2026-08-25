@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ApiError, ErrorCode
 from app.core.security import decode_token
 from app.db.session import session_factory
-from app.models.entities import Student, User
+from app.models.entities import Instructor, Student, StudentStatus, User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -69,4 +69,17 @@ async def get_current_student(
     student = result.scalar_one_or_none()
     if student is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Student profile not found.", 404)
+    if student.status != StudentStatus.ACTIVE:
+        raise ApiError(ErrorCode.ACCOUNT_DISABLED, "This student profile is inactive.", 403)
     return student
+
+
+async def get_current_instructor(
+    user: User = Depends(require_roles("instructor")),
+    db: AsyncSession = Depends(get_db),
+) -> Instructor:
+    result = await db.execute(select(Instructor).where(Instructor.user_id == user.id))
+    instructor = result.scalar_one_or_none()
+    if instructor is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Instructor profile not found.", 404)
+    return instructor

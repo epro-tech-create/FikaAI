@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { api, message } from './services/api'
 import AttendancePage from './pages/student/AttendancePage'
 import FaceEnrollmentPage from './pages/student/FaceEnrollmentPage'
-
-function clearAuthentication() {
-  localStorage.removeItem('fikaai.access')
-  localStorage.removeItem('fikaai.name')
-}
+import PortalLayout from './components/PortalLayout'
+import DashboardPage from './pages/portal/DashboardPage'
+import DataPage from './pages/portal/DataPage'
+import InfoPage from './pages/portal/InfoPage'
+import SessionPage from './pages/portal/SessionPage'
+import { adminPages, instructorPages } from './pages/portal/config'
+import { getStoredRole, roleHome, storeAuthentication, type Role } from './lib/auth'
 
 function Login() {
   const navigate = useNavigate()
@@ -22,9 +24,8 @@ function Login() {
     setError('')
     try {
       const response = await api.post('/auth/login', { email, password })
-      localStorage.setItem('fikaai.access', response.data.accessToken)
-      localStorage.setItem('fikaai.name', response.data.fullName)
-      navigate('/student/attendance')
+      const role = storeAuthentication(response.data)
+      navigate(roleHome(role))
     } catch (requestError) {
       setError(message(requestError))
     } finally {
@@ -60,9 +61,8 @@ function Signup() {
         registrationNumber,
         password,
       })
-      localStorage.setItem('fikaai.access', response.data.accessToken)
-      localStorage.setItem('fikaai.name', response.data.fullName)
-      navigate('/student/face-enrollment')
+      const role = storeAuthentication(response.data)
+      navigate(role === 'student' ? '/student/face-enrollment' : roleHome(role))
     } catch (requestError) {
       setError(message(requestError))
     } finally {
@@ -73,31 +73,38 @@ function Signup() {
   return <main className="center"><form className="panel login signup" onSubmit={submit}><div className="brand">Fika<span>AI</span></div><p className="eyebrow">NEW STUDENT REGISTRATION</p><h1>Create your account</h1><p className="signup-intro">Register for cybersecurity practical attendance. You will enrol your face on the next step.</p><label>Full name<input value={fullName} onChange={event => setFullName(event.target.value)} autoComplete="name" placeholder="Amina Mushi" required/></label><label>Email address<input value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="student@example.com" required/></label><label>Registration number<input value={registrationNumber} onChange={event => setRegistrationNumber(event.target.value)} autoCapitalize="characters" placeholder="REG-2026-031" required/></label><div className="signup-passwords"><label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label><label>Confirm password<input value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label></div><p className="password-hint">Use at least 8 characters with uppercase, lowercase and a number.</p>{error && <div className="error">{error}</div>}<button disabled={busy}>{busy ? 'Creating account…' : 'Create student account'}</button><p className="auth-switch">Already registered? <Link to="/login">Sign in</Link></p></form></main>
 }
 
-function Guard({ children }: { children: React.ReactNode }) {
-  return localStorage.getItem('fikaai.access')
-    ? <>{children}</>
-    : <Navigate to="/login" replace/>
+function Guard({ role, children }: { role: Role; children: React.ReactNode }) {
+  if (!localStorage.getItem('fikaai.access')) return <Navigate to="/login" replace/>
+  const signedInRole = getStoredRole()
+  return signedInRole === role ? <>{children}</> : <Navigate to={roleHome(signedInRole)} replace/>
+}
+
+function HomeRedirect() {
+  return <Navigate to={localStorage.getItem('fikaai.access') ? roleHome(getStoredRole()) : '/login'} replace/>
 }
 
 export default function App() {
-  const [sessionInitialized, setSessionInitialized] = useState(false)
-
-  useEffect(() => {
-    // Security requirement: a browser refresh/restart ends the local session.
-    // The user must submit their password to obtain a fresh JWT.
-    clearAuthentication()
-    setSessionInitialized(true)
-  }, [])
-
-  if (!sessionInitialized) {
-    return <main className="center"><div className="panel login">Starting secure session…</div></main>
-  }
-
   return <Routes>
     <Route path="/login" element={<Login/>}/>
     <Route path="/signup" element={<Signup/>}/>
-    <Route path="/student/attendance" element={<Guard><AttendancePage/></Guard>}/>
-    <Route path="/student/face-enrollment" element={<Guard><FaceEnrollmentPage/></Guard>}/>
-    <Route path="*" element={<Navigate to="/student/attendance" replace/>}/>
+    <Route path="/student/attendance" element={<Guard role="student"><AttendancePage/></Guard>}/>
+    <Route path="/student/face-enrollment" element={<Guard role="student"><FaceEnrollmentPage/></Guard>}/>
+    <Route path="/admin" element={<Guard role="admin"><PortalLayout role="admin"/></Guard>}>
+      <Route index element={<Navigate to="dashboard" replace/>}/>
+      <Route path="dashboard" element={<DashboardPage role="admin"/>}/>
+      <Route path="attendance-sessions" element={<SessionPage role="admin"/>}/>
+      {Object.entries(adminPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
+      <Route path="system-settings" element={<InfoPage title="System Settings"/>}/>
+      <Route path="profile" element={<InfoPage title="Profile"/>}/>
+    </Route>
+    <Route path="/instructor" element={<Guard role="instructor"><PortalLayout role="instructor"/></Guard>}>
+      <Route index element={<Navigate to="dashboard" replace/>}/>
+      <Route path="dashboard" element={<DashboardPage role="instructor"/>}/>
+      <Route path="attendance-sessions" element={<SessionPage role="instructor"/>}/>
+      {Object.entries(instructorPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
+      <Route path="notifications" element={<InfoPage title="Notifications"/>}/>
+      <Route path="profile" element={<InfoPage title="Profile"/>}/>
+    </Route>
+    <Route path="*" element={<HomeRedirect/>}/>
   </Routes>
 }

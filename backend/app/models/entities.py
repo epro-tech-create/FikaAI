@@ -1,7 +1,7 @@
 """SQLAlchemy 2.0 entities for the FikaAI student-attendance MVP.
 
 Tables (UUID PKs, FKs, indexes, unique constraints):
-    users, students, courses, class_groups, student_class_enrollments,
+    users, students, instructors, courses, instructor_course_assignments,
     practical_locations, attendance_sessions, face_enrollments,
     location_verifications, face_verifications, attendance_records, audit_logs
 """
@@ -20,6 +20,7 @@ from sqlalchemy import (
     Enum as SAEnum,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     LargeBinary,
@@ -39,8 +40,13 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 # ---------------------------------------------------------------- enums
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
-    SUPERVISOR = "supervisor"
+    INSTRUCTOR = "instructor"
     STUDENT = "student"
+
+
+class StudentStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
 
 
 class LocationType(str, enum.Enum):
@@ -116,6 +122,9 @@ class Student(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     registration_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     course_of_study: Mapped[str | None] = mapped_column(String(120))
     year_of_study: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[StudentStatus] = mapped_column(
+        _enum(StudentStatus, "student_status"), nullable=False, default=StudentStatus.ACTIVE
+    )
     consent_given_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(lazy="joined")
@@ -128,35 +137,29 @@ class Course(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
 
 
-class ClassGroup(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    __tablename__ = "class_groups"
-    __table_args__ = (UniqueConstraint("course_id", "name", name="uq_class_course_name"),)
+class Instructor(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "instructors"
 
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+
+    user: Mapped[User] = relationship(lazy="joined")
+
+
+class InstructorCourseAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "instructor_course_assignments"
+    __table_args__ = (UniqueConstraint("instructor_id", "course_id", name="uq_instructor_course"),)
+
+    instructor_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("instructors.id", ondelete="CASCADE"), nullable=False
+    )
     course_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="RESTRICT"), nullable=False
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
     )
-    default_location_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("practical_locations.id", ondelete="SET NULL")
-    )
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
 
+    instructor: Mapped[Instructor] = relationship(lazy="joined")
     course: Mapped[Course] = relationship(lazy="joined")
-    default_location: Mapped[PracticalLocation | None] = relationship(
-        "PracticalLocation", foreign_keys=[default_location_id], lazy="joined"
-    )
-
-
-class StudentClassEnrollment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    __tablename__ = "student_class_enrollments"
-    __table_args__ = (UniqueConstraint("student_id", "class_group_id", name="uq_student_class"),)
-
-    student_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("students.id", ondelete="CASCADE"), nullable=False
-    )
-    class_group_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("class_groups.id", ondelete="CASCADE"), nullable=False
-    )
-    enrolled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class PracticalLocation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -177,8 +180,11 @@ class PracticalLocation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class AttendanceSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "attendance_sessions"
 
-    class_group_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("class_groups.id", ondelete="RESTRICT"), nullable=False
+    course_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="RESTRICT"), nullable=False
+    )
+    instructor_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("instructors.id", ondelete="RESTRICT"), nullable=False
     )
     location_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("practical_locations.id", ondelete="RESTRICT"), nullable=False
@@ -186,15 +192,29 @@ class AttendanceSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     session_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     check_in_open: Mapped[time] = mapped_column(Time, nullable=False)
+    official_start: Mapped[time] = mapped_column(Time, nullable=False)
     check_in_close: Mapped[time] = mapped_column(Time, nullable=False)
     expected_end: Mapped[time] = mapped_column(Time, nullable=False)
+    check_out_close: Mapped[time] = mapped_column(Time, nullable=False)
     late_threshold_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=15)
+    permitted_radius_meters: Mapped[int] = mapped_column(Integer, nullable=False)
+    instructions: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[SessionStatus] = mapped_column(_enum(SessionStatus, "session_status"), nullable=False)
 
-    class_group: Mapped[ClassGroup] = relationship(lazy="joined")
+    course: Mapped[Course] = relationship(lazy="joined")
+    instructor: Mapped[Instructor] = relationship(lazy="joined")
     location: Mapped[PracticalLocation] = relationship(lazy="joined")
 
-    __table_args__ = (Index("ix_sessions_status_date", "status", "session_date"),)
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["instructor_id", "course_id"],
+            ["instructor_course_assignments.instructor_id", "instructor_course_assignments.course_id"],
+            name="fk_session_instructor_course_assignment",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_sessions_status_date", "status", "session_date"),
+        CheckConstraint("permitted_radius_meters > 0", name="ck_session_radius_positive"),
+    )
 
 
 class FaceEnrollment(UUIDPrimaryKeyMixin, TimestampMixin, Base):

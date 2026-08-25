@@ -2,7 +2,7 @@
 
 Guarantees (all enforced server-side inside ONE database transaction):
     * student identity from JWT only
-    * session is ACTIVE and the student is enrolled in its class group
+    * session is globally ACTIVE today
     * session date / time window valid for the operation
     * location + face verification tokens belong to this student+session,
       are verified, unexpired and UNUSED - consumed atomically via
@@ -33,7 +33,6 @@ from app.models.entities import (
     LocationVerification,
     RecordSource,
     SessionStatus,
-    StudentClassEnrollment,
     Student,
     VerificationMethod,
 )
@@ -147,19 +146,6 @@ async def _load_locked_session(db: AsyncSession, session_id: uuid.UUID) -> Atten
     return session
 
 
-async def _assert_assigned(db: AsyncSession, session: AttendanceSession, student_id: uuid.UUID) -> None:
-    assigned = (
-        await db.execute(
-            select(StudentClassEnrollment.id).where(
-                StudentClassEnrollment.class_group_id == session.class_group_id,
-                StudentClassEnrollment.student_id == student_id,
-            )
-        )
-    ).scalar_one_or_none()
-    if assigned is None:
-        raise ApiError(ErrorCode.NOT_ASSIGNED, "You are not assigned to this attendance session.", 403)
-
-
 async def check_in(
     db: AsyncSession,
     *,
@@ -189,7 +175,6 @@ async def check_in(
         clock = campus_now()
         validate_window(session, "check_in", clock)
 
-        await _assert_assigned(db, session, student.id)
         await _lock_attendance_row(db, session.id, student.id)
 
         existing = await _get_locked_record(db, session.id, student.id)
@@ -230,10 +215,12 @@ async def check_in(
 
         # Server time is authoritative; LATE beyond open + threshold
         now_local = clock.now_local
-        open_dt = datetime.combine(session.session_date, session.check_in_open, tzinfo=clock.now_local.tzinfo)
-        grace_deadline = open_dt + timedelta(minutes=session.late_threshold_minutes)
+        official_start = datetime.combine(
+            session.session_date, session.official_start, tzinfo=clock.now_local.tzinfo
+        )
+        grace_deadline = official_start + timedelta(minutes=session.late_threshold_minutes)
         late = now_local > grace_deadline
-        minutes_late = max(0, int((now_local - open_dt).total_seconds() // 60)) if late else 0
+        minutes_late = max(0, int((now_local - official_start).total_seconds() // 60)) if late else 0
         status = AttendanceStatus.LATE if late else AttendanceStatus.PRESENT
 
         record = AttendanceRecord(
@@ -297,7 +284,6 @@ async def check_out(
         clock = campus_now()
         validate_window(session, "check_out", clock)
 
-        await _assert_assigned(db, session, student.id)
         await _lock_attendance_row(db, session.id, student.id)
 
         record = await _get_locked_record(db, session.id, student.id)

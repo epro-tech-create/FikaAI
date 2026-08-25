@@ -1,10 +1,9 @@
-"""Active-session resolution for students.
+"""Global active-session resolution for students.
 
 An ACTIVE session is usable only when:
     session.status == ACTIVE
     AND the campus-local date matches session.session_date
     AND the current campus time falls inside the relevant window
-    AND the authenticated student is enrolled in the session's class group.
 Identity always comes from the JWT - never from request payloads.
 """
 
@@ -22,10 +21,10 @@ from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
 from app.models.entities import (
     AttendanceSession,
-    ClassGroup,
+    Course,
+    Instructor,
     PracticalLocation,
     SessionStatus,
-    StudentClassEnrollment,
 )
 
 
@@ -46,18 +45,15 @@ def campus_now() -> CampusClock:
     return CampusClock(datetime.now(settings.campus_tz))
 
 
-async def find_active_assigned_session(
+async def find_active_session(
     db: AsyncSession,
-    student_id: uuid.UUID,
     session_id: uuid.UUID | None = None,
 ) -> AttendanceSession | None:
-    """Return the student's active assigned session (optionally a specific one)."""
+    """Return today's global active session, optionally restricted by ID."""
     now_campus = campus_now()
     stmt = (
         select(AttendanceSession)
-        .join(StudentClassEnrollment, StudentClassEnrollment.class_group_id == AttendanceSession.class_group_id)
         .where(
-            StudentClassEnrollment.student_id == student_id,
             AttendanceSession.status == SessionStatus.ACTIVE,
             AttendanceSession.session_date == now_campus.today,
         )
@@ -69,51 +65,53 @@ async def find_active_assigned_session(
     return result.scalar_one_or_none()
 
 
-async def ensure_daily_presence_session(db: AsyncSession, student_id: uuid.UUID) -> AttendanceSession:
-    """Create/find the internal all-day presence record for the student's class.
+async def ensure_daily_presence_session(db: AsyncSession) -> AttendanceSession:
+    """Create or find the single global all-day presence session.
 
     Students do not manage or select sessions. This record only preserves the
     existing attendance foreign keys and concurrency guarantees while the UX
     behaves as a simple daily face-presence scan.
     """
-    enrollment = (await db.execute(
-        select(StudentClassEnrollment)
-        .where(StudentClassEnrollment.student_id == student_id)
-        .order_by(StudentClassEnrollment.enrolled_at.asc())
-        .limit(1)
-    )).scalar_one_or_none()
-    if enrollment is None:
-        raise ApiError(ErrorCode.NOT_ASSIGNED, "No practical class is assigned to this student.", 403)
-
-    class_group = await db.get(ClassGroup, enrollment.class_group_id)
-    location_id = class_group.default_location_id if class_group else None
-    if location_id is None:
-        location_id = (await db.execute(
-            select(PracticalLocation.id).where(PracticalLocation.is_active.is_(True)).order_by(PracticalLocation.name)
-        )).scalar_one_or_none()
-    if location_id is None:
-        raise ApiError(ErrorCode.NOT_FOUND, "No training location has been configured.", 500)
-
     today = campus_now().today
     existing = (await db.execute(
         select(AttendanceSession).where(
-            AttendanceSession.class_group_id == enrollment.class_group_id,
             AttendanceSession.session_date == today,
             AttendanceSession.status == SessionStatus.ACTIVE,
-        )
+        ).order_by(AttendanceSession.check_in_open, AttendanceSession.created_at).limit(1)
     )).scalar_one_or_none()
     if existing is not None:
         return existing
 
+    course = (await db.execute(select(Course).order_by(Course.created_at, Course.code).limit(1))).scalar_one_or_none()
+    instructor = (
+        await db.execute(select(Instructor).order_by(Instructor.created_at, Instructor.id).limit(1))
+    ).scalar_one_or_none()
+    location = (await db.execute(
+        select(PracticalLocation)
+        .where(PracticalLocation.is_active.is_(True))
+        .order_by(PracticalLocation.name)
+        .limit(1)
+    )).scalar_one_or_none()
+    if course is None or instructor is None or location is None:
+        raise ApiError(
+            ErrorCode.NOT_FOUND,
+            "A course, instructor, and active training location must be configured.",
+            500,
+        )
+
     daily = AttendanceSession(
-        class_group_id=enrollment.class_group_id,
-        location_id=location_id,
+        course_id=course.id,
+        instructor_id=instructor.id,
+        location_id=location.id,
         title="Daily practical presence",
         session_date=today,
         check_in_open=time(0, 0),
+        official_start=time(0, 0),
         check_in_close=time(23, 59),
         expected_end=time(23, 59),
+        check_out_close=time(23, 59),
         late_threshold_minutes=24 * 60,
+        permitted_radius_meters=location.radius_meters,
         status=SessionStatus.ACTIVE,
     )
     db.add(daily)
@@ -122,21 +120,17 @@ async def ensure_daily_presence_session(db: AsyncSession, student_id: uuid.UUID)
     return daily
 
 
-async def get_active_assigned_session_or_error(
+async def get_active_session_or_error(
     db: AsyncSession,
-    student_id: uuid.UUID,
     session_id: uuid.UUID | None = None,
 ) -> AttendanceSession:
-    session = await find_active_assigned_session(db, student_id, session_id)
+    session = await find_active_session(db, session_id)
     if session is None:
         if session_id is not None:
-            # A specific session was requested but is either inactive or not assigned
             found = await db.get(AttendanceSession, session_id)
             if found is None:
                 raise ApiError(ErrorCode.NOT_FOUND, "Session not found.", 404)
-            if found.status != SessionStatus.ACTIVE:
-                raise ApiError(ErrorCode.SESSION_INACTIVE, "This attendance session is no longer active.", 409)
-            raise ApiError(ErrorCode.NOT_ASSIGNED, "You are not assigned to this attendance session.", 403)
+            raise ApiError(ErrorCode.SESSION_INACTIVE, "This attendance session is no longer active today.", 409)
         raise ApiError(ErrorCode.NO_ACTIVE_SESSION, "There is currently no active attendance session.", 404)
     return session
 
@@ -166,9 +160,9 @@ def validate_window(
     else:  # check_out
         if clock.now_time < session.check_in_open:
             raise ApiError(ErrorCode.SESSION_NOT_STARTED, "The session has not opened yet.", 409)
-        if clock.now_time > session.expected_end:
+        if clock.now_time > session.check_out_close:
             raise ApiError(
                 ErrorCode.SESSION_CLOSED,
-                f"The session ended at {session.expected_end.strftime('%H:%M')}.",
+                f"Check-out closed at {session.check_out_close.strftime('%H:%M')}.",
                 409,
             )

@@ -2,6 +2,10 @@
 
 Student attendance MVP based on **active session + GPS geofence + backend live face verification**.
 
+The application serves one student population. Attendance sessions connect a
+course and instructor directly, and student accounts require no subdivision or
+session assignment.
+
 The development geofence currently covers Dar es Salaam using a 50 km radius
 around the city reference point (`-6.7924000`, `39.2083000`). This is for
 development/testing only. Set `TRAINING_LATITUDE`, `TRAINING_LONGITUDE`, and
@@ -83,4 +87,3 @@ Embeddings are encrypted at rest, raw images are processed in memory, and
 embeddings are never returned by APIs. Calibrate `FACE_MATCH_THRESHOLD` with
 genuine and impostor samples before deployment. See
 `docs/THRESHOLD_CALIBRATION.md`.
-# FikaAI

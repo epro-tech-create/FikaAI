@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime, time
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -89,18 +89,22 @@ class ActiveSessionResponse(CamelModel):
     title: str
     course_code: str
     course_title: str
-    class_group_name: str
+    instructor_id: uuid.UUID
+    instructor_name: str
     location_name: str
     location_address: str
     session_date: str
     check_in_open: str
+    official_start: str
     check_in_close: str
     expected_end: str
+    check_out_close: str
     late_threshold_minutes: int
     status: str
-    allowed_radius_meters: float
+    permitted_radius_meters: float
     latitude: float
     longitude: float
+    instructions: str | None = None
 
 
 class NoActiveSessionResponse(CamelModel):
@@ -110,11 +114,13 @@ class NoActiveSessionResponse(CamelModel):
 class StudentSummaryResponse(CamelModel):
     full_name: str
     registration_number: str
-    course_title: str
-    class_group_name: str
-    permanent_location_name: str | None = None
-    permanent_location_address: str | None = None
-    allowed_radius_meters: float | None = None
+    status: str
+    current_session_id: uuid.UUID | None = None
+    course_code: str | None = None
+    course_title: str | None = None
+    location_name: str | None = None
+    location_address: str | None = None
+    permitted_radius_meters: float | None = None
 
 
 # ------------------------------------------------------------ geofencing
@@ -212,3 +218,72 @@ class CurrentAttendanceResponse(CamelModel):
 
 class MessageResponse(CamelModel):
     message: str
+
+
+# ----------------------------------------------------- management portals
+class SessionCreateRequest(CamelModel):
+    course_id: uuid.UUID
+    instructor_id: uuid.UUID | None = None
+    location_id: uuid.UUID
+    title: str = Field(min_length=1, max_length=200)
+    session_date: date
+    check_in_open: time
+    official_start: time
+    check_in_close: time
+    expected_end: time
+    check_out_close: time
+    late_threshold_minutes: int = Field(default=15, ge=0, le=1440)
+    permitted_radius_meters: int = Field(gt=0)
+    instructions: str | None = Field(default=None, max_length=500)
+    status: str = "SCHEDULED"
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str) -> str:
+        return " ".join(value.strip().split())
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        normalized = value.upper()
+        if normalized not in {"SCHEDULED", "ACTIVE", "CLOSED", "CANCELLED"}:
+            raise ValueError("Invalid session status.")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_time_order(self):
+        times = (
+            self.check_in_open,
+            self.official_start,
+            self.check_in_close,
+            self.expected_end,
+            self.check_out_close,
+        )
+        if any(current > following for current, following in zip(times, times[1:])):
+            raise ValueError(
+                "Session times must follow check-in open, official start, check-in close, expected end, and check-out close."
+            )
+        return self
+
+
+class SessionResponse(CamelModel):
+    id: uuid.UUID
+    course_id: uuid.UUID
+    course_code: str
+    course_title: str
+    instructor_id: uuid.UUID
+    instructor_name: str
+    location_id: uuid.UUID
+    location_name: str
+    title: str
+    session_date: date
+    check_in_open: time
+    official_start: time
+    check_in_close: time
+    expected_end: time
+    check_out_close: time
+    late_threshold_minutes: int
+    permitted_radius_meters: int
+    instructions: str | None
+    status: str
+    created_at: datetime

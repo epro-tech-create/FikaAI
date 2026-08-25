@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import uuid
-
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_current_student, get_db, limiter
-from app.core.errors import ApiError, ErrorCode
-from app.models.entities import AttendanceRecord, AttendanceStatus, ClassGroup, Course, PracticalLocation, Student, StudentClassEnrollment
+from app.models.entities import AttendanceRecord, Student
 from app.schemas import (
     ActiveSessionResponse,
     AttendanceRecordResponse,
@@ -23,7 +20,7 @@ from app.schemas import (
 from app.services.attendance_service import check_in as check_in_service
 from app.services.attendance_service import check_out as check_out_service
 from app.services.location_service import verify_location
-from app.services.session_service import ensure_daily_presence_session, find_active_assigned_session
+from app.services.session_service import ensure_daily_presence_session, find_active_session
 
 router = APIRouter(prefix="/student/attendance", tags=["student-attendance"])
 profile_router = APIRouter(prefix="/student/profile", tags=["student-profile"])
@@ -34,28 +31,18 @@ async def student_summary(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ) -> StudentSummaryResponse:
-    """Return the student's seeded class and permanent training-room mapping."""
-    result = await db.execute(
-        select(StudentClassEnrollment, ClassGroup, Course, PracticalLocation)
-        .join(ClassGroup, StudentClassEnrollment.class_group_id == ClassGroup.id)
-        .join(Course, ClassGroup.course_id == Course.id)
-        .outerjoin(PracticalLocation, ClassGroup.default_location_id == PracticalLocation.id)
-        .where(StudentClassEnrollment.student_id == student.id)
-        .order_by(StudentClassEnrollment.enrolled_at.asc())
-        .limit(1)
-    )
-    row = result.first()
-    if row is None:
-        raise ApiError(ErrorCode.NOT_FOUND, "No class assignment found for this student.", 404)
-    _, class_group, course, location = row
+    """Return student identity and optional context from today's global session."""
+    session = await find_active_session(db)
     return StudentSummaryResponse(
         full_name=student.user.full_name,
         registration_number=student.registration_number,
-        course_title=course.title,
-        class_group_name=class_group.name,
-        permanent_location_name=location.name if location else None,
-        permanent_location_address=location.address if location else None,
-        allowed_radius_meters=float(location.radius_meters) if location else None,
+        status=student.status.value,
+        current_session_id=session.id if session else None,
+        course_code=session.course.code if session else None,
+        course_title=session.course.title if session else None,
+        location_name=session.location.name if session else None,
+        location_address=session.location.address if session else None,
+        permitted_radius_meters=float(session.permitted_radius_meters) if session else None,
     )
 
 
@@ -63,20 +50,24 @@ def _session_dto(session) -> ActiveSessionResponse:
     return ActiveSessionResponse(
         session_id=session.id,
         title=session.title,
-        course_code=session.class_group.course.code,
-        course_title=session.class_group.course.title,
-        class_group_name=session.class_group.name,
+        course_code=session.course.code,
+        course_title=session.course.title,
+        instructor_id=session.instructor.id,
+        instructor_name=session.instructor.user.full_name,
         location_name=session.location.name,
         location_address=session.location.address,
         session_date=session.session_date.isoformat(),
         check_in_open=session.check_in_open.strftime("%H:%M"),
+        official_start=session.official_start.strftime("%H:%M"),
         check_in_close=session.check_in_close.strftime("%H:%M"),
         expected_end=session.expected_end.strftime("%H:%M"),
+        check_out_close=session.check_out_close.strftime("%H:%M"),
         late_threshold_minutes=session.late_threshold_minutes,
         status=session.status.value,
-        allowed_radius_meters=float(session.location.radius_meters),
+        permitted_radius_meters=float(session.permitted_radius_meters),
         latitude=float(session.location.latitude),
         longitude=float(session.location.longitude),
+        instructions=session.instructions,
     )
 
 
@@ -85,8 +76,8 @@ async def get_active_session(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
-    """The student's active assigned session for today, or null."""
-    session = await ensure_daily_presence_session(db, student.id)
+    """Today's global active session, creating the daily fallback when absent."""
+    session = await ensure_daily_presence_session(db)
     return _session_dto(session)
 
 
@@ -173,9 +164,7 @@ async def get_current_attendance(
     db: AsyncSession = Depends(get_db),
 ):
     """Today's record for the active session (if any)."""
-    from app.services.session_service import campus_now
-
-    session = await find_active_assigned_session(db, student.id)
+    session = await find_active_session(db)
     if session is None:
         return {"hasRecord": False, "record": None}
     result = await db.execute(

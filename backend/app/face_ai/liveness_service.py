@@ -107,7 +107,7 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
             options = mp.tasks.vision.FaceLandmarkerOptions(
                 base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),
                 running_mode=mp.tasks.vision.RunningMode.IMAGE,
-                num_faces=1,
+                num_faces=2,
                 output_face_blendshapes=True,
             )
             self._landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(options)
@@ -125,6 +125,10 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
         if not result.face_landmarks:
             return _FrameSignals(face_count=0, blink=0.0, smile=0.0, yaw=0.0)
 
+        face_count = len(result.face_landmarks)
+        if face_count > 1:
+            return _FrameSignals(face_count=face_count, blink=0.0, smile=0.0, yaw=0.0)
+
         landmarks = result.face_landmarks[0]
         blink = 0.0
         smile = 0.0
@@ -133,9 +137,7 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
             blink = max(categories.get("eyeBlinkLeft", 0.0), categories.get("eyeBlinkRight", 0.0))
             smile = max(categories.get("mouthSmileLeft", 0.0), categories.get("mouthSmileRight", 0.0))
         yaw = _yaw_ratio(landmarks)
-        # num_faces=1 makes >1 undetectable by the landmarker itself; the
-        # recognition service enforces the multi-face rule on the chosen frame.
-        return _FrameSignals(face_count=len(result.face_landmarks), blink=float(blink),
+        return _FrameSignals(face_count=face_count, blink=float(blink),
                              smile=float(smile), yaw=float(yaw))
 
     def analyze(self, frames: list[np.ndarray], challenge: LivenessChallengeType) -> LivenessResult:
@@ -156,8 +158,7 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
         }
 
         if sum(faces_ok) / len(frames) < FACE_PRESENCE_RATIO:
-            zero_face = all(not ok for ok in faces_ok)
-            reason = ErrorCode.NO_FACE if zero_face else ErrorCode.MULTIPLE_FACES
+            reason = ErrorCode.MULTIPLE_FACES if any(s.face_count > 1 for s in signals) else ErrorCode.NO_FACE
             return LivenessResult(False, 0, reason, metrics)
         if not faces_ok[-1]:
             return LivenessResult(False, 0, ErrorCode.NO_FACE,
@@ -242,7 +243,7 @@ class FakeLivenessAnalyzer(LivenessAnalyzer):
 
     def analyze(self, frames: list[np.ndarray], challenge: LivenessChallengeType) -> LivenessResult:
         if self.passed:
-            return LivenessResult(True, 0, None, {"analyzer": "fake"})
+            return LivenessResult(True, 0, None, {"analyzer": "fake"}, tuple(range(len(frames))))
         return LivenessResult(False, 0, self.failure_reason or ErrorCode.LIVENESS_FAILED, {"analyzer": "fake"})
 
 

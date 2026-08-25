@@ -6,8 +6,8 @@ import { useCameraFrames } from '../../hooks/useCameraFrames'
 import { useFaceMonitor } from '../../hooks/useFaceMonitor'
 import { isContinuousReading, isFreshReading, parseChallengeType, type ChallengeType } from '../../lib/captureQuality'
 
-type Session = { sessionId: string }
-type Summary = { fullName:string; registrationNumber:string; courseTitle:string; classGroupName:string; permanentLocationName:string|null; permanentLocationAddress:string|null }
+type Session = { sessionId:string; title:string; courseTitle:string; locationName:string }
+type Summary = { fullName:string; registrationNumber:string }
 const sleep = (milliseconds:number) => new Promise(resolve => window.setTimeout(resolve,milliseconds))
 
 export default function AttendancePage() {
@@ -31,10 +31,12 @@ export default function AttendancePage() {
       api.get('/student/attendance/active-session'),
       api.get('/student/profile/summary'),
       api.get('/student/face-enrollment/status'),
-    ]).then(([sessionResponse,summaryResponse,enrollmentResponse]) => {
+      api.get('/student/attendance/current'),
+    ]).then(([sessionResponse,summaryResponse,enrollmentResponse,attendanceResponse]) => {
       setSession(sessionResponse.data)
       setSummary(summaryResponse.data)
       setEnrolled(Boolean(enrollmentResponse.data.enrolled))
+      setRecord(attendanceResponse.data.record)
     }).catch(requestError => setError(message(requestError)))
     const timer = setInterval(() => setClock(new Date()),1000)
     return () => clearInterval(timer)
@@ -212,7 +214,7 @@ export default function AttendancePage() {
   return <main className="app">
     <header><div className="brand">Fika<span>AI</span></div><nav><Link to="/student/attendance">Attendance</Link><Link to="/student/face-enrollment">Face enrolment</Link><button className="ghost" onClick={() => { localStorage.clear(); window.location.reload() }}>Sign out</button></nav></header>
     <section className="hero compact-hero"><p className="eyebrow">CYBERSECURITY INDUSTRIAL PRACTICAL TRAINING</p><h1>Good morning, {summary?.fullName || localStorage.getItem('fikaai.name') || 'Student'}</h1><p className="date">{clock.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})} · {clock.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p></section>
-    {summary && <section className="training-strip"><div><span>DAILY PRESENCE</span><b>{summary.courseTitle}</b><small>{summary.classGroupName} · {summary.registrationNumber}</small></div><div><span>TRAINING AREA</span><b>{summary.permanentLocationName || 'Dar es Salaam'}</b><small>GPS temporarily disabled</small></div></section>}
+    {summary && session && <section className="training-strip"><div><span>DAILY PRESENCE</span><b>{session.courseTitle}</b><small>{session.title} · {summary.registrationNumber}</small></div><div><span>TRAINING AREA</span><b>{session.locationName}</b><small>GPS temporarily disabled</small></div></section>}
     {!enrolled && <div className="error">A compatible Face ID is required. <Link to="/student/face-enrollment">Enrol your face now</Link>.</div>}
     {error && stage === 'intro' && <div className="error">{error}</div>}
     <FaceScanFlow

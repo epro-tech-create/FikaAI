@@ -19,7 +19,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.models.entities import AuditLog, ClassGroup, Student, StudentClassEnrollment, User, UserRole
+from app.models.entities import AuditLog, Student, StudentStatus, User, UserRole
 from app.schemas import LoginRequest, MeResponse, RefreshRequest, StudentRegisterRequest, TokenPairResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -43,19 +43,6 @@ async def register_student(
             409,
         )
 
-    class_group = (await db.execute(
-        select(ClassGroup)
-        .where(ClassGroup.default_location_id.is_not(None))
-        .order_by(ClassGroup.created_at.asc())
-        .limit(1)
-    )).scalar_one_or_none()
-    if class_group is None:
-        raise ApiError(
-            ErrorCode.REGISTRATION_UNAVAILABLE,
-            "Student registration is unavailable until a default class is configured.",
-            503,
-        )
-
     user = User(
         email=payload.email,
         full_name=payload.full_name,
@@ -70,16 +57,16 @@ async def register_student(
             user_id=user.id,
             registration_number=payload.registration_number,
             course_of_study="Industrial Practical Training - Cybersecurity",
+            status=StudentStatus.ACTIVE,
         )
         db.add(student)
         await db.flush()
-        db.add(StudentClassEnrollment(student_id=student.id, class_group_id=class_group.id))
         db.add(AuditLog(
             actor_user_id=user.id,
             action="student_self_registered",
             entity_type="student",
             entity_id=student.id,
-            details={"class_group_id": str(class_group.id)},
+            details={"status": StudentStatus.ACTIVE.value},
             ip_address=request.client.host if request.client else None,
         ))
         await db.commit()

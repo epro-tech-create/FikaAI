@@ -35,7 +35,7 @@ from app.models.entities import (
 )
 from app.services.audit_service import audit_detached
 from app.services.enrollment_service import decode_frame, load_active_enrollment
-from app.services.session_service import get_active_assigned_session_or_error
+from app.services.session_service import get_active_session_or_error
 
 logger = logging.getLogger("fikaai.verify")
 
@@ -52,6 +52,13 @@ def aggregate_match_scores(scores: list[float]) -> float:
     if len(scores) < MIN_MATCH_FRAMES:
         raise ValueError(f"At least {MIN_MATCH_FRAMES} scores are required")
     return float(np.median(np.asarray(scores, dtype=np.float32)))
+
+
+def is_robust_match(scores: list[float], threshold: float) -> bool:
+    """Require both the aggregate and a strict majority to meet the threshold."""
+    aggregate = aggregate_match_scores(scores)
+    passing = sum(score >= threshold for score in scores)
+    return aggregate >= threshold and passing > len(scores) // 2
 
 
 async def issue_challenge(
@@ -73,7 +80,7 @@ async def issue_challenge(
         raise ApiError(ErrorCode.FACE_NOT_ENROLLED,
                        "No face enrolment found. Complete face enrolment first.", 409)
 
-    await get_active_assigned_session_or_error(db, student.id, session_id)
+    await get_active_session_or_error(db, session_id)
 
     challenge_type = random.choice(list(LivenessChallengeType))
     record = FaceVerification(
@@ -145,10 +152,9 @@ async def verify_face(
     decoded: list[np.ndarray] = []
     for blob in blobs:
         img = cv2.imdecode(np.frombuffer(blob, dtype=np.uint8), cv2.IMREAD_COLOR)
-        if img is not None:
-            decoded.append(img)
-    if not decoded:
-        raise ApiError(ErrorCode.UNSUPPORTED_MEDIA_TYPE, "Frames could not be decoded.", 422)
+        if img is None:
+            raise ApiError(ErrorCode.UNSUPPORTED_MEDIA_TYPE, "A frame could not be decoded.", 422)
+        decoded.append(img)
 
     # ---- server-side liveness decision ----
     result = await run_in_threadpool(liveness.analyze, decoded, row.challenge_type)
@@ -242,7 +248,7 @@ async def verify_face(
     row.face_enrollment_id = enrollment.id
     threshold = settings.face_match_threshold
 
-    if similarity < threshold:
+    if not is_robust_match(scores, threshold):
         row.completed_at = now
         row.verified = False
         row.failure_reason = ErrorCode.FACE_MISMATCH.value

@@ -20,7 +20,7 @@ from app.models.entities import AttendanceSession, LocationVerification, Student
 from app.services.audit_service import audit_detached
 from app.services.session_service import (
     campus_now,
-    get_active_assigned_session_or_error,
+    get_active_session_or_error,
     validate_window,
 )
 
@@ -68,7 +68,7 @@ async def verify_location(
     ip_address: str | None = None,
 ) -> LocationVerification:
     """Validate the session, GPS freshness/accuracy/radius; persist a one-time token."""
-    session = await get_active_assigned_session_or_error(db, student.id, session_id)
+    session = await get_active_session_or_error(db, session_id)
     assert isinstance(session, AttendanceSession)
 
     # Session time window: students with an existing check-in are validating for checkout
@@ -93,7 +93,7 @@ async def verify_location(
             session_id=session_id,
             verified=True,
             distance_meters=0.0,
-            allowed_radius_meters=float(session.location.radius_meters),
+            allowed_radius_meters=float(session.permitted_radius_meters),
             accuracy_meters=0.0,
             captured_at=now_utc,
             expires_at=now_utc + timedelta(seconds=settings.location_token_ttl_seconds),
@@ -141,7 +141,7 @@ async def verify_location(
         latitude, longitude,
         float(session.location.latitude), float(session.location.longitude),
     )
-    allowed_radius = float(session.location.radius_meters)
+    allowed_radius = float(session.permitted_radius_meters)
     if distance > allowed_radius:
         await audit_detached(
             action="location_verification_failed",

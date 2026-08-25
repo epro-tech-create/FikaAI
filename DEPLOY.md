@@ -2,6 +2,9 @@
 
 This deployment runs PostgreSQL, FastAPI, the built React application, and Caddy on one Linux VPS. Caddy obtains and renews the HTTPS certificate automatically. HTTPS is required because browsers block camera access on non-secure public origins.
 
+FikaAI serves a single student population. Courses and instructors own
+attendance sessions directly, without assigning students to subdivisions.
+
 ## Prerequisites
 
 - A Linux VPS with at least 4 GB RAM, 2 CPU cores, and 20 GB free disk space
