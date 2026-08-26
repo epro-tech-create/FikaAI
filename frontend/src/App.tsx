@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { api, message } from './services/api'
 import AttendancePage from './pages/student/AttendancePage'
 import FaceEnrollmentPage from './pages/student/FaceEnrollmentPage'
@@ -14,6 +14,7 @@ import { adminPages, instructorPages } from './pages/portal/config'
 import { clearAuthentication, getStoredRole, parseRole, storeAuthentication } from './lib/auth'
 import { applicationConfig, currentApplication, instructorLoginUrl, portalTitleForRole, type Application } from './lib/application'
 import { getRegistrationDeviceId } from './lib/device'
+import { startInactivityTimer } from './lib/inactivity'
 
 function Login({ application }: { application: Application }) {
   const navigate = useNavigate()
@@ -102,6 +103,14 @@ function HomeRedirect({ application }: { application: Application }) {
 
 export default function App({ application }: { application?: Application }) {
   const app = application ?? currentApplication()
+  const location = useLocation()
+  useEffect(() => {
+    if (!localStorage.getItem('fikaai.access')) return
+    return startInactivityTimer(() => {
+      clearAuthentication()
+      window.location.replace('/login')
+    })
+  }, [location.pathname])
   return <Routes>
     <Route path="/login" element={<Login application={app}/>}/>
     {app === 'student' && <>
