@@ -5,7 +5,7 @@ import { api, message } from '../../services/api'
 import { useCameraFrames } from '../../hooks/useCameraFrames'
 import { useFaceMonitor } from '../../hooks/useFaceMonitor'
 import { isContinuousReading, isFreshReading, parseChallengeType, type ChallengeType } from '../../lib/captureQuality'
-import { clearAuthentication } from '../../lib/auth'
+import { clearAuthentication, getStoredFaceEnrollment, storeFaceEnrollment } from '../../lib/auth'
 
 type Session = { sessionId:string; title:string; courseTitle:string; locationName:string }
 type Summary = { fullName:string; registrationNumber:string }
@@ -14,7 +14,7 @@ const sleep = (milliseconds:number) => new Promise(resolve => window.setTimeout(
 export default function AttendancePage() {
   const [session,setSession] = useState<Session|null>(null)
   const [summary,setSummary] = useState<Summary|null>(null)
-  const [enrolled,setEnrolled] = useState(false)
+  const [enrolled,setEnrolled] = useState(getStoredFaceEnrollment)
   const [record,setRecord] = useState<any>(null)
   const [stage,setStage] = useState<ScanStage>('intro')
   const [progress,setProgress] = useState(0)
@@ -36,7 +36,11 @@ export default function AttendancePage() {
     ]).then(([sessionResult,summaryResult,enrollmentResult,attendanceResult]) => {
       if (sessionResult.status === 'fulfilled') setSession(sessionResult.value.data)
       if (summaryResult.status === 'fulfilled') setSummary(summaryResult.value.data)
-      if (enrollmentResult.status === 'fulfilled') setEnrolled(Boolean(enrollmentResult.value.data.enrolled))
+      if (enrollmentResult.status === 'fulfilled') {
+        const isEnrolled = Boolean(enrollmentResult.value.data.enrolled)
+        setEnrolled(isEnrolled)
+        storeFaceEnrollment(isEnrolled)
+      }
       if (attendanceResult.status === 'fulfilled') setRecord(attendanceResult.value.data.record)
       const failure = [sessionResult,summaryResult,enrollmentResult,attendanceResult]
         .find(result => result.status === 'rejected')

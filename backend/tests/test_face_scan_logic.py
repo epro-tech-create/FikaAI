@@ -104,7 +104,7 @@ def test_quality_accepts_normal_webcam_edge_detail():
 
 
 @pytest.mark.asyncio
-async def test_enrollment_accepts_five_good_samples_when_two_are_rejected(monkeypatch):
+async def test_enrollment_stops_inference_after_five_good_samples(monkeypatch):
     import cv2
 
     good = np.full((120, 160, 3), 120, dtype=np.uint8)
@@ -129,6 +129,13 @@ async def test_enrollment_accepts_five_good_samples_when_two_are_rejected(monkey
             self.enrollment.id = uuid.uuid4()
             self.enrollment.created_at = datetime.now(timezone.utc)
 
+    class CountingRecognizer(FakeRecognitionService):
+        calls = 0
+
+        def detect_and_embed(self, bgr):
+            self.calls += 1
+            return super().detect_and_embed(bgr)
+
     async def no_audit(*_args, **_kwargs):
         return None
 
@@ -140,6 +147,7 @@ async def test_enrollment_accepts_five_good_samples_when_two_are_rejected(monkey
         consent_given_at=None,
     )
     db = FakeDb()
+    recognizer = CountingRecognizer(always_match=True)
 
     result = await enroll_face(
         db,
@@ -148,11 +156,12 @@ async def test_enrollment_accepts_five_good_samples_when_two_are_rejected(monkey
         samples_b64=[encode(good)] * 5 + [encode(blurred)] * 2,
         consent_granted=True,
         ip_address=None,
-        recognizer=FakeRecognitionService(always_match=True),
+        recognizer=recognizer,
     )
 
     assert result["enrolled"]
     assert result["sampleCount"] == 5
+    assert recognizer.calls == 5
 
 
 def test_candidate_selection_spreads_five_frames_across_sequence():

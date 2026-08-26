@@ -1,6 +1,7 @@
 export type Role = 'admin' | 'instructor' | 'student'
 
 const ROLE_KEY = 'fikaai.role'
+const FACE_ENROLLED_KEY = 'fikaai.face-enrolled'
 
 export function parseRole(value: unknown): Role | null {
   if (typeof value !== 'string') return null
@@ -26,12 +27,23 @@ export function storeAuthentication(data: Record<string, unknown>) {
   if (typeof accessToken !== 'string' || !role) throw new Error('The server returned an invalid sign-in response.')
   localStorage.setItem('fikaai.access', accessToken)
   localStorage.setItem(ROLE_KEY, role)
+  localStorage.removeItem(FACE_ENROLLED_KEY)
   if (typeof fullName === 'string') localStorage.setItem('fikaai.name', fullName)
   return role
+}
+
+export function getStoredFaceEnrollment() {
+  return localStorage.getItem(FACE_ENROLLED_KEY) === 'true'
+}
+
+export function storeFaceEnrollment(enrolled: boolean) {
+  if (enrolled) localStorage.setItem(FACE_ENROLLED_KEY,'true')
+  else localStorage.removeItem(FACE_ENROLLED_KEY)
 }
 
 export function clearAuthentication() {
   localStorage.removeItem('fikaai.access')
   localStorage.removeItem('fikaai.name')
   localStorage.removeItem(ROLE_KEY)
+  localStorage.removeItem(FACE_ENROLLED_KEY)
 }

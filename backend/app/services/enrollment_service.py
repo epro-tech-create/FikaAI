@@ -138,6 +138,8 @@ async def enroll_face(
             rejected.append({"sampleIndex": index, "code": exc.code.value})
             continue
         embeddings.append(embedding)
+        if len(embeddings) == MIN_SAMPLES:
+            break
 
     if len(embeddings) < MIN_SAMPLES:
         raise ApiError(

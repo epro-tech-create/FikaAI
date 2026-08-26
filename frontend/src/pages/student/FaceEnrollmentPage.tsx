@@ -5,7 +5,7 @@ import { api, message } from '../../services/api'
 import { useCameraFrames } from '../../hooks/useCameraFrames'
 import { useFaceMonitor, type FaceReading } from '../../hooks/useFaceMonitor'
 import { isContinuousReading, isFreshReading } from '../../lib/captureQuality'
-import { clearAuthentication } from '../../lib/auth'
+import { clearAuthentication, storeFaceEnrollment } from '../../lib/auth'
 
 const sleep = (milliseconds:number) => new Promise(resolve => window.setTimeout(resolve,milliseconds))
 
@@ -109,7 +109,7 @@ export default function FaceEnrollmentPage() {
       processingTimer = window.setInterval(() => setProgress(value => Math.min(94,value + 1)),130)
       const response = await api.post('/student/face-enrollment',{samples,consentGranted:consent})
       window.clearInterval(processingTimer); processingTimer = undefined
-      setStatus(response.data); setProgress(100)
+      setStatus(response.data); storeFaceEnrollment(true); setProgress(100)
       window.setTimeout(() => setStage('success'),350)
     } catch (requestError) {
       if (processingTimer) window.clearInterval(processingTimer)
