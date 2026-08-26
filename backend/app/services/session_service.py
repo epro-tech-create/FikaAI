@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, time
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -23,6 +23,8 @@ from app.models.entities import (
     AttendanceSession,
     Course,
     Instructor,
+    InstructorCourseAssignment,
+    LocationType,
     PracticalLocation,
     SessionStatus,
 )
@@ -72,6 +74,8 @@ async def ensure_daily_presence_session(db: AsyncSession) -> AttendanceSession |
     existing attendance foreign keys and concurrency guarantees while the UX
     behaves as a simple daily face-presence scan.
     """
+    # Serialize fallback creation when several students open attendance together.
+    await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": 1_173_172_359})
     today = campus_now().today
     existing = (await db.execute(
         select(AttendanceSession).where(
@@ -82,23 +86,51 @@ async def ensure_daily_presence_session(db: AsyncSession) -> AttendanceSession |
     if existing is not None:
         return existing
 
-    course = (await db.execute(select(Course).order_by(Course.created_at, Course.code).limit(1))).scalar_one_or_none()
     instructor = (
         await db.execute(select(Instructor).order_by(Instructor.created_at, Instructor.id).limit(1))
     ).scalar_one_or_none()
+    if instructor is None:
+        return None
+
+    course = (await db.execute(select(Course).order_by(Course.created_at, Course.code).limit(1))).scalar_one_or_none()
+    if course is None:
+        course = Course(code="IPT-CYBER", title="Cybersecurity Industrial Practical Training")
+        db.add(course)
+        await db.flush()
+
     location = (await db.execute(
         select(PracticalLocation)
         .where(PracticalLocation.is_active.is_(True))
         .order_by(PracticalLocation.name)
         .limit(1)
     )).scalar_one_or_none()
-    if course is None or instructor is None or location is None:
-        return None
+    if location is None:
+        location = PracticalLocation(
+            name="Cybersecurity Practical Training Area",
+            address="Configured training area",
+            latitude=settings.training_latitude,
+            longitude=settings.training_longitude,
+            radius_meters=settings.training_radius_meters,
+            location_type=LocationType.CLASSROOM,
+            is_active=True,
+        )
+        db.add(location)
+        await db.flush()
+
+    assignment = (await db.execute(
+        select(InstructorCourseAssignment).where(
+            InstructorCourseAssignment.instructor_id == instructor.id,
+            InstructorCourseAssignment.course_id == course.id,
+        )
+    )).scalar_one_or_none()
+    if assignment is None:
+        db.add(InstructorCourseAssignment(instructor_id=instructor.id, course_id=course.id))
+        await db.flush()
 
     daily = AttendanceSession(
-        course_id=course.id,
-        instructor_id=instructor.id,
-        location_id=location.id,
+        course=course,
+        instructor=instructor,
+        location=location,
         title="Daily practical presence",
         session_date=today,
         check_in_open=time(0, 0),

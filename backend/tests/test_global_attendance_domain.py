@@ -1,10 +1,12 @@
 import inspect
+import uuid
 from datetime import date, datetime
 
 import pytest
 
 from app.core.errors import ApiError, ErrorCode
 from app.models.base import Base
+from app.models.entities import AttendanceSession, Course, Instructor, InstructorCourseAssignment, PracticalLocation
 from app.services.attendance_service import validate_minimum_checkout_time
 from app.services.session_service import CampusClock, ensure_daily_presence_session, find_active_session, validate_window
 
@@ -46,10 +48,60 @@ async def test_daily_session_returns_none_when_configuration_is_incomplete():
             return None
 
     class EmptyDb:
-        async def execute(self, _statement):
+        async def execute(self, _statement, _parameters=None):
             return EmptyResult()
 
     assert await ensure_daily_presence_session(EmptyDb()) is None
+
+
+@pytest.mark.asyncio
+async def test_daily_session_bootstraps_missing_course_location_and_assignment():
+    instructor = Instructor(id=uuid.uuid4(), user_id=uuid.uuid4())
+
+    class Result:
+        def __init__(self, value=None):
+            self.value = value
+
+        def scalar_one_or_none(self):
+            return self.value
+
+    class BootstrapDb:
+        def __init__(self):
+            self.results = iter([
+                Result(),  # advisory lock
+                Result(),  # today's session
+                Result(instructor),
+                Result(),  # course
+                Result(),  # location
+                Result(),  # assignment
+            ])
+            self.added = []
+
+        async def execute(self, _statement, _parameters=None):
+            return next(self.results)
+
+        def add(self, value):
+            self.added.append(value)
+
+        async def flush(self):
+            for value in self.added:
+                if getattr(value, "id", None) is None:
+                    value.id = uuid.uuid4()
+
+        async def commit(self):
+            return None
+
+        async def refresh(self, _value):
+            return None
+
+    db = BootstrapDb()
+
+    session = await ensure_daily_presence_session(db)
+
+    assert isinstance(session, AttendanceSession)
+    assert any(isinstance(value, Course) for value in db.added)
+    assert any(isinstance(value, PracticalLocation) for value in db.added)
+    assert any(isinstance(value, InstructorCourseAssignment) for value in db.added)
 
 
 def test_window_validation_depends_only_on_session_time():
