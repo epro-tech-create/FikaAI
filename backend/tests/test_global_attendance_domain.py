@@ -5,6 +5,7 @@ import pytest
 
 from app.core.errors import ApiError, ErrorCode
 from app.models.base import Base
+from app.services.attendance_service import validate_minimum_checkout_time
 from app.services.session_service import CampusClock, ensure_daily_presence_session, find_active_session, validate_window
 
 
@@ -85,3 +86,24 @@ def test_global_window_still_rejects_a_closed_check_in():
         validate_window(session, "check_in", clock)
 
     assert error.value.code == ErrorCode.CHECK_IN_CLOSED
+
+
+def test_checkout_is_rejected_before_thirty_minutes():
+    check_in_at = datetime.fromisoformat("2026-08-26T08:00:00+03:00")
+
+    with pytest.raises(ApiError) as error:
+        validate_minimum_checkout_time(
+            check_in_at,
+            datetime.fromisoformat("2026-08-26T08:12:00+03:00"),
+        )
+
+    assert error.value.code == ErrorCode.CHECKOUT_TOO_EARLY
+    assert error.value.details["remainingMinutes"] == 18
+    assert error.value.details["availableAt"] == "2026-08-26T08:30:00+03:00"
+
+
+def test_checkout_is_allowed_at_thirty_minutes():
+    validate_minimum_checkout_time(
+        datetime.fromisoformat("2026-08-26T08:00:00+03:00"),
+        datetime.fromisoformat("2026-08-26T08:30:00+03:00"),
+    )

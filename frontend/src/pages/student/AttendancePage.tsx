@@ -6,6 +6,7 @@ import { useCameraFrames } from '../../hooks/useCameraFrames'
 import { useFaceMonitor } from '../../hooks/useFaceMonitor'
 import { isContinuousReading, isFreshReading, parseChallengeType, type ChallengeType } from '../../lib/captureQuality'
 import { clearAuthentication, getStoredFaceEnrollment, storeFaceEnrollment } from '../../lib/auth'
+import { earlyCheckoutMessage } from '../../lib/checkout'
 
 type Session = { sessionId:string; title:string; courseTitle:string; locationName:string }
 type Summary = { fullName:string; registrationNumber:string }
@@ -171,6 +172,13 @@ export default function AttendancePage() {
 
   async function scan() {
     if (!session || !enrolled) return
+    const checkoutError = (record?.status === 'PRESENT' || record?.status === 'LATE')
+      ? earlyCheckoutMessage(record?.checkInAt)
+      : ''
+    if (checkoutError) {
+      setError(checkoutError)
+      return
+    }
     const activeRun = ++runId.current
     setStage('scanning'); setProgress(2); setInstruction('Loading secure face scanner…'); setScanStatus('Allow camera access when asked'); setError('')
     let processingTimer: number | undefined
