@@ -8,10 +8,12 @@ import pytest
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
 from app.face_ai.liveness_service import MediaPipeLivenessAnalyzer, _FrameSignals
-from app.face_ai.quality import assess_quality, select_temporally_distributed
+from app.face_ai.quality import MIN_BLUR_VARIANCE, assess_quality, select_temporally_distributed
+from app.face_ai.recognition_service import FakeRecognitionService
 from app.models.entities import LivenessChallengeType
+from app.models.entities import Student
 from app.schemas import ChallengeResponse
-from app.services.enrollment_service import decode_frame
+from app.services.enrollment_service import decode_frame, enroll_face
 from app.services.verification_service import aggregate_match_scores, is_robust_match
 
 
@@ -81,6 +83,68 @@ def test_quality_reports_blur_separately():
     blurred = np.full((100, 100, 3), 120, dtype=np.uint8)
 
     assert assess_quality(blurred).reason_code == "BLURRED_IMAGE"
+
+
+def test_quality_accepts_normal_webcam_edge_detail():
+    image = np.full((120, 160, 3), 120, dtype=np.uint8)
+    image[:, ::8] = 155
+
+    result = assess_quality(image)
+
+    assert result.blur_variance >= MIN_BLUR_VARIANCE
+    assert result.ok
+
+
+@pytest.mark.asyncio
+async def test_enrollment_accepts_five_good_samples_when_two_are_rejected(monkeypatch):
+    import cv2
+
+    good = np.full((120, 160, 3), 120, dtype=np.uint8)
+    good[:, ::8] = 155
+    blurred = np.full((120, 160, 3), 120, dtype=np.uint8)
+
+    def encode(image: np.ndarray) -> str:
+        success, data = cv2.imencode(".jpg", image)
+        assert success
+        return base64.b64encode(data).decode()
+
+    class FakeDb:
+        enrollment = None
+
+        async def execute(self, _statement):
+            return None
+
+        def add(self, enrollment):
+            self.enrollment = enrollment
+
+        async def commit(self):
+            self.enrollment.id = uuid.uuid4()
+            self.enrollment.created_at = datetime.now(timezone.utc)
+
+    async def no_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("app.services.enrollment_service.audit_detached_safe", no_audit)
+    student = Student(
+        id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
+        registration_number="TEST-001",
+        consent_given_at=None,
+    )
+    db = FakeDb()
+
+    result = await enroll_face(
+        db,
+        student=student,
+        actor_user_id=student.user_id,
+        samples_b64=[encode(good)] * 5 + [encode(blurred)] * 2,
+        consent_granted=True,
+        ip_address=None,
+        recognizer=FakeRecognitionService(always_match=True),
+    )
+
+    assert result["enrolled"]
+    assert result["sampleCount"] == 5
 
 
 def test_candidate_selection_spreads_five_frames_across_sequence():

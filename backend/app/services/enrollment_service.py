@@ -114,36 +114,38 @@ async def enroll_face(
 
     blobs = [decode_sample(s) for s in samples_b64]
 
-    # Decode to arrays once; quality gate every sample BEFORE any face work
+    # Keep enough good samples rather than rejecting an otherwise usable batch
+    # because one camera frame was blurred or missed by the detector.
     import cv2
 
-    frames: list[np.ndarray] = []
+    embeddings: list[np.ndarray] = []
+    rejected: list[dict] = []
     from app.face_ai.quality import assess_quality
 
     for index, blob in enumerate(blobs):
         img = cv2.imdecode(np.frombuffer(blob, dtype=np.uint8), cv2.IMREAD_COLOR)
         if img is None:
-            raise ApiError(ErrorCode.UNSUPPORTED_MEDIA_TYPE, f"Sample {index + 1} could not be decoded.", 422)
+            rejected.append({"sampleIndex": index, "code": ErrorCode.UNSUPPORTED_MEDIA_TYPE.value})
+            continue
         quality = assess_quality(img)
         if not quality.ok:
-            message = (
-                f"Sample {index + 1} is blurred. Hold the camera steady."
-                if quality.reason_code == "BLURRED_IMAGE"
-                else f"Sample {index + 1} is too dark or washed out. Improve the lighting."
-            )
             code = ErrorCode.BLURRED_IMAGE if quality.reason_code == "BLURRED_IMAGE" else ErrorCode.TOO_DARK
-            raise ApiError(code, message, 422, {"sampleIndex": index})
-        frames.append(img)
-
-    # One face per sample + per-sample embeddings (CPU-bound -> threadpool).
-    embeddings: list[np.ndarray] = []
-    for index, frame in enumerate(frames):
+            rejected.append({"sampleIndex": index, "code": code.value})
+            continue
         try:
-            embedding = await run_in_threadpool(recognizer.detect_and_embed, frame)
+            embedding = await run_in_threadpool(recognizer.detect_and_embed, img)
         except ApiError as exc:
-            exc.details = {**(exc.details or {}), "sampleIndex": index}
-            raise
+            rejected.append({"sampleIndex": index, "code": exc.code.value})
+            continue
         embeddings.append(embedding)
+
+    if len(embeddings) < MIN_SAMPLES:
+        raise ApiError(
+            ErrorCode.SAMPLE_COUNT_INVALID,
+            f"Only {len(embeddings)} usable face samples were captured. Hold still in even lighting and try again.",
+            422,
+            {"acceptedCount": len(embeddings), "rejectedSamples": rejected},
+        )
 
     consistency = _consistency(embeddings)
     if consistency < settings.face_min_consistency:
@@ -174,7 +176,7 @@ async def enroll_face(
         embedding_encrypted=encrypted,
         provider=recognizer.provider_name,
         embedding_dim=int(normalized.shape[0]),
-        sample_count=len(samples_b64),
+        sample_count=len(embeddings),
         mean_consistency=round(consistency, 4),
         is_active=True,
         consent_given_at=now,
@@ -185,10 +187,10 @@ async def enroll_face(
         student.consent_given_at = now
 
     await audit_detached_safe(actor_user_id, ip_address, "face_enrolled",
-                              {"samples": len(samples_b64), "consistency": round(consistency, 3)})
+                              {"samples": len(embeddings), "consistency": round(consistency, 3)})
     await db.commit()
     logger.info("Face enrolled student=%s provider=%s samples=%d", student.id, recognizer.provider_name,
-                len(samples_b64))
+                 len(embeddings))
     return {
         "enrolled": True,
         "faceId": str(enrollment.id),

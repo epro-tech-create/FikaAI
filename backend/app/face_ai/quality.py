@@ -21,7 +21,7 @@ class QualityResult:
     brightness: float = 0.0
 
 
-MIN_BLUR_VARIANCE = 60.0   # Laplacian variance below this => blurred
+MIN_BLUR_VARIANCE = 35.0   # Keep ordinary 640px webcam captures while rejecting clear blur
 MIN_BRIGHTNESS = 45.0      # mean grayscale below this => too dark
 MAX_BRIGHTNESS = 238.0     # mean grayscale above this => washed out / overexposed
 

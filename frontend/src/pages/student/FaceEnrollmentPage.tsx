@@ -33,11 +33,11 @@ export default function FaceEnrollmentPage() {
     let baselinePitch = 0
     let lastVideoTime = -1
     const poses = [
-      { instruction:'Look straight at the camera', status:'Hold a straight pose', matches:(face:FaceReading) => Math.abs(face.yaw) <= 0.09 },
-      { instruction:'Slowly turn your head to the left', status:'Hold your left profile', matches:(face:FaceReading) => face.yaw <= -0.12 },
-      { instruction:'Slowly turn your head to the right', status:'Hold your right profile', matches:(face:FaceReading) => face.yaw >= 0.12 },
-      { instruction:'Lower your chin slightly', status:'Hold the downward angle', matches:(face:FaceReading) => Math.abs(face.yaw) <= 0.12 && Math.abs(face.pitch - baselinePitch) >= 8 },
-      { instruction:'Return and look straight again', status:'Hold the final straight pose', matches:(face:FaceReading) => Math.abs(face.yaw) <= 0.09 && Math.abs(face.pitch - baselinePitch) <= 7 },
+      { instruction:'Look straight at the camera', status:'Hold a straight pose', samples:2, matches:(face:FaceReading) => face.ready && Math.abs(face.yaw) <= 0.09 },
+      { instruction:'Slowly turn your head to the left', status:'Hold your left profile', samples:1, matches:(face:FaceReading) => face.faceCount === 1 && face.sizeOk && face.lightingOk && face.yaw <= -0.12 },
+      { instruction:'Slowly turn your head to the right', status:'Hold your right profile', samples:1, matches:(face:FaceReading) => face.faceCount === 1 && face.sizeOk && face.lightingOk && face.yaw >= 0.12 },
+      { instruction:'Lower your chin slightly', status:'Hold the downward angle', samples:1, matches:(face:FaceReading) => face.ready && Math.abs(face.yaw) <= 0.12 && Math.abs(face.pitch - baselinePitch) >= 8 },
+      { instruction:'Return and look straight again', status:'Hold the final straight pose', samples:2, matches:(face:FaceReading) => face.ready && Math.abs(face.yaw) <= 0.09 && Math.abs(face.pitch - baselinePitch) <= 7 },
     ]
 
     for (let index=0; index<poses.length; index++) {
@@ -62,7 +62,7 @@ export default function FaceEnrollmentPage() {
         lastSequence = face.sequence
         if (!isContinuousReading(face,previousAnalyzedAt)) heldFrom = 0
         previousAnalyzedAt = face.analyzedAt
-        const matches = face.ready && pose.matches(face)
+        const matches = pose.matches(face)
         if (!face.ready) setScanStatus(face.hint)
         else setScanStatus(matches ? `${pose.status} — keep still` : pose.status)
 
@@ -74,6 +74,12 @@ export default function FaceEnrollmentPage() {
             const sample = cam.grabFrame(lastVideoTime)
             lastVideoTime = sample.videoTime
             samples.push(sample.dataUrl)
+            if (pose.samples === 2) {
+              await sleep(180)
+              const extra = cam.grabFrame(lastVideoTime)
+              lastVideoTime = extra.videoTime
+              samples.push(extra.dataUrl)
+            }
             if (index === 0) { baselinePitch = face.pitch; setSnapshot(sample.dataUrl) }
             setScanStatus(`Pose ${index + 1} of ${poses.length} captured`)
             await sleep(500)
@@ -85,7 +91,8 @@ export default function FaceEnrollmentPage() {
         }
         await sleep(70)
       }
-      if (samples.length !== index + 1) throw new Error(`The ${pose.instruction.toLowerCase()} pose was not captured in time. Please try again.`)
+      const completedSamples = poses.slice(0,index + 1).reduce((total,item) => total + item.samples,0)
+      if (samples.length !== completedSamples) throw new Error(`The ${pose.instruction.toLowerCase()} pose was not captured in time. Please try again.`)
     }
     return samples
   }
