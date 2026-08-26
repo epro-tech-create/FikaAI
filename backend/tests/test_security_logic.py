@@ -53,8 +53,8 @@ def test_student_registration_rejects_weak_password():
         )
 
 
-@pytest.mark.parametrize("registration_number", ["REG-2026-031", "240242412345", "2402425123456"])
-def test_student_registration_requires_expected_number_format(registration_number):
+@pytest.mark.parametrize("registration_number", ["REG-2026-031", "123-456", "ABC123"])
+def test_student_registration_rejects_non_numeric_numbers(registration_number):
     with pytest.raises(ValidationError):
         StudentRegisterRequest(
             fullName="New Student",
@@ -63,6 +63,19 @@ def test_student_registration_requires_expected_number_format(registration_numbe
             deviceId=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
             password="SecurePass9",
         )
+
+
+@pytest.mark.parametrize("registration_number", ["123", "202612345", "99999999999999999999"])
+def test_student_registration_accepts_any_numeric_number(registration_number):
+    request = StudentRegisterRequest(
+        fullName="New Student",
+        email="student@example.com",
+        registrationNumber=registration_number,
+        deviceId=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+        password="SecurePass9",
+    )
+
+    assert request.registration_number == registration_number
 
 
 def test_registration_device_hash_is_stable_and_non_reversible():

@@ -49,8 +49,8 @@ class StudentRegisterRequest(CamelModel):
     @classmethod
     def normalize_registration_number(cls, value: str) -> str:
         normalized = value.strip()
-        if len(normalized) != 13 or not normalized.startswith("2402424") or not normalized.isdigit():
-            raise ValueError("Registration number must be 13 digits in the format 2402424xxxxxx.")
+        if not normalized.isdigit():
+            raise ValueError("Registration number must contain numbers only.")
         return normalized
 
     @field_validator("password")
