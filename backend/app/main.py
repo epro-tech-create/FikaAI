@@ -78,12 +78,15 @@ def create_app() -> FastAPI:
             problems.append("database")
 
         if settings.face_embedding_provider == "insightface":
-            pack_dir = settings.models_dir / "models" / "buffalo_l"
-            missing = [
-                name
-                for name in ("det_10g.onnx", "w600k_r50.onnx")
-                if not (pack_dir / name).is_file()
-            ]
+            model_files = {
+                "buffalo_sc": ("det_500m.onnx", "w600k_mbf.onnx"),
+                "buffalo_l": ("det_10g.onnx", "w600k_r50.onnx"),
+            }
+            required = model_files.get(settings.insightface_model_name, ())
+            pack_dir = settings.models_dir / "models" / settings.insightface_model_name
+            missing = [name for name in required if not (pack_dir / name).is_file()]
+            if not required:
+                missing.append("unsupported-model-pack")
             if missing:
                 problems.append("models:" + ",".join(missing))
 

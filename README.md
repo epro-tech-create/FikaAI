@@ -54,7 +54,7 @@ python backend/scripts/download_models.py
 
 Set `FACE_EMBEDDING_PROVIDER=insightface` and provide a persistent
 `EMBEDDING_ENCRYPTION_KEY` before using real biometric data. InsightFace
-`buffalo_l` weights have a non-commercial research license; review that license
+InsightFace model weights have a non-commercial research license; review that license
 before commercial deployment. MediaPipe landmark liveness is MVP-level only;
 see `docs/LIVENESS_MVP_NOTICE.md`.
 

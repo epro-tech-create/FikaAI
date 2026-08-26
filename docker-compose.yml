@@ -26,7 +26,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Model weights persist across rebuilds (~330 MB download on first start)
+      # Model weights persist across rebuilds (~16 MB download with buffalo_sc)
       - fikaai_models:/app/models_data
     depends_on:
       db:

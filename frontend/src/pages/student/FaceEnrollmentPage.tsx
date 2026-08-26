@@ -141,7 +141,7 @@ export default function FaceEnrollmentPage() {
       details={[
         {label:'Face ID',value:status?.faceId ? `${status.faceId.slice(0,8)}…` : 'Created'},
         {label:'Samples',value:String(status?.sampleCount || 5)},
-        {label:'Provider',value:status?.provider === 'insightface_buffalo_l' ? 'ArcFace' : status?.provider || 'ArcFace'},
+        {label:'Provider',value:status?.provider?.startsWith('insightface_') ? 'ArcFace' : status?.provider || 'ArcFace'},
         {label:'Storage',value:'Encrypted'},
         {label:'Status',value:'Ready'},
       ]}

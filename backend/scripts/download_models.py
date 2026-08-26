@@ -2,7 +2,7 @@
 """Download pretrained AI models into MODELS_DIR (default: ./models_data).
 
 Downloads:
-  1. InsightFace buffalo_l pack   (~330 MB, ArcFace embeddings + SCRFD detector)
+  1. InsightFace model pack (buffalo_sc by default, ~16 MB)
      https://github.com/deepinsight/insightface  (model weights: non-commercial research licence)
   2. MediaPipe face_landmarker.task (~3.7 MB, Apache-2.0)
 
@@ -21,7 +21,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import settings  # noqa: E402
 
-BUFFALO_URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip"
+MODEL_FILES = {
+    "buffalo_sc": ("det_500m.onnx", "w600k_mbf.onnx"),
+    "buffalo_l": ("det_10g.onnx", "w600k_r50.onnx"),
+}
 LANDMARKER_URL = (
     "https://storage.googleapis.com/mediapipe-models/face_landmarker/"
     "face_landmarker/float16/latest/face_landmarker.task"
@@ -53,22 +56,28 @@ def download(url: str, dest: Path) -> None:
 
 def main() -> int:
     models_dir = settings.models_dir
-    insightface_root = models_dir / "models"
-    pack_dir = insightface_root / "buffalo_l"
+    model_name = settings.insightface_model_name
+    required_files = MODEL_FILES.get(model_name)
+    if required_files is None:
+        raise ValueError(f"Unsupported InsightFace model pack: {model_name}")
+    pack_dir = models_dir / "models" / model_name
 
-    # --- buffalo_l (FaceAnalysis looks under <root>/models/buffalo_l) ---
-    if all((pack_dir / name).exists() for name in ("det_10g.onnx", "w600k_r50.onnx")):
-        print("buffalo_l already present - skipping")
+    # FaceAnalysis looks under <root>/models/<model_name>.
+    if all((pack_dir / name).exists() for name in required_files):
+        print(f"{model_name} already present - skipping")
     else:
         pack_dir.mkdir(parents=True, exist_ok=True)
-        zip_path = models_dir / "buffalo_l.zip"
+        zip_path = models_dir / f"{model_name}.zip"
         if not zip_path.exists():
-            download(BUFFALO_URL, zip_path)
-        print("Extracting buffalo_l ...")
+            download(
+                f"https://github.com/deepinsight/insightface/releases/download/v0.7/{model_name}.zip",
+                zip_path,
+            )
+        print(f"Extracting {model_name} ...")
         with zipfile.ZipFile(zip_path) as zf:
             zf.extractall(pack_dir)
         zip_path.unlink()
-    print(f"buffalo_l contents: {sorted(p.name for p in pack_dir.glob('*'))}")
+    print(f"{model_name} contents: {sorted(p.name for p in pack_dir.glob('*'))}")
 
     # --- MediaPipe Face Landmarker ---
     landmarker_path = models_dir / "face_landmarker.task"

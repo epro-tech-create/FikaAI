@@ -24,6 +24,8 @@ services:
         sync: false # the three Vercel origins, comma-separated HTTPS URLs
       - key: FACE_EMBEDDING_PROVIDER
         value: insightface
+      - key: INSIGHTFACE_MODEL_NAME
+        value: buffalo_sc
       - key: FAKE_FACE_ALWAYS_MATCH
         value: false
       - key: MODELS_DIR

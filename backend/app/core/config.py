@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     face_min_consistency: float = 0.35
     fake_face_always_match: bool = True
     models_dir: Path = Path("./models_data")
+    insightface_model_name: str = "buffalo_sc"
     insightface_det_size: int = 640
     # Ignore tiny secondary detections caused by reflections/background patterns.
     # A second face is rejected only when it is comparable to the dominant face.

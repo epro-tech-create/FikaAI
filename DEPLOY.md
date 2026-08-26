@@ -10,7 +10,7 @@ Managed-cloud split:
 
 The legacy single-VPS layout (`docker-compose.prod.yml` + Caddy) still works and is documented at the bottom.
 
-InsightFace `buffalo_l` weights are non-commercial research licensed. Review the license before commercial deployment. Liveness is MVP-level (`docs/LIVENESS_MVP_NOTICE.md`).
+InsightFace model weights are non-commercial research licensed. Review the license before commercial deployment. Liveness is MVP-level (`docs/LIVENESS_MVP_NOTICE.md`).
 
 ## 1. Neon — create the database
 
@@ -47,7 +47,7 @@ Keep this converted URL; it is the Render `DATABASE_URL`. Migrations run automat
      ```text
      https://<student>.vercel.app,https://<admin>.vercel.app,https://<instructor>.vercel.app
      ```
-4. First deploy takes several minutes (Docker build + ~330 MB model download into the disk).
+4. First deploy downloads the configured model pack (`buffalo_sc` is ~16 MB by default).
 
 Verify: `https://<service>.onrender.com/ready` → `{"status":"ready",...}`.
 

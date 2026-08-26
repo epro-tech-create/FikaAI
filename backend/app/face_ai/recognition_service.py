@@ -1,4 +1,4 @@
-"""Reusable face recognition service built on the InsightFace buffalo_l pack.
+"""Reusable face recognition service built on an InsightFace model pack.
 
 Pipeline: detect (SCRFD) -> enforce EXACTLY ONE face -> align (5-point kps) ->
 ArcFace embedding (CPUExecutionProvider) -> L2 normalization.
@@ -79,14 +79,14 @@ class BaseFaceRecognitionService(ABC):
 
 
 class InsightFaceRecognitionService(BaseFaceRecognitionService):
-    """InsightFace buffalo_l (ArcFace) - weights are non-commercial licensed."""
+    """InsightFace detection + ArcFace recognition - non-commercial weights."""
 
-    provider_name = "insightface_buffalo_l"
     embedding_dim = 512
 
     def __init__(self) -> None:
         self._model = None
         self._lock = threading.Lock()
+        self.provider_name = f"insightface_{settings.insightface_model_name}"
 
     def _load(self):
         with self._lock:
@@ -101,13 +101,14 @@ class InsightFaceRecognitionService(BaseFaceRecognitionService):
                 ) from exc
             det = settings.insightface_det_size
             model = FaceAnalysis(
-                name="buffalo_l",
+                name=settings.insightface_model_name,
                 root=str(settings.models_dir),
+                allowed_modules=["detection", "recognition"],
                 providers=["CPUExecutionProvider"],
             )
             model.prepare(ctx_id=-1, det_size=(det, det))
             self._model = model
-            logger.info("InsightFace buffalo_l loaded (CPU)")
+            logger.info("InsightFace %s loaded (CPU)", settings.insightface_model_name)
             return self._model
 
     def detect_and_embed(self, bgr: np.ndarray) -> np.ndarray:
@@ -141,7 +142,7 @@ class FakeRecognitionService(BaseFaceRecognitionService):
 
     When FAKE_FACE_ALWAYS_MATCH=true every detection yields the SAME unit
     vector so the full enrolment->verification flow works without downloading
-    the buffalo_l weights. Otherwise a deterministic hash-of-image vector is
+    InsightFace weights. Otherwise a deterministic hash-of-image vector is
     produced (same pixels => same embedding).
     """
 
