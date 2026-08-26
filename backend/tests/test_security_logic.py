@@ -78,6 +78,17 @@ def test_student_registration_accepts_any_numeric_number(registration_number):
     assert request.registration_number == registration_number
 
 
+def test_student_registration_accepts_older_clients_without_device_id():
+    request = StudentRegisterRequest(
+        fullName="New Student",
+        email="student@example.com",
+        registrationNumber="1234567",
+        password="SecurePass9",
+    )
+
+    assert request.device_id is None
+
+
 def test_registration_device_hash_is_stable_and_non_reversible():
     device_id = uuid.UUID("12345678-1234-4234-9234-123456789abc")
 

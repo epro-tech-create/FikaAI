@@ -29,7 +29,7 @@ class StudentRegisterRequest(CamelModel):
     full_name: str = Field(min_length=3, max_length=200)
     email: str = Field(min_length=5, max_length=255)
     registration_number: str = Field(min_length=3, max_length=50)
-    device_id: uuid.UUID
+    device_id: uuid.UUID | None = None
     password: str = Field(min_length=8, max_length=200)
 
     @field_validator("full_name")

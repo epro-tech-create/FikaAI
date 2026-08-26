@@ -51,7 +51,7 @@ async def register_student(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> TokenPairResponse:
-    device_hash = _registration_device_hash(payload.device_id)
+    device_hash = _registration_device_hash(payload.device_id) if payload.device_id else None
     registration_ip = _client_ip(request)
     if (await db.execute(select(User.id).where(User.email == payload.email))).scalar_one_or_none():
         raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account already uses this email address.", 409)
@@ -63,7 +63,7 @@ async def register_student(
             "This registration number is already registered.",
             409,
         )
-    if (await db.execute(
+    if device_hash and (await db.execute(
         select(Student.id).where(Student.registration_device_hash == device_hash)
     )).scalar_one_or_none():
         raise ApiError(
