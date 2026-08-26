@@ -65,7 +65,7 @@ async def find_active_session(
     return result.scalar_one_or_none()
 
 
-async def ensure_daily_presence_session(db: AsyncSession) -> AttendanceSession:
+async def ensure_daily_presence_session(db: AsyncSession) -> AttendanceSession | None:
     """Create or find the single global all-day presence session.
 
     Students do not manage or select sessions. This record only preserves the
@@ -93,11 +93,7 @@ async def ensure_daily_presence_session(db: AsyncSession) -> AttendanceSession:
         .limit(1)
     )).scalar_one_or_none()
     if course is None or instructor is None or location is None:
-        raise ApiError(
-            ErrorCode.NOT_FOUND,
-            "A course, instructor, and active training location must be configured.",
-            500,
-        )
+        return None
 
     daily = AttendanceSession(
         course_id=course.id,

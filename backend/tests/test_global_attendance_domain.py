@@ -5,7 +5,7 @@ import pytest
 
 from app.core.errors import ApiError, ErrorCode
 from app.models.base import Base
-from app.services.session_service import CampusClock, find_active_session, validate_window
+from app.services.session_service import CampusClock, ensure_daily_presence_session, find_active_session, validate_window
 
 
 def test_domain_metadata_has_no_class_or_enrollment_tables():
@@ -36,6 +36,19 @@ def test_active_session_lookup_is_globally_eligible():
     parameters = inspect.signature(find_active_session).parameters
 
     assert set(parameters) == {"db", "session_id"}
+
+
+@pytest.mark.asyncio
+async def test_daily_session_returns_none_when_configuration_is_incomplete():
+    class EmptyResult:
+        def scalar_one_or_none(self):
+            return None
+
+    class EmptyDb:
+        async def execute(self, _statement):
+            return EmptyResult()
+
+    assert await ensure_daily_presence_session(EmptyDb()) is None
 
 
 def test_window_validation_depends_only_on_session_time():

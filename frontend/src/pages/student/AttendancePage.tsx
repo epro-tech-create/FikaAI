@@ -28,17 +28,20 @@ export default function AttendancePage() {
   const runId = useRef(0)
 
   useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       api.get('/student/attendance/active-session'),
       api.get('/student/profile/summary'),
       api.get('/student/face-enrollment/status'),
       api.get('/student/attendance/current'),
-    ]).then(([sessionResponse,summaryResponse,enrollmentResponse,attendanceResponse]) => {
-      setSession(sessionResponse.data)
-      setSummary(summaryResponse.data)
-      setEnrolled(Boolean(enrollmentResponse.data.enrolled))
-      setRecord(attendanceResponse.data.record)
-    }).catch(requestError => setError(message(requestError)))
+    ]).then(([sessionResult,summaryResult,enrollmentResult,attendanceResult]) => {
+      if (sessionResult.status === 'fulfilled') setSession(sessionResult.value.data)
+      if (summaryResult.status === 'fulfilled') setSummary(summaryResult.value.data)
+      if (enrollmentResult.status === 'fulfilled') setEnrolled(Boolean(enrollmentResult.value.data.enrolled))
+      if (attendanceResult.status === 'fulfilled') setRecord(attendanceResult.value.data.record)
+      const failure = [sessionResult,summaryResult,enrollmentResult,attendanceResult]
+        .find(result => result.status === 'rejected')
+      if (failure?.status === 'rejected') setError(message(failure.reason))
+    })
     const timer = setInterval(() => setClock(new Date()),1000)
     return () => clearInterval(timer)
   }, [])

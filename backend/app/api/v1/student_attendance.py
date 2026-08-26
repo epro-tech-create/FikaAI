@@ -78,7 +78,7 @@ async def get_active_session(
 ):
     """Today's global active session, creating the daily fallback when absent."""
     session = await ensure_daily_presence_session(db)
-    return _session_dto(session)
+    return _session_dto(session) if session else None
 
 
 @router.post("/verify-location", response_model=LocationVerificationResponse)
