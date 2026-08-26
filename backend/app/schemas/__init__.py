@@ -175,6 +175,7 @@ class LocationVerificationResponse(CamelModel):
 # ----------------------------------------------------------------- face
 class EnrollmentStatusResponse(CamelModel):
     enrolled: bool
+    face_id: uuid.UUID | None = None
     enrolled_at: datetime | None = None
     sample_count: int = 0
     provider: str | None = None

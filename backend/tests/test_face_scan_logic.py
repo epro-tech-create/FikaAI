@@ -12,7 +12,7 @@ from app.face_ai.quality import MIN_BLUR_VARIANCE, assess_quality, select_tempor
 from app.face_ai.recognition_service import FakeRecognitionService
 from app.models.entities import LivenessChallengeType
 from app.models.entities import Student
-from app.schemas import ChallengeResponse
+from app.schemas import ChallengeResponse, EnrollmentStatusResponse
 from app.services.enrollment_service import decode_frame, enroll_face
 from app.services.verification_service import aggregate_match_scores, is_robust_match
 
@@ -34,6 +34,14 @@ def test_challenge_response_preserves_camel_case_challenge_type():
     )
 
     assert response.model_dump(by_alias=True)["challengeType"] == "SMILE"
+
+
+def test_enrollment_status_returns_persisted_face_id():
+    face_id = uuid.uuid4()
+
+    response = EnrollmentStatusResponse(enrolled=True, faceId=face_id)
+
+    assert response.model_dump(by_alias=True)["faceId"] == face_id
 
 
 def test_liveness_returns_original_indices_for_near_frontal_faces():
