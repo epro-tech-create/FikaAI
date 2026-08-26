@@ -120,6 +120,8 @@ class Student(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
     )
     registration_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    registration_device_hash: Mapped[str | None] = mapped_column(String(64))
+    registration_ip: Mapped[str | None] = mapped_column(String(45))
     course_of_study: Mapped[str | None] = mapped_column(String(120))
     year_of_study: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[StudentStatus] = mapped_column(
@@ -128,6 +130,15 @@ class Student(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     consent_given_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(lazy="joined")
+
+    __table_args__ = (
+        Index(
+            "uq_students_registration_device_hash",
+            "registration_device_hash",
+            unique=True,
+            postgresql_where=text("registration_device_hash IS NOT NULL"),
+        ),
+    )
 
 
 class Course(UUIDPrimaryKeyMixin, TimestampMixin, Base):

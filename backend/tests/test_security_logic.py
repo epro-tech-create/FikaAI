@@ -1,8 +1,12 @@
 import numpy as np
 import pytest
+import uuid
 from pydantic import ValidationError
+from starlette.requests import Request
 
+from app.api.v1.auth import _client_ip, _registration_device_hash
 from app.face_ai.recognition_service import cosine_similarity
+from app.models.entities import Student
 from app.services.location_service import haversine_meters
 from app.schemas import InstructorCreateRequest, StudentRegisterRequest
 
@@ -29,12 +33,13 @@ def test_student_registration_normalizes_identity_fields():
     request = StudentRegisterRequest(
         fullName="  New   Student  ",
         email="STUDENT@EXAMPLE.COM",
-        registrationNumber="reg-2026-031",
+        registrationNumber=" 2402424123456 ",
+        deviceId=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
         password="SecurePass9",
     )
     assert request.full_name == "New Student"
     assert request.email == "student@example.com"
-    assert request.registration_number == "REG-2026-031"
+    assert request.registration_number == "2402424123456"
 
 
 def test_student_registration_rejects_weak_password():
@@ -42,9 +47,49 @@ def test_student_registration_rejects_weak_password():
         StudentRegisterRequest(
             fullName="New Student",
             email="student@example.com",
-            registrationNumber="REG-2026-031",
+            registrationNumber="2402424123456",
+            deviceId=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
             password="alllowercase",
         )
+
+
+@pytest.mark.parametrize("registration_number", ["REG-2026-031", "240242412345", "2402425123456"])
+def test_student_registration_requires_expected_number_format(registration_number):
+    with pytest.raises(ValidationError):
+        StudentRegisterRequest(
+            fullName="New Student",
+            email="student@example.com",
+            registrationNumber=registration_number,
+            deviceId=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+            password="SecurePass9",
+        )
+
+
+def test_registration_device_hash_is_stable_and_non_reversible():
+    device_id = uuid.UUID("12345678-1234-4234-9234-123456789abc")
+
+    digest = _registration_device_hash(device_id)
+
+    assert digest == _registration_device_hash(device_id)
+    assert len(digest) == 64
+    assert str(device_id) not in digest
+
+
+def test_registration_uses_forwarded_client_ip():
+    request = Request({
+        "type": "http",
+        "headers": [(b"x-forwarded-for", b"203.0.113.9, 10.0.0.2")],
+        "client": ("10.0.0.3", 1234),
+    })
+
+    assert _client_ip(request) == "203.0.113.9"
+
+
+def test_student_device_guard_is_a_unique_partial_index():
+    index = next(index for index in Student.__table__.indexes if index.name == "uq_students_registration_device_hash")
+
+    assert index.unique
+    assert str(index.dialect_options["postgresql"]["where"]) == "registration_device_hash IS NOT NULL"
 
 
 def test_instructor_creation_normalizes_identity_fields():

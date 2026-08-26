@@ -29,6 +29,7 @@ class StudentRegisterRequest(CamelModel):
     full_name: str = Field(min_length=3, max_length=200)
     email: str = Field(min_length=5, max_length=255)
     registration_number: str = Field(min_length=3, max_length=50)
+    device_id: uuid.UUID
     password: str = Field(min_length=8, max_length=200)
 
     @field_validator("full_name")
@@ -47,9 +48,9 @@ class StudentRegisterRequest(CamelModel):
     @field_validator("registration_number")
     @classmethod
     def normalize_registration_number(cls, value: str) -> str:
-        normalized = value.strip().upper()
-        if not all(char.isalnum() or char in "-/" for char in normalized):
-            raise ValueError("Registration number may contain letters, numbers, hyphens and slashes only.")
+        normalized = value.strip()
+        if len(normalized) != 13 or not normalized.startswith("2402424") or not normalized.isdigit():
+            raise ValueError("Registration number must be 13 digits in the format 2402424xxxxxx.")
         return normalized
 
     @field_validator("password")

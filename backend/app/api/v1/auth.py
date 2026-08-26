@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import ipaddress
 import uuid
 
 from fastapi import APIRouter, Depends, Request
@@ -25,6 +27,23 @@ from app.schemas import LoginRequest, MeResponse, RefreshRequest, StudentRegiste
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _registration_device_hash(device_id: uuid.UUID) -> str:
+    return hashlib.sha256(str(device_id).encode()).hexdigest()
+
+
+def _client_ip(request: Request) -> str | None:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    candidates = [part.strip() for part in forwarded.split(",") if part.strip()]
+    if request.client:
+        candidates.append(request.client.host)
+    for candidate in candidates:
+        try:
+            return ipaddress.ip_address(candidate).compressed
+        except ValueError:
+            continue
+    return None
+
+
 @router.post("/register", response_model=TokenPairResponse, status_code=201)
 @limiter.limit(settings.rate_limit_login)
 async def register_student(
@@ -32,6 +51,8 @@ async def register_student(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> TokenPairResponse:
+    device_hash = _registration_device_hash(payload.device_id)
+    registration_ip = _client_ip(request)
     if (await db.execute(select(User.id).where(User.email == payload.email))).scalar_one_or_none():
         raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account already uses this email address.", 409)
     if (await db.execute(
@@ -40,6 +61,14 @@ async def register_student(
         raise ApiError(
             ErrorCode.REGISTRATION_NUMBER_EXISTS,
             "This registration number is already registered.",
+            409,
+        )
+    if (await db.execute(
+        select(Student.id).where(Student.registration_device_hash == device_hash)
+    )).scalar_one_or_none():
+        raise ApiError(
+            ErrorCode.DEVICE_ALREADY_REGISTERED,
+            "A student account has already been registered from this device.",
             409,
         )
 
@@ -56,6 +85,8 @@ async def register_student(
         student = Student(
             user_id=user.id,
             registration_number=payload.registration_number,
+            registration_device_hash=device_hash,
+            registration_ip=registration_ip,
             course_of_study="Industrial Practical Training - Cybersecurity",
             status=StudentStatus.ACTIVE,
         )
@@ -67,14 +98,14 @@ async def register_student(
             entity_type="student",
             entity_id=student.id,
             details={"status": StudentStatus.ACTIVE.value},
-            ip_address=request.client.host if request.client else None,
+            ip_address=registration_ip,
         ))
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
         raise ApiError(
             ErrorCode.EMAIL_ALREADY_REGISTERED,
-            "The email address or registration number is already registered.",
+            "The email address, registration number, or device is already registered.",
             409,
         ) from exc
 
