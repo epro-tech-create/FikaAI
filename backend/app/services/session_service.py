@@ -14,20 +14,12 @@ from dataclasses import dataclass
 from datetime import datetime, time
 from typing import Literal
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
-from app.models.entities import (
-    AttendanceSession,
-    Course,
-    Instructor,
-    InstructorCourseAssignment,
-    LocationType,
-    PracticalLocation,
-    SessionStatus,
-)
+from app.models.entities import AttendanceSession, SessionStatus
 
 
 @dataclass(frozen=True)
@@ -65,87 +57,6 @@ async def find_active_session(
         stmt = stmt.where(AttendanceSession.id == session_id)
     result = await db.execute(stmt.limit(1))
     return result.scalar_one_or_none()
-
-
-async def ensure_daily_presence_session(db: AsyncSession) -> AttendanceSession | None:
-    """Create or find the single global all-day presence session.
-
-    Students do not manage or select sessions. This record only preserves the
-    existing attendance foreign keys and concurrency guarantees while the UX
-    behaves as a simple daily face-presence scan.
-    """
-    # Serialize fallback creation when several students open attendance together.
-    await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": 1_173_172_359})
-    today = campus_now().today
-    existing = (await db.execute(
-        select(AttendanceSession).where(
-            AttendanceSession.session_date == today,
-            AttendanceSession.status == SessionStatus.ACTIVE,
-        ).order_by(AttendanceSession.check_in_open, AttendanceSession.created_at).limit(1)
-    )).scalar_one_or_none()
-    if existing is not None:
-        return existing
-
-    instructor = (
-        await db.execute(select(Instructor).order_by(Instructor.created_at, Instructor.id).limit(1))
-    ).scalar_one_or_none()
-    if instructor is None:
-        return None
-
-    course = (await db.execute(select(Course).order_by(Course.created_at, Course.code).limit(1))).scalar_one_or_none()
-    if course is None:
-        course = Course(code="IPT-CYBER", title="Cybersecurity Industrial Practical Training")
-        db.add(course)
-        await db.flush()
-
-    location = (await db.execute(
-        select(PracticalLocation)
-        .where(PracticalLocation.is_active.is_(True))
-        .order_by(PracticalLocation.name)
-        .limit(1)
-    )).scalar_one_or_none()
-    if location is None:
-        location = PracticalLocation(
-            name="Cybersecurity Practical Training Area",
-            address="Configured training area",
-            latitude=settings.training_latitude,
-            longitude=settings.training_longitude,
-            radius_meters=settings.training_radius_meters,
-            location_type=LocationType.CLASSROOM,
-            is_active=True,
-        )
-        db.add(location)
-        await db.flush()
-
-    assignment = (await db.execute(
-        select(InstructorCourseAssignment).where(
-            InstructorCourseAssignment.instructor_id == instructor.id,
-            InstructorCourseAssignment.course_id == course.id,
-        )
-    )).scalar_one_or_none()
-    if assignment is None:
-        db.add(InstructorCourseAssignment(instructor_id=instructor.id, course_id=course.id))
-        await db.flush()
-
-    daily = AttendanceSession(
-        course=course,
-        instructor=instructor,
-        location=location,
-        title="Daily practical presence",
-        session_date=today,
-        check_in_open=time(0, 0),
-        official_start=time(0, 0),
-        check_in_close=time(23, 59),
-        expected_end=time(23, 59),
-        check_out_close=time(23, 59),
-        late_threshold_minutes=24 * 60,
-        permitted_radius_meters=location.radius_meters,
-        status=SessionStatus.ACTIVE,
-    )
-    db.add(daily)
-    await db.commit()
-    await db.refresh(daily)
-    return daily
 
 
 async def get_active_session_or_error(

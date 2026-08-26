@@ -1,4 +1,4 @@
-export const MINIMUM_CHECKOUT_MINUTES = 30
+export const MINIMUM_CHECKOUT_MINUTES = 180
 const MINIMUM_CHECKOUT_MS = MINIMUM_CHECKOUT_MINUTES * 60 * 1000
 
 export function checkoutWait(checkInAt: unknown, now = Date.now()) {

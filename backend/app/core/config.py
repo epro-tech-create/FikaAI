@@ -64,7 +64,7 @@ class Settings(BaseSettings):
 
     # Attendance
     default_late_threshold_minutes: int = 15
-    minimum_checkout_minutes: int = 30
+    minimum_checkout_minutes: int = 180
 
     # Upload limits
     max_frames_per_request: int = 60

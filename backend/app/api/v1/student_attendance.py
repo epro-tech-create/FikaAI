@@ -20,7 +20,7 @@ from app.schemas import (
 from app.services.attendance_service import check_in as check_in_service
 from app.services.attendance_service import check_out as check_out_service
 from app.services.location_service import verify_location
-from app.services.session_service import ensure_daily_presence_session, find_active_session
+from app.services.session_service import find_active_session
 
 router = APIRouter(prefix="/student/attendance", tags=["student-attendance"])
 profile_router = APIRouter(prefix="/student/profile", tags=["student-profile"])
@@ -76,8 +76,8 @@ async def get_active_session(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
-    """Today's global active session, creating the daily fallback when absent."""
-    session = await ensure_daily_presence_session(db)
+    """Today's administrator/instructor-created active session, if any."""
+    session = await find_active_session(db)
     return _session_dto(session) if session else None
 
 
