@@ -6,10 +6,9 @@ The application serves one student population. Attendance sessions connect a
 course and instructor directly, and student accounts require no subdivision or
 session assignment.
 
-The development geofence currently covers Dar es Salaam using a 50 km radius
-around the city reference point (`-6.7924000`, `39.2083000`). This is for
-development/testing only. Set `TRAINING_LATITUDE`, `TRAINING_LONGITUDE`, and
-`TRAINING_RADIUS_METERS=50` to the exact premises before production.
+The production geofence is centered on DIT's RAFIC Building
+(`-6.8150`, `39.2792`) with a 50 m radius. Verify and calibrate the radius on
+real devices before relying on it for attendance enforcement.
 
 ## Quick start
 

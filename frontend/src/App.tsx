@@ -9,7 +9,9 @@ import DashboardPage from './pages/portal/DashboardPage'
 import DataPage from './pages/portal/DataPage'
 import InfoPage from './pages/portal/InfoPage'
 import InstructorPage from './pages/portal/InstructorPage'
-import SessionPage from './pages/portal/SessionPage'
+import StudentPage from './pages/portal/StudentPage'
+import CoursePage from './pages/portal/CoursePage'
+import ReportsPage from './pages/portal/ReportsPage'
 import { adminPages, instructorPages } from './pages/portal/config'
 import { clearAuthentication, getStoredRole, parseRole, storeAuthentication } from './lib/auth'
 import { applicationConfig, currentApplication, instructorLoginUrl, portalTitleForRole, type Application } from './lib/application'
@@ -123,9 +125,11 @@ export default function App({ application }: { application?: Application }) {
       <Route path="/admin" element={<Guard application={app}><PortalLayout role="admin"/></Guard>}>
         <Route index element={<Navigate to="dashboard" replace/>}/>
         <Route path="dashboard" element={<DashboardPage role="admin"/>}/>
-        <Route path="attendance-sessions" element={<SessionPage role="admin"/>}/>
+        <Route path="students" element={<StudentPage/>}/>
         <Route path="instructors" element={<InstructorPage/>}/>
-        {Object.entries(adminPages).filter(([path]) => path !== 'instructors').map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
+        <Route path="courses" element={<CoursePage/>}/>
+        <Route path="reports" element={<ReportsPage/>}/>
+        {Object.entries(adminPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
         <Route path="system-settings" element={<InfoPage title="System Settings"/>}/>
         <Route path="profile" element={<InfoPage title="Profile"/>}/>
       </Route>
@@ -134,7 +138,6 @@ export default function App({ application }: { application?: Application }) {
       <Route path="/instructor" element={<Guard application={app}><PortalLayout role="instructor"/></Guard>}>
         <Route index element={<Navigate to="dashboard" replace/>}/>
         <Route path="dashboard" element={<DashboardPage role="instructor"/>}/>
-        <Route path="attendance-sessions" element={<SessionPage role="instructor"/>}/>
         {Object.entries(instructorPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
         <Route path="notifications" element={<InfoPage title="Notifications"/>}/>
         <Route path="profile" element={<InfoPage title="Profile"/>}/>

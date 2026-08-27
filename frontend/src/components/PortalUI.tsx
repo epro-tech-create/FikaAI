@@ -22,11 +22,11 @@ function displayValue(value: unknown) {
   return String(value).replace(/_/g, ' ')
 }
 
-export function DataTable({ columns, items }: { columns: TableColumn[]; items: Record<string, unknown>[] }) {
-  return <div className="data-table-wrap" role="region" aria-label="Scrollable data table" tabIndex={0}><table className="data-table"><thead><tr>{columns.map(column => <th key={column.key}>{column.label}</th>)}</tr></thead><tbody>{items.map((item, index) => <tr key={String(item.id ?? item.sessionId ?? index)}>{columns.map((column, columnIndex) => {
+export function DataTable({ columns, items, renderActions }: { columns: TableColumn[]; items: Record<string, unknown>[]; renderActions?: ReactNode | ((item: Record<string, unknown>) => ReactNode) }) {
+  return <div className="data-table-wrap" role="region" aria-label="Scrollable data table" tabIndex={0}><table className="data-table"><thead><tr>{columns.map(column => <th key={column.key} scope="col">{column.label}</th>)}{renderActions && <th scope="col">Actions</th>}</tr></thead><tbody>{items.map((item, index) => <tr key={String(item.id ?? item.sessionId ?? index)}>{columns.map((column, columnIndex) => {
     const value = nestedValue(item, column.key)
-    return <td key={column.key} data-label={column.label}>{columnIndex === 0 ? <b>{displayValue(value)}</b> : column.key.toLowerCase().includes('status') ? <span className="status-pill">{displayValue(value)}</span> : displayValue(value)}</td>
-  })}</tr>)}</tbody></table></div>
+    return <td key={column.key} data-label={column.label}>{columnIndex === 0 ? <b>{displayValue(value)}</b> : column.key.toLowerCase().includes('status') || typeof value === 'boolean' ? <span className={`status-pill ${value === false ? 'inactive' : ''}`}>{displayValue(value)}</span> : displayValue(value)}</td>
+  })}{renderActions && <td className="table-action-cell" data-label="Actions"><div className="row-actions">{typeof renderActions === 'function' ? renderActions(item) : renderActions}</div></td>}</tr>)}</tbody></table></div>
 }
 
 export function StatCard({ label, value, note, tone = '' }: { label: string; value: unknown; note: string; tone?: string }) {

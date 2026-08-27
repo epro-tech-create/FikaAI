@@ -42,7 +42,32 @@ services:
       context: ./frontend
       target: production
       args:
-        VITE_API_BASE_URL: /api
+        APP_ROLE: student
+        VITE_INSTRUCTOR_APP_URL: https://${INSTRUCTOR_DOMAIN}
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [private]
+
+  frontend-admin:
+    build:
+      context: ./frontend
+      target: production
+      args:
+        APP_ROLE: admin
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [private]
+
+  frontend-instructor:
+    build:
+      context: ./frontend
+      target: production
+      args:
+        APP_ROLE: instructor
     depends_on:
       backend:
         condition: service_healthy
@@ -53,6 +78,8 @@ services:
     image: caddy:2.8-alpine
     environment:
       DOMAIN: ${DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+      INSTRUCTOR_DOMAIN: ${INSTRUCTOR_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
     ports:
       - "80:80"
@@ -64,6 +91,10 @@ services:
       - caddy_config:/config
     depends_on:
       frontend:
+        condition: service_healthy
+      frontend-admin:
+        condition: service_healthy
+      frontend-instructor:
         condition: service_healthy
     restart: unless-stopped
     networks: [private]

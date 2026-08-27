@@ -1,20 +1,63 @@
 import { useEffect, useState } from 'react'
 import { api, message } from '../../services/api'
-import { PageHeading, StatCard, StatePanel } from '../../components/PortalUI'
+import { PageHeading, StatePanel } from '../../components/PortalUI'
 import type { Role } from '../../lib/auth'
+
+type TimelinePoint = { time: string; arrivals: number; departures: number }
+
+const chartWidth = 900
+const chartHeight = 300
+const chartLeft = 48
+const chartRight = 872
+const chartTop = 30
+const chartBottom = 244
+
+export function chartPath(points: TimelinePoint[], key: 'arrivals' | 'departures', maximum: number) {
+  if (!points.length) return ''
+  return points.map((point, index) => {
+    const x = chartLeft + (index / Math.max(1, points.length - 1)) * (chartRight - chartLeft)
+    const y = chartBottom - (point[key] / Math.max(1, maximum)) * (chartBottom - chartTop)
+    return `${index ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`
+  }).join(' ')
+}
 
 export default function DashboardPage({ role }: { role: Extract<Role, 'admin' | 'instructor'> }) {
   const [data, setData] = useState<Record<string, unknown>>({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  useEffect(() => { api.get(`/${role}/dashboard`).then(response => setData(response.data || {})).catch(requestError => setError(message(requestError))).finally(() => setLoading(false)) }, [role])
-  const admin = role === 'admin'
-  const stats = admin ? [
-    ['Total students', data.totalStudents ?? data.students, 'Registered learners'], ['Active instructors', data.activeInstructors ?? data.instructors, 'Enabled accounts'], ['Active courses', data.activeCourses ?? data.courses, 'Current catalogue'], ['Sessions today', data.sessionsToday ?? data.sessions, 'Scheduled and active'],
-  ] : [
-    ['My courses', data.myCourses ?? data.assignedCourses ?? data.courses, 'Assigned courses'], ['Sessions today', data.sessionsToday ?? data.sessions, 'Your schedule'], ['Attendance records', data.attendanceRecords ?? data.present, 'Verified outcomes'], ['Attendance rate', data.attendanceRate ? `${data.attendanceRate}%` : '0%', 'Current reporting period'],
-  ]
-  return <main className="portal-content"><PageHeading eyebrow={admin ? 'SYSTEM OVERVIEW' : 'TEACHING OVERVIEW'} title={`Good ${new Date().getHours() < 12 ? 'morning' : 'afternoon'}, ${(localStorage.getItem('fikaai.name') || role).split(' ')[0]}`} description="Live operational signals for attendance and identity verification."/>
-    {loading ? <StatePanel kind="loading"/> : <><div className="stat-grid">{stats.map((stat, index) => <StatCard key={stat[0] as string} label={stat[0] as string} value={stat[1]} note={stat[2] as string} tone={index === 0 ? 'accent' : ''}/>)}</div>{error && <StatePanel kind="error">{error}</StatePanel>}<div className="dashboard-grid"><section className="content-card insight-card"><p>ATTENDANCE PULSE</p><h2>{admin ? 'System readiness' : 'Today at a glance'}</h2><div className="pulse-visual"><i/><i/><i/><i/><i/><i/><i/></div><span>Connect the dashboard endpoint to surface live attendance trends here.</span></section><section className="content-card quick-card"><p>QUICK CHECK</p><h2>Operational status</h2><ul><li><i/>Identity verification service <b>Monitored</b></li><li><i/>Attendance records <b>Protected</b></li><li><i/>Role permissions <b>Enforced</b></li></ul></section></div></>}
+  useEffect(() => {
+    let active = true
+    async function load() {
+      try {
+        const response = await api.get(`/${role}/dashboard`)
+        if (active) { setData(response.data || {}); setError('') }
+      } catch (requestError) {
+        if (active) setError(message(requestError))
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    const timer = window.setInterval(load, 10_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [role])
+
+  const timeline = Array.isArray(data.timeline) ? data.timeline as TimelinePoint[] : []
+  const maximum = Math.max(1, ...timeline.flatMap(point => [point.arrivals, point.departures]))
+  const arrivalPath = chartPath(timeline, 'arrivals', maximum)
+  const departurePath = chartPath(timeline, 'departures', maximum)
+  const areaPath = arrivalPath ? `${arrivalPath} L ${chartRight} ${chartBottom} L ${chartLeft} ${chartBottom} Z` : ''
+  const yTicks = [maximum, Math.round(maximum / 2), 0]
+
+  return <main className="portal-content"><PageHeading eyebrow="LIVE ATTENDANCE" title={`Good ${new Date().getHours() < 12 ? 'morning' : 'afternoon'}, ${(localStorage.getItem('fikaai.name') || role).split(' ')[0]}`} description="Today’s attendance at DIT RAFIC Building. The graph refreshes automatically every 10 seconds."/>
+    {loading ? <StatePanel kind="loading"/> : error ? <StatePanel kind="error">{error}</StatePanel> : <section className="content-card attendance-chart-card">
+      <div className="attendance-chart-head"><div><p>DAILY ATTENDANCE</p><h2>{String(data.date || 'Today')}</h2></div><div className="chart-totals"><span><i className="arrivals"/>Arrived <b>{String(data.arrivalsToday ?? 0)}</b></span><span><i className="departures"/>Checked out <b>{String(data.departuresToday ?? 0)}</b></span><small>Live</small></div></div>
+      <div className="attendance-chart-wrap"><svg className="attendance-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="Cumulative arrivals and checkouts today">
+        <defs><linearGradient id="attendanceArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3b9cff" stopOpacity=".34"/><stop offset="1" stopColor="#3b9cff" stopOpacity=".02"/></linearGradient></defs>
+        {yTicks.map((tick, index) => { const y = chartTop + index * ((chartBottom - chartTop) / 2); return <g key={`${tick}-${index}`}><line className="chart-grid-line" x1={chartLeft} x2={chartRight} y1={y} y2={y}/><text className="chart-y-label" x={chartLeft - 13} y={y + 4}>{tick}</text></g> })}
+        {areaPath && <path className="chart-area" d={areaPath}/>}<path className="chart-line arrivals" d={arrivalPath}/><path className="chart-line departures" d={departurePath}/>
+        {timeline.map((point, index) => { const x = chartLeft + (index / Math.max(1, timeline.length - 1)) * (chartRight - chartLeft); return index % 2 === 0 ? <text key={point.time} className="chart-x-label" x={x} y={chartBottom + 28}>{point.time}</text> : null })}
+      </svg></div>
+    </section>}
   </main>
 }

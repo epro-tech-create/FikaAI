@@ -38,8 +38,8 @@ async def student_summary(
         registration_number=student.registration_number,
         status=student.status.value,
         current_session_id=session.id if session else None,
-        course_code=session.course.code if session else None,
-        course_title=session.course.title if session else None,
+        course_code=session.course.code if session and session.course else None,
+        course_title=session.course.title if session and session.course else None,
         location_name=session.location.name if session else None,
         location_address=session.location.address if session else None,
         permitted_radius_meters=float(session.permitted_radius_meters) if session else None,
@@ -50,10 +50,10 @@ def _session_dto(session) -> ActiveSessionResponse:
     return ActiveSessionResponse(
         session_id=session.id,
         title=session.title,
-        course_code=session.course.code,
-        course_title=session.course.title,
-        instructor_id=session.instructor.id,
-        instructor_name=session.instructor.user.full_name,
+        course_code=session.course.code if session.course else None,
+        course_title=session.course.title if session.course else None,
+        instructor_id=session.instructor.id if session.instructor else None,
+        instructor_name=session.instructor.user.full_name if session.instructor else None,
         location_name=session.location.name,
         location_address=session.location.address,
         session_date=session.session_date.isoformat(),
@@ -76,7 +76,7 @@ async def get_active_session(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
-    """Today's administrator/instructor-created active session, if any."""
+    """Today's automatic campus attendance session."""
     session = await find_active_session(db)
     return _session_dto(session) if session else None
 

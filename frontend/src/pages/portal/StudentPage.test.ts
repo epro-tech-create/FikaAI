@@ -1,0 +1,24 @@
+import { describe, expect, it } from 'vitest'
+import { studentFormError } from './StudentPage'
+
+const validForm = { fullName: 'Amina Mushi', email: 'amina@example.com', registrationNumber: '2402424123456', courseOfStudy: '', yearOfStudy: '', isActive: true, password: 'SecurePass9', confirmPassword: 'SecurePass9' }
+
+describe('student form', () => {
+  it('requires numeric registration numbers', () => {
+    expect(studentFormError({ ...validForm, registrationNumber: 'REG-123' })).toContain('only digits')
+  })
+
+  it('validates the optional year of study', () => {
+    expect(studentFormError({ ...validForm, yearOfStudy: '21' })).toContain('between 1 and 20')
+  })
+
+  it('requires a strong matching password for creation', () => {
+    expect(studentFormError(validForm)).toBe('')
+    expect(studentFormError({ ...validForm, confirmPassword: 'SecurePass8' })).toBe('Passwords do not match.')
+  })
+
+  it('allows an omitted edit password but validates a replacement', () => {
+    expect(studentFormError({ ...validForm, password: '', confirmPassword: '' }, true)).toBe('')
+    expect(studentFormError({ ...validForm, password: 'weak', confirmPassword: 'weak' }, true)).toContain('uppercase')
+  })
+})

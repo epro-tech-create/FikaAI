@@ -1,14 +1,15 @@
-from datetime import date, time
+from datetime import date, datetime, time
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
 
+from app.api.v1.admin import _daily_timeline
 from app.core.deps import require_roles
 from app.core.errors import ApiError, ErrorCode
 from app.main import app
-from app.schemas import SessionCreateRequest
+from app.schemas import CourseCreateRequest, CourseUpdateRequest, SessionCreateRequest
 
 
 def test_management_portal_routes_are_mounted():
@@ -25,6 +26,7 @@ def test_management_portal_routes_are_mounted():
         "/api/admin/users",
         "/api/admin/audit-logs",
         "/api/admin/reports/summary",
+        "/api/admin/reports/attendance",
         "/api/instructor/dashboard",
         "/api/instructor/courses",
         "/api/instructor/sessions",
@@ -32,6 +34,42 @@ def test_management_portal_routes_are_mounted():
         "/api/instructor/reports/attendance",
     } <= paths
     assert "post" in openapi_paths["/api/admin/instructors"]
+    assert {"get", "post"} <= set(openapi_paths["/api/admin/students"])
+    assert {"patch", "delete"} <= set(openapi_paths["/api/admin/students/{student_id}"])
+    assert {"get", "post"} <= set(openapi_paths["/api/admin/instructors"])
+    assert {"patch", "delete"} <= set(openapi_paths["/api/admin/instructors/{instructor_id}"])
+    assert {"get", "post"} <= set(openapi_paths["/api/admin/courses"])
+    assert {"patch", "delete"} <= set(openapi_paths["/api/admin/courses/{course_id}"])
+    assert "post" not in openapi_paths["/api/admin/sessions"]
+    assert "post" not in openapi_paths["/api/instructor/sessions"]
+
+
+def test_daily_timeline_counts_arrivals_and_departures_cumulatively():
+    records = [
+        SimpleNamespace(
+            check_in_at=datetime.fromisoformat("2026-08-28T08:10:00+03:00"),
+            check_out_at=datetime.fromisoformat("2026-08-28T11:10:00+03:00"),
+        ),
+        SimpleNamespace(
+            check_in_at=datetime.fromisoformat("2026-08-28T09:40:00+03:00"),
+            check_out_at=None,
+        ),
+    ]
+
+    timeline = _daily_timeline(records)
+
+    assert timeline[0] == {"time": "08:00", "arrivals": 1, "departures": 0}
+    assert next(point for point in timeline if point["time"] == "09:30")["arrivals"] == 2
+    assert next(point for point in timeline if point["time"] == "11:00")["departures"] == 1
+    assert timeline[-1] == {"time": "16:00", "arrivals": 2, "departures": 1}
+
+
+def test_course_code_is_normalized_for_admin_mutations():
+    payload = CourseCreateRequest(code=" cs  101 ", title="  Network   Security ")
+    assert payload.code == "CS101"
+    assert payload.title == "Network Security"
+    with pytest.raises(ValidationError):
+        CourseUpdateRequest(code=None)
 
 
 @pytest.mark.asyncio

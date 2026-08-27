@@ -11,6 +11,8 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 FROM dependencies AS build
 COPY . .
 ARG APP_ROLE=student
+ARG VITE_INSTRUCTOR_APP_URL
+ENV VITE_INSTRUCTOR_APP_URL=${VITE_INSTRUCTOR_APP_URL}
 RUN npm run build:${APP_ROLE}
 
 FROM docker.io/nginxinc/nginx-unprivileged:1.27-alpine AS production

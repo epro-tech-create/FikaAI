@@ -95,6 +95,70 @@ class InstructorCreateRequest(CamelModel):
         return value
 
 
+class StudentAdminCreateRequest(CamelModel):
+    full_name: str = Field(min_length=3, max_length=200)
+    email: str = Field(min_length=5, max_length=255)
+    registration_number: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=8, max_length=200)
+    course_of_study: str | None = Field(default=None, max_length=120)
+    year_of_study: int | None = Field(default=None, ge=1, le=20)
+    is_active: bool = True
+
+    _normalize_name = field_validator("full_name")(StudentRegisterRequest.normalize_name.__func__)
+    _normalize_email = field_validator("email")(StudentRegisterRequest.normalize_registration_email.__func__)
+    _normalize_registration = field_validator("registration_number")(StudentRegisterRequest.normalize_registration_number.__func__)
+    _validate_password = field_validator("password")(StudentRegisterRequest.validate_password_strength.__func__)
+
+
+class StudentAdminUpdateRequest(CamelModel):
+    full_name: str = Field(default=None, min_length=3, max_length=200)
+    email: str = Field(default=None, min_length=5, max_length=255)
+    registration_number: str = Field(default=None, min_length=3, max_length=50)
+    password: str = Field(default=None, min_length=8, max_length=200)
+    course_of_study: str | None = Field(default=None, max_length=120)
+    year_of_study: int | None = Field(default=None, ge=1, le=20)
+    is_active: bool = None
+
+    _normalize_name = field_validator("full_name")(StudentRegisterRequest.normalize_name.__func__)
+    _normalize_email = field_validator("email")(StudentRegisterRequest.normalize_registration_email.__func__)
+    _normalize_registration = field_validator("registration_number")(StudentRegisterRequest.normalize_registration_number.__func__)
+    _validate_password = field_validator("password")(StudentRegisterRequest.validate_password_strength.__func__)
+
+
+class InstructorUpdateRequest(CamelModel):
+    full_name: str = Field(default=None, min_length=3, max_length=200)
+    email: str = Field(default=None, min_length=5, max_length=255)
+    password: str = Field(default=None, min_length=8, max_length=200)
+    is_active: bool = None
+
+    _normalize_name = field_validator("full_name")(InstructorCreateRequest.normalize_name.__func__)
+    _normalize_email = field_validator("email")(InstructorCreateRequest.normalize_email.__func__)
+    _validate_password = field_validator("password")(InstructorCreateRequest.validate_password_strength.__func__)
+
+
+class CourseCreateRequest(CamelModel):
+    code: str = Field(min_length=1, max_length=30)
+    title: str = Field(min_length=1, max_length=200)
+
+    @field_validator("code")
+    @classmethod
+    def normalize_code(cls, value: str) -> str:
+        return "".join(value.upper().split())
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str) -> str:
+        return " ".join(value.strip().split())
+
+
+class CourseUpdateRequest(CamelModel):
+    code: str = Field(default=None, min_length=1, max_length=30)
+    title: str = Field(default=None, min_length=1, max_length=200)
+
+    _normalize_code = field_validator("code")(CourseCreateRequest.normalize_code.__func__)
+    _normalize_title = field_validator("title")(CourseCreateRequest.normalize_title.__func__)
+
+
 class TokenPairResponse(CamelModel):
     access_token: str
     refresh_token: str
@@ -118,10 +182,10 @@ class MeResponse(CamelModel):
 class ActiveSessionResponse(CamelModel):
     session_id: uuid.UUID
     title: str
-    course_code: str
-    course_title: str
-    instructor_id: uuid.UUID
-    instructor_name: str
+    course_code: str | None
+    course_title: str | None
+    instructor_id: uuid.UUID | None
+    instructor_name: str | None
     location_name: str
     location_address: str
     session_date: str
@@ -300,11 +364,11 @@ class SessionCreateRequest(CamelModel):
 
 class SessionResponse(CamelModel):
     id: uuid.UUID
-    course_id: uuid.UUID
-    course_code: str
-    course_title: str
-    instructor_id: uuid.UUID
-    instructor_name: str
+    course_id: uuid.UUID | None
+    course_code: str | None
+    course_title: str | None
+    instructor_id: uuid.UUID | None
+    instructor_name: str | None
     location_id: uuid.UUID
     location_name: str
     title: str

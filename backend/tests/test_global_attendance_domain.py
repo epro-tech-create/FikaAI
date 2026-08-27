@@ -4,9 +4,10 @@ from datetime import date, datetime
 import pytest
 
 from app.core.errors import ApiError, ErrorCode
-from app.api.v1.student_attendance import get_active_session
 from app.models.base import Base
+from app.models.entities import AttendanceSession
 from app.services.attendance_service import validate_minimum_checkout_time
+from app.services import session_service
 from app.services.session_service import CampusClock, find_active_session, validate_window
 
 
@@ -15,7 +16,7 @@ def test_domain_metadata_has_no_class_or_enrollment_tables():
     assert "student_class_enrollments" not in Base.metadata.tables
 
 
-def test_session_metadata_uses_direct_course_and_instructor_references():
+def test_session_metadata_supports_course_independent_automatic_rows():
     table = Base.metadata.tables["attendance_sessions"]
     columns = table.columns
 
@@ -28,10 +29,17 @@ def test_session_metadata_uses_direct_course_and_instructor_references():
         "check_out_close",
         "permitted_radius_meters",
         "instructions",
+        "is_automatic",
     } <= set(columns.keys())
-    assert "fk_session_instructor_course_assignment" in {
+    assert columns.course_id.nullable
+    assert columns.instructor_id.nullable
+    assert not columns.is_automatic.nullable
+    assert "fk_session_instructor_course_assignment" not in {
         constraint.name for constraint in table.foreign_key_constraints
     }
+    automatic_index = next(index for index in table.indexes if index.name == "uq_attendance_sessions_automatic_date")
+    assert automatic_index.unique
+    assert str(automatic_index.dialect_options["postgresql"]["where"]) == "is_automatic"
 
 
 def test_active_session_lookup_is_globally_eligible():
@@ -41,19 +49,87 @@ def test_active_session_lookup_is_globally_eligible():
 
 
 @pytest.mark.asyncio
-async def test_student_active_session_lookup_does_not_create_a_fallback():
-    class EmptyResult:
+async def test_active_session_lookup_creates_fixed_daily_session(monkeypatch):
+    class Result:
+        def __init__(self, value=None):
+            self.value = value
+
         def scalar_one_or_none(self):
+            return self.value
+
+    class Transaction:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
             return None
 
-    class ReadOnlyDb:
-        async def execute(self, _statement):
-            return EmptyResult()
+    class WriteDb:
+        def __init__(self):
+            self.added = []
+            self.select_count = 0
 
-        def add(self, _value):
-            raise AssertionError("Student session lookup must not create records")
+        def begin(self):
+            return Transaction()
 
-    assert await get_active_session(student=object(), db=ReadOnlyDb()) is None
+        async def execute(self, statement, _params=None):
+            if getattr(statement, "is_select", False):
+                self.select_count += 1
+                return Result()
+            return Result()
+
+        def add(self, value):
+            self.added.append(value)
+
+        async def flush(self):
+            for value in self.added:
+                if getattr(value, "id", None) is None:
+                    value.id = __import__("uuid").uuid4()
+
+    class SessionContext:
+        def __init__(self, db):
+            self.db = db
+
+        async def __aenter__(self):
+            return self.db
+
+        async def __aexit__(self, *_args):
+            return None
+
+    write_db = WriteDb()
+    monkeypatch.setattr(session_service, "session_factory", lambda: SessionContext(write_db))
+    monkeypatch.setattr(session_service.settings, "training_latitude", -6.8150)
+    monkeypatch.setattr(session_service.settings, "training_longitude", 39.2792)
+    monkeypatch.setattr(session_service.settings, "training_radius_meters", 50)
+    monkeypatch.setattr(session_service.settings, "training_location_name", "DIT RAFIC Building")
+    monkeypatch.setattr(
+        session_service.settings,
+        "training_location_address",
+        "Dar es Salaam Institute of Technology, RAFIC Building",
+    )
+    monkeypatch.setattr(
+        session_service,
+        "campus_now",
+        lambda: CampusClock(datetime.fromisoformat("2026-08-25T16:00:00+03:00")),
+    )
+
+    session = await find_active_session(object())
+
+    assert isinstance(session, AttendanceSession)
+    assert session.title == "Daily RAFIC Attendance"
+    assert session.session_date == date(2026, 8, 25)
+    assert session.course_id is None
+    assert session.instructor_id is None
+    assert session.is_automatic is True
+    assert session.check_in_open.strftime("%H:%M") == "08:00"
+    assert session.official_start.strftime("%H:%M") == "09:00"
+    assert session.check_in_close.strftime("%H:%M") == "11:00"
+    assert session.expected_end.strftime("%H:%M") == "15:30"
+    assert session.check_out_close.strftime("%H:%M") == "15:30"
+    assert session.permitted_radius_meters == 50
+    assert session.location.name == "DIT RAFIC Building"
+    assert float(session.location.latitude) == -6.815
+    assert float(session.location.longitude) == 39.2792
 
 
 def test_window_validation_depends_only_on_session_time():

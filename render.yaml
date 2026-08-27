@@ -32,5 +32,15 @@ services:
         value: /app/models_data
       - key: WEB_CONCURRENCY
         value: 1
+      - key: TRAINING_LATITUDE
+        value: -6.8150
+      - key: TRAINING_LONGITUDE
+        value: 39.2792
+      - key: TRAINING_RADIUS_METERS
+        value: 50
+      - key: TRAINING_LOCATION_NAME
+        value: DIT RAFIC Building
+      - key: TRAINING_LOCATION_ADDRESS
+        value: Dar es Salaam Institute of Technology, RAFIC Building
       - key: GPS_VERIFICATION_ENABLED
-        value: false # enable only after calibrating real training coordinates
+        value: true

@@ -6,9 +6,9 @@ import { useCameraFrames } from '../../hooks/useCameraFrames'
 import { useFaceMonitor } from '../../hooks/useFaceMonitor'
 import { isContinuousReading, isFreshReading, parseChallengeType, type ChallengeType } from '../../lib/captureQuality'
 import { clearAuthentication, getStoredFaceEnrollment, storeFaceEnrollment } from '../../lib/auth'
-import { earlyCheckoutMessage } from '../../lib/checkout'
+import { checkoutWait, earlyCheckoutMessage } from '../../lib/checkout'
 
-type Session = { sessionId:string; title:string; courseTitle:string; locationName:string }
+type Session = { sessionId:string; title:string; courseTitle?:string|null; locationName:string; permittedRadiusMeters:number }
 type Summary = { fullName:string; registrationNumber:string }
 const sleep = (milliseconds:number) => new Promise(resolve => window.setTimeout(resolve,milliseconds))
 
@@ -226,11 +226,14 @@ export default function AttendancePage() {
 
   function reset() { runId.current += 1; monitor.stop(); cam.stop(); setProgress(0); setInstruction(''); setError(''); setStage('intro') }
   const checkedIn = record?.status === 'PRESENT' || record?.status === 'LATE'
+  const checkout = checkedIn ? checkoutWait(record?.checkInAt,clock.getTime()) : null
+  const checkoutLocked = Boolean(checkout?.remainingMs)
+  const checkoutTime = checkout ? new Date(checkout.availableAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''
 
   return <main className="app">
     <header className="student-header"><Link className="brand" to="/">Fika<span>AI</span></Link><nav><Link to="/student/attendance">Attendance</Link><Link to="/student/face-enrollment">Face enrolment</Link><button className="ghost" onClick={() => { clearAuthentication(); window.location.href = '/login' }}>Sign out</button></nav></header>
     <section className="hero compact-hero"><p className="eyebrow">CYBERSECURITY INDUSTRIAL PRACTICAL TRAINING</p><h1>Good morning, {summary?.fullName || localStorage.getItem('fikaai.name') || 'Student'}</h1><p className="date">{clock.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})} · {clock.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p></section>
-    {summary && session && <section className="training-strip"><div><span>DAILY PRESENCE</span><b>{session.courseTitle}</b><small>{session.title} · {summary.registrationNumber}</small></div><div><span>TRAINING AREA</span><b>{session.locationName}</b><small>GPS temporarily disabled</small></div></section>}
+    {summary && session && <section className="training-strip"><div><span>DAILY PRESENCE</span><b>{session.courseTitle || 'Daily practical attendance'}</b><small>{session.title} · {summary.registrationNumber}</small></div><div><span>TRAINING AREA</span><b>{session.locationName}</b><small>{session.permittedRadiusMeters} m attendance perimeter</small></div></section>}
     {!enrolled && <div className="error">A compatible Face ID is required. <Link to="/student/face-enrollment">Enrol your face now</Link>.</div>}
     {error && stage === 'intro' && <div className="error">{error}</div>}
     <FaceScanFlow
@@ -242,9 +245,9 @@ export default function AttendancePage() {
       faceLocked={monitor.reading.ready}
       snapshot={snapshot}
       error={error}
-      introTitle={checkedIn ? 'Scan to check out' : 'Scan your Face ID'}
-      introText={checkedIn ? 'Complete a fresh live scan to record your departure.' : 'Confirm your identity with a secure live facial scan. Your images are processed temporarily and never stored.'}
-      actionLabel={checkedIn ? 'Ready to Check Out' : 'Ready to Scan'}
+      introTitle={checkoutLocked ? `Checkout available at ${checkoutTime}` : checkedIn ? 'Scan to check out' : 'Scan your Face ID'}
+      introText={checkoutLocked ? 'Checkout unlocks three hours after your recorded check-in.' : checkedIn ? 'Complete a fresh live scan to record your departure.' : 'Confirm your identity with a secure live facial scan. Your images are processed temporarily and never stored.'}
+      actionLabel={checkoutLocked ? `Checkout at ${checkoutTime}` : checkedIn ? 'Ready to Check Out' : 'Ready to Scan'}
       successTitle={record?.status === 'CHECKED_OUT' ? 'Checked out!' : 'You are in!'}
       successText="Your live face matched the encrypted profile successfully."
       details={[
@@ -254,7 +257,7 @@ export default function AttendancePage() {
         {label:'Time',value:record?.checkOutAt ? new Date(record.checkOutAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : record?.checkInAt ? new Date(record.checkInAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'},
         {label:'Status',value:record?.status || 'Verified'},
       ]}
-      disabled={!enrolled || !session}
+      disabled={!enrolled || !session || checkoutLocked}
       onStart={scan}
       onReset={reset}
     />

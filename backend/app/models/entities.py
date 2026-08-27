@@ -20,7 +20,6 @@ from sqlalchemy import (
     Enum as SAEnum,
     Float,
     ForeignKey,
-    ForeignKeyConstraint,
     Index,
     Integer,
     LargeBinary,
@@ -191,11 +190,11 @@ class PracticalLocation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class AttendanceSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "attendance_sessions"
 
-    course_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="RESTRICT"), nullable=False
+    course_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="RESTRICT"), nullable=True
     )
-    instructor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("instructors.id", ondelete="RESTRICT"), nullable=False
+    instructor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("instructors.id", ondelete="RESTRICT"), nullable=True
     )
     location_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("practical_locations.id", ondelete="RESTRICT"), nullable=False
@@ -211,19 +210,20 @@ class AttendanceSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     permitted_radius_meters: Mapped[int] = mapped_column(Integer, nullable=False)
     instructions: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[SessionStatus] = mapped_column(_enum(SessionStatus, "session_status"), nullable=False)
+    is_automatic: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
 
-    course: Mapped[Course] = relationship(lazy="joined")
-    instructor: Mapped[Instructor] = relationship(lazy="joined")
+    course: Mapped[Course | None] = relationship(lazy="joined")
+    instructor: Mapped[Instructor | None] = relationship(lazy="joined")
     location: Mapped[PracticalLocation] = relationship(lazy="joined")
 
     __table_args__ = (
-        ForeignKeyConstraint(
-            ["instructor_id", "course_id"],
-            ["instructor_course_assignments.instructor_id", "instructor_course_assignments.course_id"],
-            name="fk_session_instructor_course_assignment",
-            ondelete="RESTRICT",
-        ),
         Index("ix_sessions_status_date", "status", "session_date"),
+        Index(
+            "uq_attendance_sessions_automatic_date",
+            "session_date",
+            unique=True,
+            postgresql_where=text("is_automatic"),
+        ),
         CheckConstraint("permitted_radius_meters > 0", name="ck_session_radius_positive"),
     )
 

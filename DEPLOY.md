@@ -127,8 +127,9 @@ Warm up the model once before the first real class (first face request loads wei
 # Legacy single-VPS deployment
 
 ```bash
-cp .env.production.example .env.production  # see git history for the VPS-era template
+cp .env.vps.example .env.production
+# Set DOMAIN, ADMIN_DOMAIN, INSTRUCTOR_DOMAIN, ACME_EMAIL, all secrets, and the production coordinates.
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 ```
 
-Requires Docker + Compose on a 4 GB VPS, DNS A record, ports 80/443 open; Caddy terminates HTTPS. Alembic migrations and model downloads run automatically before Uvicorn starts. Back up with `pg_dump` from the `db` service plus `EMBEDDING_ENCRYPTION_KEY`.
+Requires Docker + Compose on a 4 GB VPS, DNS A records for all three domains, and ports 80/443 open; Caddy terminates HTTPS. `DOMAIN` serves the student build, `ADMIN_DOMAIN` serves the administrator build, and `INSTRUCTOR_DOMAIN` serves the instructor build. Alembic migrations and model downloads run automatically before Uvicorn starts. Back up with `pg_dump` from the `db` service plus `EMBEDDING_ENCRYPTION_KEY`.
