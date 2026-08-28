@@ -194,6 +194,10 @@ class ActiveSessionResponse(CamelModel):
     check_in_close: str
     expected_end: str
     check_out_close: str
+    campus_timezone: str
+    check_in_close_at: datetime
+    checkout_opens_at: datetime
+    checkout_closes_at: datetime
     late_threshold_minutes: int
     status: str
     permitted_radius_meters: float

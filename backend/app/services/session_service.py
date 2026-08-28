@@ -108,9 +108,9 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
                 existing.title = "Daily RAFIC Attendance"
                 existing.check_in_open = time(8, 0)
                 existing.official_start = time(9, 0)
-                existing.check_in_close = time(12, 0)
-                existing.expected_end = time(15, 30)
-                existing.check_out_close = time(15, 30)
+                existing.check_in_close = time(14, 0)
+                existing.expected_end = time(14, 0)
+                existing.check_out_close = time(16, 0)
                 existing.late_threshold_minutes = settings.default_late_threshold_minutes
                 existing.permitted_radius_meters = settings.training_radius_meters
                 existing.status = SessionStatus.ACTIVE
@@ -125,9 +125,9 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
                 session_date=clock.today,
                 check_in_open=time(8, 0),
                 official_start=time(9, 0),
-                check_in_close=time(12, 0),
-                expected_end=time(15, 30),
-                check_out_close=time(15, 30),
+                check_in_close=time(14, 0),
+                expected_end=time(14, 0),
+                check_out_close=time(16, 0),
                 late_threshold_minutes=settings.default_late_threshold_minutes,
                 permitted_radius_meters=settings.training_radius_meters,
                 status=SessionStatus.ACTIVE,
@@ -176,8 +176,12 @@ def validate_window(
                 409,
             )
     else:  # check_out
-        if clock.now_time < session.check_in_open:
-            raise ApiError(ErrorCode.SESSION_NOT_STARTED, "The session has not opened yet.", 409)
+        if clock.now_time < session.expected_end:
+            raise ApiError(
+                ErrorCode.CHECKOUT_TOO_EARLY,
+                f"Checkout opens at {session.expected_end.strftime('%H:%M')}.",
+                409,
+            )
         if clock.now_time > session.check_out_close:
             raise ApiError(
                 ErrorCode.SESSION_CLOSED,

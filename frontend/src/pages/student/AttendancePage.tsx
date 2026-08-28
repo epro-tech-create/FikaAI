@@ -3,13 +3,24 @@ import { Link } from 'react-router-dom'
 import FaceScanFlow, { type ScanStage } from '../../components/FaceScanFlow'
 import { api, message } from '../../services/api'
 import { useCameraFrames } from '../../hooks/useCameraFrames'
+import { useCampusClock } from '../../hooks/useCampusClock'
 import { useFaceMonitor } from '../../hooks/useFaceMonitor'
 import { getLocation } from '../../hooks/useGeolocation'
 import { isContinuousReading, isFreshReading, parseChallengeType, type ChallengeType } from '../../lib/captureQuality'
 import { clearAuthentication, getStoredFaceEnrollment, storeFaceEnrollment } from '../../lib/auth'
-import { checkoutWait, earlyCheckoutMessage } from '../../lib/checkout'
+import { checkoutWindow } from '../../lib/checkout'
+import { campusGreeting, formatCampusDate, formatCampusTime } from '../../lib/campusTime'
 
-type Session = { sessionId:string; title:string; courseTitle?:string|null; locationName:string; permittedRadiusMeters:number }
+type Session = {
+  sessionId:string
+  title:string
+  courseTitle?:string|null
+  locationName:string
+  permittedRadiusMeters:number
+  checkInCloseAt:string
+  checkoutOpensAt:string
+  checkoutClosesAt:string
+}
 type Summary = { fullName:string; registrationNumber:string }
 const sleep = (milliseconds:number) => new Promise(resolve => window.setTimeout(resolve,milliseconds))
 const MAX_CAPTURE_FRAMES = 16
@@ -25,7 +36,7 @@ export default function AttendancePage() {
   const [scanStatus,setScanStatus] = useState('Starting face scanner…')
   const [snapshot,setSnapshot] = useState('')
   const [error,setError] = useState('')
-  const [clock,setClock] = useState(new Date())
+  const clock = useCampusClock()
   const cam = useCameraFrames()
   const monitor = useFaceMonitor(cam.video)
   const runId = useRef(0)
@@ -49,8 +60,6 @@ export default function AttendancePage() {
         .find(result => result.status === 'rejected')
       if (failure?.status === 'rejected') setError(message(failure.reason))
     })
-    const timer = setInterval(() => setClock(new Date()),1000)
-    return () => clearInterval(timer)
   }, [])
 
   useEffect(() => () => { runId.current += 1; monitor.stop(); cam.stop() }, [])
@@ -174,11 +183,19 @@ export default function AttendancePage() {
 
   async function scan() {
     if (!session || !enrolled) return
-    const checkoutError = (record?.status === 'PRESENT' || record?.status === 'LATE')
-      ? earlyCheckoutMessage(record?.checkInAt)
-      : ''
-    if (checkoutError) {
-      setError(checkoutError)
+    const checkingOut = record?.status === 'PRESENT' || record?.status === 'LATE'
+    if (checkingOut) {
+      const window = checkoutWindow(session.checkoutOpensAt,session.checkoutClosesAt)
+      if (window?.state === 'before') {
+        setError(`Checkout opens at ${formatCampusTime(window.opensAt)}.`)
+        return
+      }
+      if (!window || window.state === 'closed') {
+        setError(`Checkout closed at ${formatCampusTime(session.checkoutClosesAt)}.`)
+        return
+      }
+    } else if (Date.now() > new Date(session.checkInCloseAt).getTime()) {
+      setError(`Check-in closed at ${formatCampusTime(session.checkInCloseAt)}.`)
       return
     }
     const activeRun = ++runId.current
@@ -210,7 +227,6 @@ export default function AttendancePage() {
         frames,
       })
       window.clearInterval(processingTimer); processingTimer = undefined; setProgress(95)
-      const checkingOut = record?.status === 'PRESENT' || record?.status === 'LATE'
       const result = await api.post(
         checkingOut ? '/student/attendance/check-out' : '/student/attendance/check-in',
         {
@@ -230,13 +246,30 @@ export default function AttendancePage() {
 
   function reset() { runId.current += 1; monitor.stop(); cam.stop(); setProgress(0); setInstruction(''); setError(''); setStage('intro') }
   const checkedIn = record?.status === 'PRESENT' || record?.status === 'LATE'
-  const checkout = checkedIn ? checkoutWait(record?.checkInAt,clock.getTime()) : null
-  const checkoutLocked = Boolean(checkout?.remainingMs)
-  const checkoutTime = checkout ? new Date(checkout.availableAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''
+  const checkout = checkedIn ? checkoutWindow(session?.checkoutOpensAt,session?.checkoutClosesAt,clock.getTime()) : null
+  const checkoutLocked = checkedIn && checkout?.state !== 'open'
+  const checkInClosed = !checkedIn && Boolean(session && clock.getTime() > new Date(session.checkInCloseAt).getTime())
+  const scheduleLocked = checkoutLocked || checkInClosed
+  const checkoutOpenTime = checkout ? formatCampusTime(checkout.opensAt) : '2:00 PM'
+  const checkoutCloseTime = checkout ? formatCampusTime(checkout.closesAt) : '4:00 PM'
+  const introTitle = checkInClosed
+    ? `Check-in closed at ${session ? formatCampusTime(session.checkInCloseAt) : '2:00 PM'}`
+    : checkout?.state === 'before'
+      ? `Checkout opens at ${checkoutOpenTime}`
+      : checkout?.state === 'closed'
+        ? `Checkout closed at ${checkoutCloseTime}`
+        : checkedIn ? 'Scan to check out' : 'Scan your Face ID'
+  const introText = checkInClosed
+    ? 'Today’s check-in window has ended.'
+    : checkout?.state === 'before'
+      ? `Checkout is available from ${checkoutOpenTime} to ${checkoutCloseTime} campus time.`
+      : checkout?.state === 'closed'
+        ? `Today’s checkout window was ${checkoutOpenTime} to ${checkoutCloseTime} campus time.`
+        : checkedIn ? 'Complete a fresh live scan to record your departure.' : 'Confirm your identity with a secure live facial scan. Your images are processed temporarily and never stored.'
 
   return <main className="app">
     <header className="student-header"><Link className="brand" to="/">CCD-<span>Attendance</span></Link><nav><Link to="/student/attendance">Attendance</Link><Link to="/student/face-enrollment">Face enrolment</Link><button className="ghost" onClick={() => { clearAuthentication(); window.location.href = '/login' }}>Sign out</button></nav></header>
-    <section className="hero compact-hero"><p className="eyebrow">CYBERSECURITY INDUSTRIAL PRACTICAL TRAINING</p><h1>Good morning, {summary?.fullName || localStorage.getItem('fikaai.name') || 'Student'}</h1><p className="date">{clock.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})} · {clock.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p></section>
+    <section className="hero compact-hero"><p className="eyebrow">CYBERSECURITY INDUSTRIAL PRACTICAL TRAINING</p><h1>{campusGreeting(clock)}, {summary?.fullName || localStorage.getItem('fikaai.name') || 'Student'}</h1><p className="date">{formatCampusDate(clock)} · {formatCampusTime(clock)}</p></section>
     {summary && session && <section className="training-strip"><div><span>DAILY PRESENCE</span><b>{session.courseTitle || 'Daily practical attendance'}</b><small>{session.title} · {summary.registrationNumber}</small></div><div><span>TRAINING AREA</span><b>{session.locationName}</b><small>{session.permittedRadiusMeters} m attendance perimeter</small></div></section>}
     {!enrolled && <div className="error">A compatible Face ID is required. <Link to="/student/face-enrollment">Enrol your face now</Link>.</div>}
     {error && stage === 'intro' && <div className="error">{error}</div>}
@@ -250,19 +283,19 @@ export default function AttendancePage() {
       snapshot={snapshot}
       error={error}
       errorTitle={checkedIn ? 'Check-out unsuccessful' : 'Check-in unsuccessful'}
-      introTitle={checkoutLocked ? `Checkout available at ${checkoutTime}` : checkedIn ? 'Scan to check out' : 'Scan your Face ID'}
-      introText={checkoutLocked ? 'Checkout unlocks three hours after your recorded check-in.' : checkedIn ? 'Complete a fresh live scan to record your departure.' : 'Confirm your identity with a secure live facial scan. Your images are processed temporarily and never stored.'}
-      actionLabel={checkoutLocked ? `Checkout at ${checkoutTime}` : checkedIn ? 'Ready to Check Out' : 'Ready to Scan'}
+      introTitle={introTitle}
+      introText={introText}
+      actionLabel={checkout?.state === 'before' ? `Checkout at ${checkoutOpenTime}` : checkout?.state === 'closed' ? 'Checkout closed' : checkInClosed ? 'Check-in closed' : checkedIn ? 'Ready to Check Out' : 'Ready to Scan'}
       successTitle={record?.status === 'CHECKED_OUT' ? 'Checked out!' : 'You are in!'}
       successText="Your live face matched the encrypted profile successfully."
       details={[
         {label:'Student',value:summary?.fullName || 'Student'},
         {label:'Student ID',value:summary?.registrationNumber || '—'},
         {label:'Face ID',value:record?.faceId ? `${record.faceId.slice(0,8)}…` : '—'},
-        {label:'Time',value:record?.checkOutAt ? new Date(record.checkOutAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : record?.checkInAt ? new Date(record.checkInAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'},
+        {label:'Time',value:record?.checkOutAt ? formatCampusTime(record.checkOutAt) : record?.checkInAt ? formatCampusTime(record.checkInAt) : '—'},
         {label:'Status',value:record?.status || 'Verified'},
       ]}
-      disabled={!enrolled || !session || checkoutLocked}
+      disabled={!enrolled || !session || scheduleLocked}
       onStart={scan}
       onReset={reset}
     />

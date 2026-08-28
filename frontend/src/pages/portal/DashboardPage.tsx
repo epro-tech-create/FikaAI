@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api, message } from '../../services/api'
 import { PageHeading, StatePanel, StatCard } from '../../components/PortalUI'
+import { useCampusClock } from '../../hooks/useCampusClock'
+import { campusGreeting } from '../../lib/campusTime'
 import type { Role } from '../../lib/auth'
 
 type TimelinePoint = { time: string; arrivals: number; departures: number }
@@ -30,6 +32,7 @@ export function chartPath(points: TimelinePoint[], key: 'arrivals' | 'departures
 }
 
 export default function DashboardPage({ role }: { role: Extract<Role, 'admin' | 'instructor'> }) {
+  const clock = useCampusClock()
   const [data, setData] = useState<DashboardData>({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -57,7 +60,7 @@ export default function DashboardPage({ role }: { role: Extract<Role, 'admin' | 
   const areaPath = arrivalPath ? `${arrivalPath} L ${chartRight} ${chartBottom} L ${chartLeft} ${chartBottom} Z` : ''
   const yTicks = [maximum, Math.round(maximum / 2), 0]
 
-  return <main className="portal-content"><PageHeading eyebrow="LIVE ATTENDANCE" title={`Good ${new Date().getHours() < 12 ? 'morning' : 'afternoon'}, ${(localStorage.getItem('fikaai.name') || role).split(' ')[0]}`} description="Today’s attendance at DIT RAFIC Building. The graph refreshes automatically every 10 seconds."/>
+  return <main className="portal-content"><PageHeading eyebrow="LIVE ATTENDANCE" title={`${campusGreeting(clock)}, ${(localStorage.getItem('fikaai.name') || role).split(' ')[0]}`} description="Today’s attendance at DIT RAFIC Building. The graph refreshes automatically every 10 seconds."/>
     {loading ? <StatePanel kind="loading"/> : error ? <StatePanel kind="error">{error}</StatePanel> : <>
       {role === 'admin' && <section className="stat-grid" aria-label="Daily student summary">
         <StatCard label="Registered students" value={data.students} note="All student accounts"/>

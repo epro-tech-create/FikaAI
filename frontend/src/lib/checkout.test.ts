@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { checkoutWait, earlyCheckoutMessage } from './checkout'
+import { checkoutWindow } from './checkout'
 
-describe('checkout minimum stay', () => {
-  const checkInAt = '2026-08-26T08:00:00.000Z'
+describe('scheduled checkout window', () => {
+  const opensAt = '2026-08-26T14:00:00+03:00'
+  const closesAt = '2026-08-26T16:00:00+03:00'
 
-  it('returns an immediate countdown before three hours', () => {
-    const now = new Date('2026-08-26T08:12:00.000Z').getTime()
-
-    expect(checkoutWait(checkInAt,now)?.remainingMs).toBe(168 * 60 * 1000)
-    expect(earlyCheckoutMessage(checkInAt,now)).toContain('Try again in 168 minutes')
+  it('is locked before 14:00 campus time', () => {
+    expect(checkoutWindow(opensAt,closesAt,new Date('2026-08-26T10:59:59Z').getTime())?.state).toBe('before')
   })
 
-  it('allows checkout once three hours have elapsed', () => {
-    const now = new Date('2026-08-26T11:00:00.000Z').getTime()
+  it('is open from 14:00 through the 16:00 boundary', () => {
+    expect(checkoutWindow(opensAt,closesAt,new Date('2026-08-26T11:00:00Z').getTime())?.state).toBe('open')
+    expect(checkoutWindow(opensAt,closesAt,new Date('2026-08-26T13:00:00Z').getTime())?.state).toBe('open')
+  })
 
-    expect(checkoutWait(checkInAt,now)?.remainingMs).toBe(0)
-    expect(earlyCheckoutMessage(checkInAt,now)).toBe('')
+  it('is closed after 16:00 campus time', () => {
+    expect(checkoutWindow(opensAt,closesAt,new Date('2026-08-26T13:00:01Z').getTime())?.state).toBe('closed')
   })
 })

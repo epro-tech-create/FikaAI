@@ -14,7 +14,6 @@ Guarantees (all enforced server-side inside ONE database transaction):
 from __future__ import annotations
 
 import logging
-import math
 import uuid
 import zlib
 from datetime import datetime, timedelta, timezone
@@ -41,19 +40,6 @@ from app.services.audit_service import audit_detached
 from app.services.session_service import campus_now, validate_window
 
 logger = logging.getLogger("fikaai.attendance")
-
-
-def validate_minimum_checkout_time(check_in_at: datetime, now: datetime) -> None:
-    available_at = check_in_at + timedelta(minutes=settings.minimum_checkout_minutes)
-    if now >= available_at:
-        return
-    remaining_minutes = max(1, math.ceil((available_at - now).total_seconds() / 60))
-    raise ApiError(
-        ErrorCode.CHECKOUT_TOO_EARLY,
-        f"Checkout is available {settings.minimum_checkout_minutes} minutes after check-in. Try again in {remaining_minutes} minute{'s' if remaining_minutes != 1 else ''}.",
-        409,
-        {"availableAt": available_at.isoformat(), "remainingMinutes": remaining_minutes},
-    )
 
 
 def _advisory_key(session_id: uuid.UUID, student_id: uuid.UUID) -> int:
@@ -308,8 +294,6 @@ async def check_out(
             if record.idempotency_key == idem_uuid:
                 return _record_dto(record, replay=True)
             raise ApiError(ErrorCode.ALREADY_CHECKED_OUT, "You have already checked out of this session.", 409)
-
-        validate_minimum_checkout_time(record.check_in_at, clock.now_local)
 
         await _consume_token(
             db, LocationVerification,

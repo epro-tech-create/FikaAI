@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +49,9 @@ async def student_summary(
 
 
 def _session_dto(session) -> ActiveSessionResponse:
+    def boundary(value):
+        return datetime.combine(session.session_date, value, tzinfo=settings.campus_tz)
+
     return ActiveSessionResponse(
         session_id=session.id,
         title=session.title,
@@ -62,6 +67,10 @@ def _session_dto(session) -> ActiveSessionResponse:
         check_in_close=session.check_in_close.strftime("%H:%M"),
         expected_end=session.expected_end.strftime("%H:%M"),
         check_out_close=session.check_out_close.strftime("%H:%M"),
+        campus_timezone=settings.campus_timezone,
+        check_in_close_at=boundary(session.check_in_close),
+        checkout_opens_at=boundary(session.expected_end),
+        checkout_closes_at=boundary(session.check_out_close),
         late_threshold_minutes=session.late_threshold_minutes,
         status=session.status.value,
         permitted_radius_meters=float(session.permitted_radius_meters),

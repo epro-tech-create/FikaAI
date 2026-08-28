@@ -6,7 +6,6 @@ import pytest
 from app.core.errors import ApiError, ErrorCode
 from app.models.base import Base
 from app.models.entities import AttendanceSession
-from app.services.attendance_service import validate_minimum_checkout_time
 from app.services import session_service
 from app.services.session_service import CampusClock, find_active_session, validate_window
 
@@ -123,44 +122,40 @@ async def test_active_session_lookup_creates_fixed_daily_session(monkeypatch):
     assert session.is_automatic is True
     assert session.check_in_open.strftime("%H:%M") == "08:00"
     assert session.official_start.strftime("%H:%M") == "09:00"
-    assert session.check_in_close.strftime("%H:%M") == "12:00"
-    assert session.expected_end.strftime("%H:%M") == "15:30"
-    assert session.check_out_close.strftime("%H:%M") == "15:30"
+    assert session.check_in_close.strftime("%H:%M") == "14:00"
+    assert session.expected_end.strftime("%H:%M") == "14:00"
+    assert session.check_out_close.strftime("%H:%M") == "16:00"
     assert session.permitted_radius_meters == 100
     assert session.location.name == "DIT RAFIC Building"
     assert float(session.location.latitude) == -6.8137482
     assert float(session.location.longitude) == 39.2801352
 
 
-def test_window_validation_depends_only_on_session_time():
-    session = type(
+def automatic_session_window():
+    return type(
         "Session",
         (),
         {
             "session_date": date(2026, 8, 25),
             "check_in_open": datetime.strptime("08:00", "%H:%M").time(),
-            "check_in_close": datetime.strptime("09:00", "%H:%M").time(),
-            "check_out_close": datetime.strptime("12:00", "%H:%M").time(),
+            "check_in_close": datetime.strptime("14:00", "%H:%M").time(),
+            "expected_end": datetime.strptime("14:00", "%H:%M").time(),
+            "check_out_close": datetime.strptime("16:00", "%H:%M").time(),
         },
     )()
-    clock = CampusClock(datetime.fromisoformat("2026-08-25T08:30:00+03:00"))
+
+
+def test_check_in_and_checkout_are_allowed_at_two_pm():
+    session = automatic_session_window()
+    clock = CampusClock(datetime.fromisoformat("2026-08-25T14:00:00+03:00"))
 
     validate_window(session, "check_in", clock)
     validate_window(session, "check_out", clock)
 
 
-def test_global_window_still_rejects_a_closed_check_in():
-    session = type(
-        "Session",
-        (),
-        {
-            "session_date": date(2026, 8, 25),
-            "check_in_open": datetime.strptime("08:00", "%H:%M").time(),
-            "check_in_close": datetime.strptime("09:00", "%H:%M").time(),
-            "check_out_close": datetime.strptime("12:00", "%H:%M").time(),
-        },
-    )()
-    clock = CampusClock(datetime.fromisoformat("2026-08-25T09:01:00+03:00"))
+def test_check_in_is_rejected_after_two_pm():
+    session = automatic_session_window()
+    clock = CampusClock(datetime.fromisoformat("2026-08-25T14:00:01+03:00"))
 
     with pytest.raises(ApiError) as error:
         validate_window(session, "check_in", clock)
@@ -168,22 +163,49 @@ def test_global_window_still_rejects_a_closed_check_in():
     assert error.value.code == ErrorCode.CHECK_IN_CLOSED
 
 
-def test_checkout_is_rejected_before_three_hours():
-    check_in_at = datetime.fromisoformat("2026-08-26T08:00:00+03:00")
+def test_checkout_is_rejected_before_two_pm():
+    session = automatic_session_window()
+    clock = CampusClock(datetime.fromisoformat("2026-08-25T13:59:59+03:00"))
 
     with pytest.raises(ApiError) as error:
-        validate_minimum_checkout_time(
-            check_in_at,
-            datetime.fromisoformat("2026-08-26T08:12:00+03:00"),
-        )
+        validate_window(session, "check_out", clock)
 
     assert error.value.code == ErrorCode.CHECKOUT_TOO_EARLY
-    assert error.value.details["remainingMinutes"] == 168
-    assert error.value.details["availableAt"] == "2026-08-26T11:00:00+03:00"
 
 
-def test_checkout_is_allowed_at_three_hours():
-    validate_minimum_checkout_time(
-        datetime.fromisoformat("2026-08-26T08:00:00+03:00"),
-        datetime.fromisoformat("2026-08-26T11:00:00+03:00"),
+def test_checkout_is_allowed_at_four_pm_boundary():
+    validate_window(
+        automatic_session_window(),
+        "check_out",
+        CampusClock(datetime.fromisoformat("2026-08-25T16:00:00+03:00")),
     )
+
+
+def test_checkout_is_rejected_after_four_pm():
+    session = automatic_session_window()
+    clock = CampusClock(datetime.fromisoformat("2026-08-25T16:00:01+03:00"))
+
+    with pytest.raises(ApiError) as error:
+        validate_window(session, "check_out", clock)
+
+    assert error.value.code == ErrorCode.SESSION_CLOSED
+
+
+def test_window_rejects_a_different_session_date():
+    session = type(
+        "Session",
+        (),
+        {
+            "session_date": date(2026, 8, 25),
+            "check_in_open": datetime.strptime("08:00", "%H:%M").time(),
+            "check_in_close": datetime.strptime("14:00", "%H:%M").time(),
+            "expected_end": datetime.strptime("14:00", "%H:%M").time(),
+            "check_out_close": datetime.strptime("12:00", "%H:%M").time(),
+        },
+    )()
+    clock = CampusClock(datetime.fromisoformat("2026-08-26T08:30:00+03:00"))
+
+    with pytest.raises(ApiError) as error:
+        validate_window(session, "check_in", clock)
+
+    assert error.value.code == ErrorCode.SESSION_INACTIVE
