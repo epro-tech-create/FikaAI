@@ -6,6 +6,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -28,6 +29,14 @@ async def lifespan(app: FastAPI):
         "fake(dev)" if provider == "fake" else provider,
         settings.face_match_threshold,
     )
+    if provider == "insightface":
+        from app.face_ai.liveness_service import get_liveness_analyzer
+        from app.face_ai.recognition_service import get_face_recognition_service
+
+        logger.info("Preloading face recognition and liveness models")
+        await run_in_threadpool(get_face_recognition_service().warm_up)
+        await run_in_threadpool(get_liveness_analyzer().warm_up)
+        logger.info("Face models ready")
     yield
 
 

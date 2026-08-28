@@ -12,6 +12,7 @@ import { checkoutWait, earlyCheckoutMessage } from '../../lib/checkout'
 type Session = { sessionId:string; title:string; courseTitle?:string|null; locationName:string; permittedRadiusMeters:number }
 type Summary = { fullName:string; registrationNumber:string }
 const sleep = (milliseconds:number) => new Promise(resolve => window.setTimeout(resolve,milliseconds))
+const MAX_CAPTURE_FRAMES = 16
 
 export default function AttendancePage() {
   const [session,setSession] = useState<Session|null>(null)
@@ -102,7 +103,7 @@ export default function AttendancePage() {
     let straightHeldFrom = 0
     let actionCompleted = false
     const captureActionFrame = (analyzedAt:number) => {
-      if (frames.length >= 24) return
+      if (frames.length >= MAX_CAPTURE_FRAMES) return
       const frame = cam.grabFrame(lastCapturedVideoTime)
       lastCapturedVideoTime = frame.videoTime
       frames.push(frame.dataUrl)
@@ -133,7 +134,7 @@ export default function AttendancePage() {
         continue
       }
 
-      if (face.analyzedAt - lastCapturedAt >= 220 && frames.length < 24) {
+      if (face.analyzedAt - lastCapturedAt >= 280 && frames.length < MAX_CAPTURE_FRAMES) {
         captureActionFrame(face.analyzedAt)
       }
 

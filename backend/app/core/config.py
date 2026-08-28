@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     campus_timezone: str = "Africa/Dar_es_Salaam"
     training_latitude: float = -6.8137482
     training_longitude: float = 39.2801352
-    training_radius_meters: int = 50
+    training_radius_meters: int = 100
     training_location_name: str = "DIT RAFIC Building"
     training_location_address: str = "Dar es Salaam Institute of Technology, RAFIC Building"
 

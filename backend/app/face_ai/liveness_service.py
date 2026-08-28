@@ -59,6 +59,9 @@ class LivenessAnalyzer(ABC):
     def analyze(self, frames: list[np.ndarray], challenge: LivenessChallengeType) -> LivenessResult:
         ...
 
+    def warm_up(self) -> None:
+        """Load analyzer resources before serving verification requests."""
+
 
 @dataclass(frozen=True)
 class _FrameSignals:
@@ -90,10 +93,11 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
 
     def __init__(self) -> None:
         self._landmarker = None
-        self._lock = threading.Lock()
+        self._load_lock = threading.Lock()
+        self._inference_lock = threading.Lock()
 
     def _load(self):
-        with self._lock:
+        with self._load_lock:
             if self._landmarker is not None:
                 return self._landmarker
             model_path = settings.models_dir / "face_landmarker.task"
@@ -113,6 +117,9 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
             self._landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(options)
             logger.info("MediaPipe Face Landmarker loaded")
             return self._landmarker
+
+    def warm_up(self) -> None:
+        self._load()
 
     def _signals(self, bgr: np.ndarray) -> _FrameSignals:
         landmarker = self._load()
@@ -145,7 +152,9 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
             return LivenessResult(False, 0, ErrorCode.LIVENESS_NOT_COMPLETED,
                                   {"reason": f"At least {MIN_FRAMES} frames required", "frames": len(frames)})
 
-        signals = [self._signals(f) for f in frames]
+        # MediaPipe's shared landmarker is not safe to invoke concurrently.
+        with self._inference_lock:
+            signals = [self._signals(f) for f in frames]
         faces_ok = [s.face_count == 1 for s in signals]
 
         metrics = {

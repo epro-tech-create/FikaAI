@@ -57,6 +57,9 @@ class BaseFaceRecognitionService(ABC):
     def detect_and_embed(self, bgr: np.ndarray) -> np.ndarray:
         """Return a normalized embedding for the single face in the image."""
 
+    def warm_up(self) -> None:
+        """Load provider resources before serving verification requests."""
+
     def embed_bytes(self, encoded_image: bytes) -> tuple[np.ndarray, float]:
         """Decode an encoded image, run quality gate, return (embedding, blur_variance)."""
         import cv2  # local import keeps module import light for tests
@@ -85,11 +88,12 @@ class InsightFaceRecognitionService(BaseFaceRecognitionService):
 
     def __init__(self) -> None:
         self._model = None
-        self._lock = threading.Lock()
+        self._load_lock = threading.Lock()
+        self._inference_lock = threading.Lock()
         self.provider_name = f"insightface_{settings.insightface_model_name}"
 
     def _load(self):
-        with self._lock:
+        with self._load_lock:
             if self._model is not None:
                 return self._model
             try:
@@ -111,9 +115,15 @@ class InsightFaceRecognitionService(BaseFaceRecognitionService):
             logger.info("InsightFace %s loaded (CPU)", settings.insightface_model_name)
             return self._model
 
+    def warm_up(self) -> None:
+        self._load()
+
     def detect_and_embed(self, bgr: np.ndarray) -> np.ndarray:
         model = self._load()
-        faces = model.get(bgr)
+        # InsightFace/ONNX model objects are shared by threadpool requests.
+        # Bound each worker to one inference at a time instead of CPU thrashing.
+        with self._inference_lock:
+            faces = model.get(bgr)
         if len(faces) == 0:
             raise NoFaceError()
         if len(faces) > 1:

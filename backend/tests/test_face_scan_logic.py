@@ -19,6 +19,7 @@ from app.services.verification_service import aggregate_match_scores, is_robust_
 
 class StubSignalAnalyzer(MediaPipeLivenessAnalyzer):
     def __init__(self, signals: list[_FrameSignals]) -> None:
+        super().__init__()
         self.signals = iter(signals)
 
     def _signals(self, _frame: np.ndarray) -> _FrameSignals:

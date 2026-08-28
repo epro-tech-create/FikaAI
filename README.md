@@ -7,7 +7,7 @@ course and instructor directly, and student accounts require no subdivision or
 session assignment.
 
 The production geofence is centered on DIT's RAFIC Building
-(`-6.8137482`, `39.2801352`) with a 50 m radius. Verify and calibrate the radius on
+(`-6.8137482`, `39.2801352`) with a 100 m radius. Verify and calibrate the radius on
 real devices before relying on it for attendance enforcement.
 
 ## Quick start
