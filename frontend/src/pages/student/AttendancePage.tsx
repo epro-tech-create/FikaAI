@@ -248,6 +248,7 @@ export default function AttendancePage() {
       faceLocked={monitor.reading.ready}
       snapshot={snapshot}
       error={error}
+      errorTitle={checkedIn ? 'Check-out unsuccessful' : 'Check-in unsuccessful'}
       introTitle={checkoutLocked ? `Checkout available at ${checkoutTime}` : checkedIn ? 'Scan to check out' : 'Scan your Face ID'}
       introText={checkoutLocked ? 'Checkout unlocks three hours after your recorded check-in.' : checkedIn ? 'Complete a fresh live scan to record your departure.' : 'Confirm your identity with a secure live facial scan. Your images are processed temporarily and never stored.'}
       actionLabel={checkoutLocked ? `Checkout at ${checkoutTime}` : checkedIn ? 'Ready to Check Out' : 'Ready to Scan'}

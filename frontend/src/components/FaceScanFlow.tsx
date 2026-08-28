@@ -13,6 +13,7 @@ type Props = {
   faceLocked?: boolean
   snapshot?: string
   error?: string
+  errorTitle?: string
   introTitle: string
   introText: string
   actionLabel: string
@@ -52,6 +53,6 @@ export default function FaceScanFlow(props: Props) {
 
     {props.stage === 'success' && <div className="face-id-copy"><p className="scan-kicker success-label">AUTHENTICATION DONE</p><h2>{props.successTitle}</h2><p>{props.successText}</p>{props.details?.length ? <div className="scan-details">{props.details.map(detail => <div key={detail.label}><span>{detail.label}</span><b>{detail.value}</b></div>)}</div> : null}<button className="neon-button" onClick={props.onSuccess ?? props.onReset}>{props.successLabel || 'Continue'}<span>→</span></button></div>}
 
-    {props.stage === 'error' && <div className="face-id-copy"><p className="scan-kicker error-label">AUTHENTICATION FAILED</p><h2>Face scan unsuccessful</h2><p>{props.error || 'We could not verify this scan. Please try again.'}</p><button className="retry-button" onClick={props.onReset}>Try Again</button></div>}
+    {props.stage === 'error' && <div className="face-id-copy"><p className="scan-kicker error-label">AUTHENTICATION FAILED</p><h2>{props.errorTitle || 'Face scan unsuccessful'}</h2><p>{props.error || 'We could not verify this scan. Please try again.'}</p><button className="retry-button" onClick={props.onReset}>Try Again</button></div>}
   </section>
 }

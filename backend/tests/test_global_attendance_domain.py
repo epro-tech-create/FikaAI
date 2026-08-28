@@ -123,7 +123,7 @@ async def test_active_session_lookup_creates_fixed_daily_session(monkeypatch):
     assert session.is_automatic is True
     assert session.check_in_open.strftime("%H:%M") == "08:00"
     assert session.official_start.strftime("%H:%M") == "09:00"
-    assert session.check_in_close.strftime("%H:%M") == "11:00"
+    assert session.check_in_close.strftime("%H:%M") == "12:00"
     assert session.expected_end.strftime("%H:%M") == "15:30"
     assert session.check_out_close.strftime("%H:%M") == "15:30"
     assert session.permitted_radius_meters == 50

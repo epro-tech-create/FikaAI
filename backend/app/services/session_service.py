@@ -108,7 +108,7 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
                 existing.title = "Daily RAFIC Attendance"
                 existing.check_in_open = time(8, 0)
                 existing.official_start = time(9, 0)
-                existing.check_in_close = time(11, 0)
+                existing.check_in_close = time(12, 0)
                 existing.expected_end = time(15, 30)
                 existing.check_out_close = time(15, 30)
                 existing.late_threshold_minutes = settings.default_late_threshold_minutes
@@ -125,7 +125,7 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
                 session_date=clock.today,
                 check_in_open=time(8, 0),
                 official_start=time(9, 0),
-                check_in_close=time(11, 0),
+                check_in_close=time(12, 0),
                 expected_end=time(15, 30),
                 check_out_close=time(15, 30),
                 late_threshold_minutes=settings.default_late_threshold_minutes,
