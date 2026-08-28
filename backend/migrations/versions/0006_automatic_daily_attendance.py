@@ -44,7 +44,7 @@ def upgrade() -> None:
                 (id, name, address, latitude, longitude, radius_meters,
                  location_type, is_active, created_at, updated_at)
             VALUES
-                (md5(:name)::uuid, :name, :address, -6.8150, 39.2792, 50,
+                (md5(:name)::uuid, :name, :address, -6.8137482, 39.2801352, 50,
                  'classroom'::location_type, true, now(), now())
             ON CONFLICT (name) DO UPDATE SET
                 address = EXCLUDED.address,

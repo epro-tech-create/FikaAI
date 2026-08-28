@@ -4,6 +4,7 @@ import FaceScanFlow, { type ScanStage } from '../../components/FaceScanFlow'
 import { api, message } from '../../services/api'
 import { useCameraFrames } from '../../hooks/useCameraFrames'
 import { useFaceMonitor } from '../../hooks/useFaceMonitor'
+import { getLocation } from '../../hooks/useGeolocation'
 import { isContinuousReading, isFreshReading, parseChallengeType, type ChallengeType } from '../../lib/captureQuality'
 import { clearAuthentication, getStoredFaceEnrollment, storeFaceEnrollment } from '../../lib/auth'
 import { checkoutWait, earlyCheckoutMessage } from '../../lib/checkout'
@@ -187,9 +188,11 @@ export default function AttendancePage() {
       await monitor.start()
       await waitForPosition(activeRun)
       if (runId.current !== activeRun) return
+      setScanStatus('Checking training area')
+      const currentLocation = await getLocation()
       const location = await api.post('/student/attendance/verify-location', {
-        sessionId:session.sessionId, latitude:0, longitude:0, accuracyMeters:0,
-        capturedAt:new Date().toISOString(),
+        sessionId:session.sessionId,
+        ...currentLocation,
       })
       setProgress(18); setScanStatus('Face locked')
       const challenge = await api.post('/student/liveness/challenge',{sessionId:session.sessionId})

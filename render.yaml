@@ -33,9 +33,9 @@ services:
       - key: WEB_CONCURRENCY
         value: 1
       - key: TRAINING_LATITUDE
-        value: -6.8150
+        value: -6.8137482
       - key: TRAINING_LONGITUDE
-        value: 39.2792
+        value: 39.2801352
       - key: TRAINING_RADIUS_METERS
         value: 50
       - key: TRAINING_LOCATION_NAME

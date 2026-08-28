@@ -98,8 +98,8 @@ async def test_active_session_lookup_creates_fixed_daily_session(monkeypatch):
 
     write_db = WriteDb()
     monkeypatch.setattr(session_service, "session_factory", lambda: SessionContext(write_db))
-    monkeypatch.setattr(session_service.settings, "training_latitude", -6.8150)
-    monkeypatch.setattr(session_service.settings, "training_longitude", 39.2792)
+    monkeypatch.setattr(session_service.settings, "training_latitude", -6.8137482)
+    monkeypatch.setattr(session_service.settings, "training_longitude", 39.2801352)
     monkeypatch.setattr(session_service.settings, "training_radius_meters", 50)
     monkeypatch.setattr(session_service.settings, "training_location_name", "DIT RAFIC Building")
     monkeypatch.setattr(
@@ -128,8 +128,8 @@ async def test_active_session_lookup_creates_fixed_daily_session(monkeypatch):
     assert session.check_out_close.strftime("%H:%M") == "15:30"
     assert session.permitted_radius_meters == 50
     assert session.location.name == "DIT RAFIC Building"
-    assert float(session.location.latitude) == -6.815
-    assert float(session.location.longitude) == 39.2792
+    assert float(session.location.latitude) == -6.8137482
+    assert float(session.location.longitude) == 39.2801352
 
 
 def test_window_validation_depends_only_on_session_time():
