@@ -1,0 +1,24 @@
+{
+  "name": "CCD-Attendance - Secure Student Attendance System",
+  "short_name": "CCD-Attendance",
+  "description": "Secure student attendance system with GPS geofence and live Face ID verification for DIT and universities in Tanzania.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070c10",
+  "theme_color": "#070c10",
+  "categories": ["education", "productivity", "business"],
+  "lang": "en-TZ",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "keywords": ["attendance", "attendance system", "student attendance", "biometric attendance", "face recognition"]
+}

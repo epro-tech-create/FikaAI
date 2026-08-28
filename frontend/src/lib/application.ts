@@ -46,6 +46,6 @@ export function externalLoginUrl(value: unknown, fallbackOrigin: string): string
 }
 
 export function instructorLoginUrl(): string {
-  const fallback = import.meta.env.DEV ? 'http://localhost:5175' : 'https://fikaai-instructor.vercel.app'
+  const fallback = import.meta.env.DEV ? 'http://localhost:5175' : 'https://attendance.cyberclubdit.org'
   return externalLoginUrl(import.meta.env.VITE_INSTRUCTOR_APP_URL, fallback)
 }

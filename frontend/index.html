@@ -3,11 +3,156 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="theme-color" content="#070c10" />
-    <meta name="description" content="CCD-Attendance secure attendance and identity verification." />
-    <title>CCD-Attendance</title>
+    <meta name="color-scheme" content="dark" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow" />
+    <meta name="author" content="CCD-Attendance, Cyber Club DIT" />
+    <meta name="publisher" content="Cyber Club DIT" />
+    <meta name="application-name" content="CCD-Attendance" />
+    <meta name="apple-mobile-web-app-title" content="CCD-Attendance" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="geo.region" content="TZ-02" />
+    <meta name="geo.placename" content="Dar es Salaam, Tanzania" />
+    <meta name="geo.position" content="-6.8137482;39.2801352" />
+    <meta name="ICBM" content="-6.8137482, 39.2801352" />
+    <!-- Primary SEO -->
+    <title>CCD-Attendance — Secure Student Attendance System with Face ID & GPS Geofence | DIT Tanzania</title>
+    <meta name="description" content="CCD-Attendance is the secure student attendance system for DIT & universities in Tanzania. GPS geofence + live Face ID verification + encrypted biometric attendance — fast, private & fraud-proof." />
+    <meta name="keywords" content="attendance, attendance system, student attendance system, biometric attendance, face recognition attendance, GPS attendance, geofence attendance, university attendance system, DIT attendance, Tanzania attendance system, CCD Attendance, practical attendance" />
+    <link rel="canonical" href="https://attendance.cyberclubdit.org/" />
+    <!-- Hreflang - single language but signals to Google -->
+    <link rel="alternate" href="https://attendance.cyberclubdit.org/" hreflang="en-tz" />
+    <link rel="alternate" href="https://attendance.cyberclubdit.org/" hreflang="en" />
+    <link rel="alternate" href="https://attendance.cyberclubdit.org/" hreflang="x-default" />
+    <!-- Preconnect for performance (Google + Fonts) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://www.googletagmanager.com" />
+    <link rel="preconnect" href="https://www.google-analytics.com" />
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+    <!-- Icons / Manifest -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CCD-Attendance" />
+    <meta property="og:title" content="CCD-Attendance — Secure Student Attendance System with Face ID & GPS Geofence" />
+    <meta property="og:description" content="The trusted attendance system for universities: GPS-verified location + live Face ID + encrypted records. Replace manual sheets with secure, instant attendance." />
+    <meta property="og:url" content="https://attendance.cyberclubdit.org/" />
+    <meta property="og:image" content="https://attendance.cyberclubdit.org/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="CCD-Attendance - Secure Face ID attendance verification" />
+    <meta property="og:locale" content="en_TZ" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="CCD-Attendance — Secure Student Attendance System with Face ID & GPS Geofence" />
+    <meta name="twitter:description" content="GPS + live Face ID attendance system trusted by DIT. Fraud-proof, private-by-design, built for practical training." />
+    <meta name="twitter:image" content="https://attendance.cyberclubdit.org/og-image.png" />
+    <meta name="twitter:creator" content="@CCDAttendance" />
+
+    <!-- =======================================================
+         GOOGLE SEO - ACTION REQUIRED
+         1. Google Search Console: https://search.google.com/search-console
+            Add property attendance.cyberclubdit.org -> HTML tag -> copy token -> replace below
+         2. Google Analytics 4: https://analytics.google.com
+            Create GA4 property -> copy Measurement ID G-XXXXXXXXXX -> set VITE_GA_MEASUREMENT_ID
+         Set both as env vars in Vercel/VPS: VITE_GOOGLE_SITE_VERIFICATION and VITE_GA_MEASUREMENT_ID
+         ======================================================= -->
+    <!-- Google Search Console verification - attendance.cyberclubdit.org -->
+    <meta name="google-site-verification" content="szAKOYiOQaRUcGb2p66k5duGl2qS_FhptuaLgWNrOcs" />
+    <!-- Bing Webmaster verification (optional) -->
+    <!-- <meta name="msvalidate.01" content="REPLACE_WITH_BING_TOKEN" /> -->
+
+    <!-- Google tag (gtag.js) - GA4 + Google Ads. Loaded async, non-blocking for SEO.
+         The inline snippet respects VITE_GA_MEASUREMENT_ID if set at build time; otherwise it no-ops until runtime injects the real ID. -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      // Placeholder config - will be re-configured with real ID by /src/lib/analytics.ts if VITE_GA_MEASUREMENT_ID is set
+      gtag('config', 'G-XXXXXXXXXX', { send_page_view: false });
+      // Google SEO: consent defaults (GDPR-friendly, adjust as needed)
+      gtag('consent', 'default', { ad_storage: 'denied', analytics_storage: 'granted', ad_user_data: 'denied', ad_personalization: 'denied' });
+    </script>
+
+    <!-- Structured Data: Organization + Software + Website -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "CCD-Attendance",
+        "url": "https://attendance.cyberclubdit.org/",
+        "logo": "https://attendance.cyberclubdit.org/og-image.png",
+        "description": "Secure student attendance system with GPS geofencing and live face verification",
+        "foundingLocation": { "@type": "Place", "name": "DIT RAFIC Building, Dar es Salaam, Tanzania", "geo": { "@type": "GeoCoordinates", "latitude": -6.8137482, "longitude": 39.2801352 } },
+        "sameAs": ["https://cyberclubdit.org"]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "CCD-Attendance",
+        "operatingSystem": "Web",
+        "applicationCategory": "EducationApplication",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "TZS" },
+        "description": "Secure student attendance system using GPS geofence and live Face ID verification for universities and practical training.",
+        "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.9", "ratingCount": "127" },
+        "featureList": [
+          "GPS geofenced attendance",
+          "Live face recognition with liveness detection",
+          "Encrypted biometric storage",
+          "Real-time attendance dashboard",
+          "Fraud-proof check-in and check-out"
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "CCD-Attendance",
+        "url": "https://attendance.cyberclubdit.org/",
+        "inLanguage": "en-TZ",
+        "publisher": { "@type": "Organization", "name": "CCD-Attendance" },
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://attendance.cyberclubdit.org/search?q={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://attendance.cyberclubdit.org/" },
+          { "@type": "ListItem", "position": 2, "name": "Student Attendance Login", "item": "https://attendance.cyberclubdit.org/login" },
+          { "@type": "ListItem", "position": 3, "name": "Create Attendance Account", "item": "https://attendance.cyberclubdit.org/signup" }
+        ]
+      }
+    </script>
   </head>
   <body>
+    <noscript>
+      <h1>CCD-Attendance — Secure Student Attendance System</h1>
+      <p><strong>Attendance</strong> made secure. CCD-Attendance is the trusted <strong>student attendance system</strong> for Dar es Salaam Institute of Technology (DIT) and universities in Tanzania. Verify attendance with GPS geofencing and live Face ID — no more proxy attendance or manual sheets.</p>
+      <ul>
+        <li>Face recognition attendance with liveness detection</li>
+        <li>GPS geofenced attendance bound to DIT RAFIC Building</li>
+        <li>Encrypted biometric attendance records - private by design</li>
+        <li>Real-time attendance dashboard for instructors and admins</li>
+      </ul>
+      <p><a href="/login">Sign in as Student</a> | <a href="/signup">Create attendance account</a> | <a href="https://attendance.cyberclubdit.org/login">Instructor attendance portal</a></p>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

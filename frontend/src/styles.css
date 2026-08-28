@@ -78,3 +78,38 @@ nav{display:flex;align-items:center;gap:22px}nav a,.ghost{border:0;background:no
 @media(max-height:620px) and (orientation:landscape){.face-id-shell{padding-block:18px}.face-id-orb{width:min(38vw,42dvh)}.face-id-copy{margin-top:15px}.face-id-copy h2{font-size:24px}.face-id-copy>p:not(.scan-kicker){margin-bottom:14px;line-height:1.4}.landing-hero{padding:35px 0}.identity-visual{width:min(55vh,400px)}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 .brand,.hero h1,.face-id-copy h2,.scan-error-mark,.login h1,.portal-heading h1,.portal-topbar b,.card-toolbar b,.state-panel b,.stat-card>b,.content-card h2,.landing-copy h1,.role-number,.role-entry b,.identity-core b,.landing-proof b{font-family:'Space Grotesk','DM Sans',sans-serif}
+
+/* SEO landing extensions */
+.landing-seo{margin:42px 0 28px;padding:36px 32px;border:1px solid #1f3038;border-radius:20px;background:linear-gradient(145deg,#0f1a20cc,#0b1217cc);box-shadow:0 18px 45px #0004}
+.landing-seo-grid{display:grid;grid-template-columns:1.35fr .85fr;gap:36px;align-items:start}
+.landing-seo h2{margin:0 0 14px;font:700 clamp(22px,2.4vw,30px) 'Space Grotesk';letter-spacing:-1px;line-height:1.15}
+.landing-seo h3{margin:0 0 12px;font:700 13px 'Space Grotesk';letter-spacing:1px;text-transform:uppercase;color:var(--blue)}
+.landing-seo p{margin:0 0 14px;color:#93a7af;font-size:14px;line-height:1.7}
+.landing-seo p strong{color:#d8e8ef}
+.seo-list{margin:14px 0 0;padding-left:18px;color:#93a7af;font-size:13px;line-height:1.7}
+.seo-list li{margin-bottom:6px}
+.seo-list strong{color:#b8d4e6}
+.seo-highlights{padding:22px;border:1px solid #22333c;border-radius:16px;background:#0d171df5}
+.seo-highlights dl{margin:0 0 16px;display:grid;gap:10px}
+.seo-highlights dl>div{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:10px;background:#0a1217;border:1px solid #1c2c34}
+.seo-highlights dt{color:#607680;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.seo-highlights dd{margin:0;color:#c7d6dc;font-size:12px}
+.seo-cta a{color:var(--blue);font-weight:700;text-decoration:none;font-size:13px}
+.seo-cta a:hover{text-decoration:underline}
+.landing-steps{margin:28px 0;padding:32px;border:1px solid #1f3038;border-radius:20px;background:linear-gradient(145deg,#0f1a20cc,#0b1217cc)}
+.landing-steps h2{margin:0 0 20px;font:700 22px 'Space Grotesk';letter-spacing:-.8px}
+.landing-steps ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.landing-steps li{padding:18px;border:1px solid #22333c;border-radius:14px;background:#0d171d;display:flex;flex-direction:column;gap:8px}
+.landing-steps li b{font:700 13px 'Space Grotesk';color:#d8e8ef}
+.landing-steps li span{color:#7f929b;font-size:12px;line-height:1.6}
+.landing-faq{margin:28px 0 36px;padding:32px;border:1px solid #1f3038;border-radius:20px;background:linear-gradient(145deg,#0f1a20cc,#0b1217cc)}
+.landing-faq h2{margin:0 0 18px;font:700 22px 'Space Grotesk';letter-spacing:-.8px}
+.landing-faq dl{margin:0;display:grid;gap:14px}
+.landing-faq dl>div{padding:16px 18px;border:1px solid #22333c;border-radius:14px;background:#0d171d}
+.landing-faq dt{margin-bottom:8px;color:#d8e8ef;font:700 14px 'Space Grotesk'}
+.landing-faq dd{margin:0;color:#93a7af;font-size:13px;line-height:1.65}
+.landing-footer{padding:22px 0 8px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1px solid #1e2c34;color:#657982;font-size:11px;flex-wrap:wrap}
+.landing-footer a{color:#7da8c3;text-decoration:none;font-weight:600}
+.landing-footer a:hover{color:var(--blue);text-decoration:underline}
+@media(max-width:920px){.landing-seo-grid{grid-template-columns:1fr}.landing-steps ol{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.landing-seo,.landing-steps,.landing-faq{padding:22px 18px}.landing-steps ol{grid-template-columns:1fr}}

@@ -17,6 +17,8 @@ import { clearAuthentication, getStoredRole, parseRole, storeAuthentication } fr
 import { applicationConfig, currentApplication, instructorLoginUrl, portalTitleForRole, type Application } from './lib/application'
 import { getRegistrationDeviceId } from './lib/device'
 import { startInactivityTimer } from './lib/inactivity'
+import { applySeo, seoForApplication } from './lib/seo'
+import { trackPageView } from './lib/analytics'
 
 function Login({ application }: { application: Application }) {
   const navigate = useNavigate()
@@ -106,6 +108,21 @@ function HomeRedirect({ application }: { application: Application }) {
 export default function App({ application }: { application?: Application }) {
   const app = application ?? currentApplication()
   const location = useLocation()
+  useEffect(() => {
+    applySeo(seoForApplication(app))
+  }, [app])
+  // Per-route SEO + Google Analytics page_view for attendance.cyberclubdit.org
+  useEffect(() => {
+    const path = location.pathname
+    if (app === 'student') {
+      if (path === '/') applySeo({ title: 'CCD-Attendance — Secure Student Attendance System with Face ID & GPS Geofence | DIT Tanzania', description: 'The trusted student attendance system for DIT & universities in Tanzania. GPS geofence + live Face ID verification — fast, private & fraud-proof. Mark attendance in seconds.', canonical: 'https://attendance.cyberclubdit.org/' })
+      else if (path === '/login') applySeo({ title: 'Student Attendance Login — CCD-Attendance | Sign in to Mark Attendance', description: 'Sign in to CCD-Attendance to mark your student attendance with Face ID and GPS verification. Secure attendance for DIT practical training.', canonical: 'https://attendance.cyberclubdit.org/login' })
+      else if (path === '/signup') applySeo({ title: 'Create Attendance Account — CCD-Attendance | Student Registration', description: 'Create your CCD-Attendance student account to start marking attendance with secure Face ID and GPS geofence verification.', canonical: 'https://attendance.cyberclubdit.org/signup' })
+      else applySeo({ noindex: true })
+    }
+    // Google SEO: SPA page_view (GA4)
+    trackPageView(path)
+  }, [app, location.pathname])
   useEffect(() => {
     if (!localStorage.getItem('fikaai.access')) return
     return startInactivityTimer(() => {

@@ -1,0 +1,13 @@
+# CCD-Attendance - robots.txt for attendance.cyberclubdit.org
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /signup
+
+# Block authenticated / private routes
+Disallow: /student/
+Disallow: /admin/
+Disallow: /instructor/
+Disallow: /api/
+
+Sitemap: https://attendance.cyberclubdit.org/sitemap.xml
