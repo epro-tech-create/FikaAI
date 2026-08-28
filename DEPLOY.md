@@ -1,4 +1,4 @@
-# FikaAI Production Deployment
+# CCD-Attendance Production Deployment
 
 Managed-cloud split:
 

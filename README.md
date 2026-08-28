@@ -1,4 +1,4 @@
-# FikaAI Attendance System
+# CCD-Attendance System
 
 Student attendance MVP based on **active session + GPS geofence + backend live face verification**.
 

@@ -34,7 +34,7 @@ export default function PortalLayout({ role }: { role: Extract<Role, 'admin' | '
 
   return <div className="portal-shell">
     <aside id="portal-navigation" className={`portal-sidebar ${open ? 'is-open' : ''}`}>
-      <div className="portal-brand"><div><div className="brand">Fika<span>AI</span></div><small>Attendance intelligence</small></div><button className="sidebar-close" onClick={() => { setOpen(false); menuButton.current?.focus() }} aria-label="Close navigation">Close</button></div>
+      <div className="portal-brand"><div><div className="brand">CCD-<span>Attendance</span></div><small>Attendance intelligence</small></div><button className="sidebar-close" onClick={() => { setOpen(false); menuButton.current?.focus() }} aria-label="Close navigation">Close</button></div>
       <div className="role-chip"><i/>{role === 'admin' ? 'Administration' : 'Instructor portal'}</div>
       <nav className="portal-nav" aria-label={`${role} navigation`}>
         {nav.map(item => <NavLink key={item.path} to={item.path} onClick={() => setOpen(false)}><span>{item.mark}</span>{item.label}</NavLink>)}

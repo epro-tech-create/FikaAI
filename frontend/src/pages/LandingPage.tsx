@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 export default function LandingPage({ instructorLoginUrl }: { instructorLoginUrl: string }) {
   return <main className="landing-shell">
     <header className="landing-header">
-      <Link className="brand" to="/" aria-label="FikaAI home">Fika<span>AI</span></Link>
+      <Link className="brand" to="/" aria-label="CCD-Attendance home">CCD-<span>Attendance</span></Link>
       <span className="landing-status"><i/>Attendance systems online</span>
     </header>
 
@@ -43,6 +43,6 @@ export default function LandingPage({ instructorLoginUrl }: { instructorLoginUrl
       <article><span>03</span><div><b>Private by design</b><p>Encrypted profiles; raw captures are not retained.</p></div></article>
     </section>
 
-    <footer className="landing-footer"><span>FikaAI Attendance Intelligence</span><span>Secure · Verifiable · Role protected</span></footer>
+    <footer className="landing-footer"><span>CCD-Attendance Intelligence</span><span>Secure · Verifiable · Role protected</span></footer>
   </main>
 }

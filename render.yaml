@@ -1,4 +1,4 @@
-# FikaAI production blueprint: Render (backend) + Neon (Postgres) + Vercel (frontends).
+# CCD-Attendance production blueprint: Render (backend) + Neon (Postgres) + Vercel (frontends).
 # Frontends are three Vercel projects built from ./frontend with different modes:
 #   student (default), admin, instructor. See DEPLOY.md.
 services:

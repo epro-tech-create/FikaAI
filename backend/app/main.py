@@ -1,4 +1,4 @@
-"""FikaAI Attendance API - application entrypoint."""
+"""CCD-Attendance API - application entrypoint."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ logger = logging.getLogger("fikaai")
 async def lifespan(app: FastAPI):
     provider = settings.face_embedding_provider
     logger.info(
-        "FikaAI starting | face_provider=%s | threshold=%.2f (dev default - calibrate!)",
+        "CCD-Attendance starting | face_provider=%s | threshold=%.2f (dev default - calibrate!)",
         "fake(dev)" if provider == "fake" else provider,
         settings.face_match_threshold,
     )
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="FikaAI Attendance API",
+        title="CCD-Attendance API",
         version="0.1.0",
         description="Student attendance with geofencing + live face verification.",
         lifespan=lifespan,

@@ -1,8 +1,8 @@
 # Liveness Detection — MVP Scope Notice
 
-## What FikaAI implements today
+## What CCD-Attendance implements today
 
-FikaAI's `LivenessDetectionService` uses **MediaPipe Face Landmarker**
+CCD-Attendance's `LivenessDetectionService` uses **MediaPipe Face Landmarker**
 (478 landmarks + blendshapes) evaluated **on the backend** over a short,
 timestamped sequence of camera frames. Randomized challenges supported:
 

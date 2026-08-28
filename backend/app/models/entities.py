@@ -1,4 +1,4 @@
-"""SQLAlchemy 2.0 entities for the FikaAI student-attendance MVP.
+"""SQLAlchemy 2.0 entities for the CCD-Attendance student-attendance MVP.
 
 Tables (UUID PKs, FKs, indexes, unique constraints):
     users, students, instructors, courses, instructor_course_assignments,
