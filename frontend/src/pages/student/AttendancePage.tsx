@@ -38,7 +38,7 @@ export default function AttendancePage() {
   const [snapshot,setSnapshot] = useState('')
   const [error,setError] = useState('')
   // venue mode
-  const [mode,setMode] = useState<'venue'|'face'>('venue')
+  const [mode,setMode] = useState<'venue'|'face'>('face')
   const [venueCode,setVenueCode] = useState('')
   const [venueBusy,setVenueBusy] = useState(false)
   const [showQrScanner,setShowQrScanner] = useState(false)

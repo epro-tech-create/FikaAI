@@ -56,8 +56,12 @@ function Login({ application }: { application: Application }) {
         return
       }
       storeAuthentication(response.data)
-      const next = safeNextPath(params.get('next')) || config.home
-      navigate(next)
+      const next = safeNextPath(params.get('next'))
+      const code = (params.get('code') || '').trim().toUpperCase()
+      const fromQr = Boolean(next?.includes('/checkin') || /^[A-Z0-9]{8}$/.test(code))
+      if (!fromQr) sessionStorage.removeItem(VENUE_CODE_KEY)
+      // Normal login (no QR) → face attendance. QR login → auto check-in/out.
+      navigate(fromQr && next ? next : (application === 'student' ? '/student/attendance' : (next || config.home)))
     } catch (requestError) {
       setError(message(requestError))
     } finally {
