@@ -18,15 +18,15 @@ export default function VenueQrPage({ role }: { role: 'admin'|'instructor' }) {
       <div style={{padding:'18px', border:'1px solid #1e3a4a', borderRadius:14, background:'#0e1a22'}}>
         <small style={{letterSpacing:'1.2px', color:'#5a8aa0'}}>STATIC CODE (on poster/projector)</small>
         <div style={{font: '700 34px monospace', letterSpacing:'6px', textAlign:'center', margin:'14px 0', color:'#f2f7f8', background:'#070c10', padding:'14px', borderRadius:10, border:'1px dashed #2a4a5e'}}>VENUE CODE IN ROOM</div>
-        <small style={{color:'#7ea0b5'}}>Actual 8-char code is on the physical poster/projector in RAFIC. This page shows only a hint for security: <b style={{color:'#cfe8f5'}}>{data?.codeHint ?? '****'}</b>. Generate/print QR via: <code>python backend/scripts/generate_venue_code.py --code YOUR8CHAR --qr</code> then display <code>venue-qr.png</code> on projector.</small>
+        <small style={{color:'#7ea0b5'}}>Phone camera scans a URL QR → login → auto GPS check-in. Hint: <b style={{color:'#cfe8f5'}}>{data?.codeHint ?? '****'}</b>. Generate: <code>python backend/scripts/generate_venue_code.py --code YOUR8CHAR --qr --url https://YOUR_DOMAIN/checkin</code></small>
       </div>
       <div style={{padding:'14px', border:'1px solid #2a3b44', borderRadius:10, background:'#0d151a', fontSize:13, color:'#9bb5c4', lineHeight:1.6}}>
-        <b style={{color:'#cfe8f5'}}>How it works (automatic):</b><br/>
-        1. Student taps <b>Scan QR / Check In</b> → app prompts “Allow location”.<br/>
-        2. App auto-verifies location (inside 100 m RAFIC) + venue code — no extra taps.<br/>
-        3. Same code works for check-out 14:00–16:00. After 16:00 session closes.<br/>
+        <b style={{color:'#cfe8f5'}}>Student flow (no extra button):</b><br/>
+        1. Scan room QR with phone camera → opens login.<br/>
+        2. After sign-in, app checks GPS (100 m RAFIC) and records attendance automatically.<br/>
+        3. If already checked in, student sees “You have already checked in”.<br/>
         <br/>
-        <b style={{color:'#cfe8f5'}}>Setup:</b> Set <code>VENUE_STATIC_CODE_HASH</code> in <code>.env</code> / Render env (sha256 of 8-char). Example dev code <code>A7K9P2X4</code> already in <code>.env.example</code>. Print QR and pin at RAFIC entrance + projector slide.
+        <b style={{color:'#cfe8f5'}}>Setup:</b> Set <code>VENUE_STATIC_CODE_HASH</code> in <code>.env</code>. Print <code>frontend/public/venue-qr.png</code> (URL QR) for the room.
       </div>
       {data?.message && <div style={{fontSize:12, color:'#6a8a9a'}}>{data.message}</div>}
     </div>

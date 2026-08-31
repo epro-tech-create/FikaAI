@@ -3,10 +3,11 @@
 
 Usage:
   python scripts/generate_venue_code.py --code A7K9P2X4
+  python scripts/generate_venue_code.py --code A7K9P2X4 --qr --url https://attendance.cyberclubdit.org/checkin
   python scripts/generate_venue_code.py --generate   # random 8-char
 
-Stores ONLY the sha256 hash in .env (VENUE_STATIC_CODE_HASH). Plaintext
-stays on the physical poster/projector in the RAFIC room for the entire IPT.
+Phone cameras should scan a URL QR that opens /checkin?code=XXXXXXXX
+so students land on login, then auto check-in with GPS.
 """
 from __future__ import annotations
 
@@ -15,10 +16,10 @@ import hashlib
 import re
 import secrets
 import string
+from urllib.parse import urlencode
 
 CODE_RE = re.compile(r"^[A-Z0-9]{8}$")
 ALPHABET = string.ascii_uppercase + string.digits
-# Avoid confusing chars
 ALPHABET = ALPHABET.replace("O", "").replace("0", "").replace("I", "").replace("1", "")
 
 
@@ -36,6 +37,12 @@ def main() -> None:
     g.add_argument("--code", help="8-char alphanumeric code (uppercase)")
     g.add_argument("--generate", action="store_true", help="generate random 8-char code")
     ap.add_argument("--qr", action="store_true", help="also generate QR PNG (requires qrcode)")
+    ap.add_argument(
+        "--url",
+        default="https://attendance.cyberclubdit.org/checkin",
+        help="Base check-in URL encoded into the QR",
+    )
+    ap.add_argument("--out", default="venue-qr.png", help="QR output path")
     args = ap.parse_args()
 
     if args.generate:
@@ -48,19 +55,21 @@ def main() -> None:
 
     h = hash_code(code)
     hint = f"{code[:2]}****{code[-2:]}"
+    checkin_url = f"{args.url.rstrip('/')}?{urlencode({'code': code})}"
     print(f"Code: {code}")
     print(f"Hint: {hint}")
     print(f"SHA256: {h}")
+    print(f"Check-in URL: {checkin_url}")
     print(f"\nAdd to .env / Render env:")
     print(f"VENUE_STATIC_CODE_HASH={h}")
 
     if args.qr:
         try:
             import qrcode
-            img = qrcode.make(code)
-            path = "venue-qr.png"
+            img = qrcode.make(checkin_url)
+            path = args.out
             img.save(path)
-            print(f"QR saved to {path} (scans to: {code})")
+            print(f"QR saved to {path} (scans to URL above)")
         except ImportError:
             print("qrcode not installed: pip install qrcode[pil]")
 

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, message } from './services/api'
 import AttendancePage from './pages/student/AttendancePage'
+import AutoCheckInPage from './pages/student/AutoCheckInPage'
 import FaceEnrollmentPage from './pages/student/FaceEnrollmentPage'
 import LandingPage from './pages/LandingPage'
 import PortalLayout from './components/PortalLayout'
@@ -22,13 +23,26 @@ import { startInactivityTimer } from './lib/inactivity'
 import { applySeo, seoForApplication } from './lib/seo'
 import { trackPageView } from './lib/analytics'
 
+const VENUE_CODE_KEY = 'ccd.venueCode'
+
+function safeNextPath(value: string | null) {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return null
+  return value
+}
+
 function Login({ application }: { application: Application }) {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
   const config = applicationConfig(application)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    const code = (params.get('code') || '').trim().toUpperCase()
+    if (/^[A-Z0-9]{8}$/.test(code)) sessionStorage.setItem(VENUE_CODE_KEY, code)
+  }, [params])
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -42,7 +56,8 @@ function Login({ application }: { application: Application }) {
         return
       }
       storeAuthentication(response.data)
-      navigate(config.home)
+      const next = safeNextPath(params.get('next')) || config.home
+      navigate(next)
     } catch (requestError) {
       setError(message(requestError))
     } finally {
@@ -51,6 +66,20 @@ function Login({ application }: { application: Application }) {
   }
 
   return <main className="center"><form className="panel login" onSubmit={submit}><div className="brand">CCD-<span>Attendance</span></div><p className="eyebrow">{config.eyebrow}</p><h1>{config.title}</h1><label>Email<input value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="username" required/></label><label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete="current-password" autoFocus required/></label>{error && <div className="error">{error}</div>}<button disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button><small>Enter your password whenever the app is opened or refreshed.</small>{application === 'student' && <p className="auth-switch">New student? <Link to="/signup">Create an account</Link></p>}</form></main>
+}
+
+function CheckInEntry() {
+  const [params] = useSearchParams()
+  const code = (params.get('code') || '').trim().toUpperCase()
+  if (/^[A-Z0-9]{8}$/.test(code)) sessionStorage.setItem(VENUE_CODE_KEY, code)
+  const dest = code ? `/student/checkin?code=${encodeURIComponent(code)}` : '/student/checkin'
+  const signedIn = Boolean(localStorage.getItem('ccd.access') || localStorage.getItem('fikaai.access'))
+  if (!signedIn || getStoredRole() !== 'student') {
+    const next = encodeURIComponent(dest)
+    const login = code ? `/login?next=${next}&code=${encodeURIComponent(code)}` : `/login?next=${next}`
+    return <Navigate to={login} replace />
+  }
+  return <Navigate to={dest} replace />
 }
 
 function Signup() {
@@ -138,9 +167,11 @@ export default function App({ application }: { application?: Application }) {
     {app === 'student' && <>
       <Route path="/" element={<LandingPage instructorLoginUrl={instructorLoginUrl()}/>}/>
       <Route path="/signup" element={<Signup/>}/>
+      <Route path="/checkin" element={<CheckInEntry/>}/>
       <Route path="/student" element={<Guard application={app}><StudentLayout/></Guard>}>
         <Route index element={<Navigate to="attendance" replace/>}/>
         <Route path="attendance" element={<AttendancePage/>}/>
+        <Route path="checkin" element={<AutoCheckInPage/>}/>
         <Route path="face-enrollment" element={<FaceEnrollmentPage/>}/>
       </Route>
     </>}
