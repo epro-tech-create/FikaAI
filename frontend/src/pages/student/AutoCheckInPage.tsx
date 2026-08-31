@@ -157,7 +157,11 @@ export default function AutoCheckInPage() {
             <p className="scan-kicker success-label auto-checkin-ok-label">
               {celebrating ? 'CONGRATULATIONS' : 'ALREADY RECORDED'}
             </p>
-            <h2 className="auto-checkin-ok-title">{status}</h2>
+            <h2 className="auto-checkin-ok-title">
+              {celebrating
+                ? (isOut ? 'Congratulations! You successfully checked out' : 'Congratulations! You successfully checked in')
+                : status}
+            </h2>
             <p>
               {celebrating
                 ? (isOut

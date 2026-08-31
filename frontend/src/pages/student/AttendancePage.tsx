@@ -24,7 +24,6 @@ type Session = {
 type Summary = { fullName:string; registrationNumber:string }
 const sleep = (ms:number) => new Promise(r => window.setTimeout(r,ms))
 const MAX_CAPTURE_FRAMES = 16
-const VENUE_CODE_RE = /^[A-Z0-9]{8}$/
 
 export default function AttendancePage() {
   const [session,setSession] = useState<Session|null>(null)
@@ -37,13 +36,6 @@ export default function AttendancePage() {
   const [scanStatus,setScanStatus] = useState('Starting scanner…')
   const [snapshot,setSnapshot] = useState('')
   const [error,setError] = useState('')
-  // venue mode
-  const [mode,setMode] = useState<'venue'|'face'>('face')
-  const [venueCode,setVenueCode] = useState('')
-  const [venueBusy,setVenueBusy] = useState(false)
-  const [showQrScanner,setShowQrScanner] = useState(false)
-  const qrVideoRef = useRef<HTMLVideoElement|null>(null)
-  const qrStreamRef = useRef<MediaStream|null>(null)
   const clock = useCampusClock()
   const cam = useCameraFrames()
   const monitor = useFaceMonitor(cam.video)
@@ -68,48 +60,8 @@ export default function AttendancePage() {
       if (failure?.status==='rejected') setError(message(failure.reason))
     })
   }, [])
-  useEffect(() => () => { runId.current+=1; monitor.stop(); cam.stop(); stopQrScanner() }, [])
+  useEffect(() => () => { runId.current+=1; monitor.stop(); cam.stop() }, [])
 
-  function stopQrScanner(){ if(qrStreamRef.current){ qrStreamRef.current.getTracks().forEach(t=>t.stop()); qrStreamRef.current=null } if(qrVideoRef.current) qrVideoRef.current.srcObject=null }
-
-  async function startQrScanner(){
-    setError('')
-    try{
-      const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ideal:640}, height:{ideal:480}}})
-      qrStreamRef.current=stream
-      if(qrVideoRef.current){ qrVideoRef.current.srcObject=stream; await qrVideoRef.current.play() }
-      setShowQrScanner(true)
-      scanQrLoop()
-    } catch(e:any){ setError(message(e)) }
-  }
-
-  async function scanQrLoop(){
-    const BarcodeDetectorAny = (window as any).BarcodeDetector
-    let detector: any = null
-    if (BarcodeDetectorAny) { try{ detector=new BarcodeDetectorAny({formats:['qr_code']}) }catch{} }
-    const start = performance.now()
-    while(showQrScanner || qrStreamRef.current){
-      if(!qrVideoRef.current) { await sleep(100); continue }
-      try{
-        if(detector){
-          const barcodes = await detector.detect(qrVideoRef.current)
-          if(barcodes.length>0){
-            const raw = String(barcodes[0].rawValue||'').trim().toUpperCase()
-            const m = raw.match(/[A-Z0-9]{8}/)
-            const code = m ? m[0] : raw
-            if(VENUE_CODE_RE.test(code)){
-              stopQrScanner(); setShowQrScanner(false); setVenueCode(code); await submitVenue(code)
-              return
-            }
-          }
-        }
-      }catch{}
-      if(performance.now()-start>30000){ setError('QR scan timed out. Please try again.'); stopQrScanner(); setShowQrScanner(false); return }
-      await sleep(200)
-    }
-  }
-
-  // —— face helpers (kept as fallback) ——
   async function waitForPosition(activeRun:number) {
     let heldFrom=0, lastSeq=monitor.current.current.sequence, prev=0
     const deadline=Date.now()+25000
@@ -149,41 +101,6 @@ export default function AttendancePage() {
     throw new Error('The requested face action was not completed in time. Please try again.')
   }
 
-  async function submitVenue(rawInput?:string){
-    const code = (rawInput ?? venueCode).trim().toUpperCase()
-    if(!VENUE_CODE_RE.test(code)){ setError('Invalid QR. Please scan the QR displayed in the RAFIC room.'); return }
-    if(!session){ setError('No active session.'); return }
-    const checkingOut = record?.status==='PRESENT' || record?.status==='LATE'
-    // schedule check before even asking location
-    if(checkingOut){
-      const w=checkoutWindow(session.checkoutOpensAt,session.checkoutClosesAt)
-      if(w?.state==='before'){ setError(`Checkout opens at ${formatCampusTime(w.opensAt)}.`); return }
-      if(!w || w.state==='closed'){ setError(`Checkout closed at ${formatCampusTime(session.checkoutClosesAt)}.`); return }
-    } else if(Date.now()>new Date(session.checkInCloseAt).getTime()){ setError(`Check-in closed at ${formatCampusTime(session.checkInCloseAt)}.`); return }
-
-    setVenueBusy(true); setError(''); setStage('scanning'); setProgress(5); setInstruction('Verifying location — allow when prompted'); setScanStatus('Requesting location permission…')
-    try{
-      // 1) GPS — prompt appears now, automatic
-      const loc = await getLocation()
-      setProgress(18); setScanStatus('Location acquired — verifying in RAFIC area…')
-      const locRes = await api.post('/student/attendance/verify-location',{ sessionId:session.sessionId, ...loc })
-      setProgress(45); setScanStatus('QR — verifying in room…')
-      // 2) venue — automatic, no extra click
-      const venueRes = await api.post('/student/attendance/verify-venue',{ sessionId:session.sessionId, code })
-      setProgress(72); setScanStatus('Location + venue verified — recording attendance…')
-      setInstruction('Recording attendance…')
-      const result = await api.post(checkingOut?'/student/attendance/check-out':'/student/attendance/check-in',{
-        sessionId:session.sessionId,
-        locationVerificationToken: locRes.data.locationVerificationToken,
-        venueVerificationToken: venueRes.data.venueVerificationToken,
-        idempotencyKey: crypto.randomUUID(),
-      })
-      setRecord(result.data); setProgress(100); setSnapshot('')
-      window.setTimeout(()=>setStage('success'),350)
-    } catch(e:any){ setError(message(e)); setStage('error') }
-    finally{ setVenueBusy(false) }
-  }
-
   async function scanFace(){
     if(!session) return
     const checkingOut = record?.status==='PRESENT' || record?.status==='LATE'
@@ -214,7 +131,7 @@ export default function AttendancePage() {
     } catch(e:any){ if(timer) window.clearInterval(timer); monitor.stop(); cam.stop(); setError(message(e)); setStage('error') }
   }
 
-  function reset(){ runId.current+=1; monitor.stop(); cam.stop(); stopQrScanner(); setShowQrScanner(false); setProgress(0); setInstruction(''); setError(''); setStage('intro') }
+  function reset(){ runId.current+=1; monitor.stop(); cam.stop(); setProgress(0); setInstruction(''); setError(''); setStage('intro') }
 
   const checkedIn = record?.status==='PRESENT' || record?.status==='LATE'
   const checkout = checkedIn ? checkoutWindow(session?.checkoutOpensAt,session?.checkoutClosesAt,clock.getTime()) : null
@@ -223,11 +140,9 @@ export default function AttendancePage() {
   const scheduleLocked = checkoutLocked || checkInClosed
   const checkoutOpenTime = checkout?formatCampusTime(checkout.opensAt):'2:00 PM'
   const checkoutCloseTime = checkout?formatCampusTime(checkout.closesAt):'4:00 PM'
-  const introTitle = checkInClosed?`Check-in closed at ${session?formatCampusTime(session.checkInCloseAt):'2:00 PM'}`:checkout?.state==='before'?`Checkout opens at ${checkoutOpenTime}`:checkout?.state==='closed'?`Checkout closed at ${checkoutCloseTime}`:checkedIn?'Scan to check out':'Check in at RAFIC'
-  // TESTING: whole-day — keep text generic so it matches 00:00-23:59 window
-  const introText = checkInClosed?'Today’s check-in window has ended.':checkout?.state==='before'?`Checkout is available from ${checkoutOpenTime} to ${checkoutCloseTime} campus time.`:checkout?.state==='closed'?`Today’s checkout window was ${checkoutOpenTime} to ${checkoutCloseTime}.`:checkedIn?'Complete check-out by scanning the QR — available all day (testing).':'Scan the QR displayed in the RAFIC room. Location will be requested automatically — same QR works all day for check-in & check-out (testing).'
+  const introTitle = checkInClosed?`Check-in closed at ${session?formatCampusTime(session.checkInCloseAt):'2:00 PM'}`:checkout?.state==='before'?`Checkout opens at ${checkoutOpenTime}`:checkout?.state==='closed'?`Checkout closed at ${checkoutCloseTime}`:checkedIn?'Face scan to check out':'Face ID check-in'
+  const introText = checkInClosed?'Today’s check-in window has ended.':checkout?.state==='before'?`Checkout is available from ${checkoutOpenTime} to ${checkoutCloseTime} campus time.`:checkout?.state==='closed'?`Today’s checkout window was ${checkoutOpenTime} to ${checkoutCloseTime}.`:checkedIn?'Complete a live Face ID scan to check out — or scan the room QR with your phone camera.':'Preferred: scan the room QR with your phone camera. Face ID below is the in-app option.'
   const actionLabel = checkout?.state==='before'?`Checkout at ${checkoutOpenTime}`:checkout?.state==='closed'?'Checkout closed':checkInClosed?'Check-in closed':checkedIn?'Ready to Check Out':'Ready to Check In'
-  const venueDisabled = !session || scheduleLocked || venueBusy
 
   return <div>
     <section className="hero compact-hero">
@@ -250,74 +165,37 @@ export default function AttendancePage() {
       </section>
     )}
     <div className="student-checkin-head">
-      <h2>{checkedIn ? 'Check out' : 'Check in'}</h2>
-      <p>{checkedIn ? 'Scan QR to record your departure — available all day (testing).' : 'Scan the QR in the RAFIC room to mark attendance. GPS verifies you inside 100 m.'}</p>
+      <h2>Room QR attendance</h2>
+      <p>Scan the QR in the RAFIC room with your phone camera. After login, the system checks GPS and confirms check-in or check-out automatically.</p>
     </div>
     {error && stage==='intro' && <div className="error">{error}</div>}
 
-    <div style={{display:'flex', gap:8, margin:'12px 0', justifyContent:'center'}}>
-      <button onClick={()=>setMode('venue')} className={`mode-btn ${mode==='venue'?'active':''}`}>QR Scan</button>
-      <button onClick={()=>setMode('face')} className={`mode-btn ${mode==='face'?'active':''}`}>Face ID {enrolled?'':' (not enrolled)'}</button>
-    </div>
-
-    {mode==='venue' ? (
-      stage==='intro' ? (
-        <section className="face-id-shell stage-intro">
-          <div className="face-id-copy" style={{maxWidth:520, margin:'0 auto'}}>
-            <p className="scan-kicker">QR SCAN + GPS</p>
-            <h2>{introTitle}</h2>
-            <p>{introText}</p>
-            <div style={{display:'grid', gap:10, margin:'18px 0'}}>
-              <button className="neon-button" disabled={venueDisabled} onClick={startQrScanner} style={{width:'100%'}}>{venueBusy?'Verifying…': checkedIn?'Scan QR to Check Out':'Scan QR to Check In'}<span>→</span></button>
-            </div>
-            {showQrScanner && <div style={{border:'1px solid #2a3b44', borderRadius:12, overflow:'hidden', background:'#070c10', padding:8}}><video ref={qrVideoRef} muted playsInline style={{width:'100%', maxHeight:260, borderRadius:8, background:'#000'}}/><div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:8}}><small style={{color:'#8aa0ad'}}>Point at QR on wall/projector</small><button className="ghost" onClick={()=>{stopQrScanner(); setShowQrScanner(false)}}>Close</button></div></div>}
-          </div>
-        </section>
-      ) : stage === 'scanning' ? (
-        <section className="face-id-shell stage-scanning">
-          <div className="face-id-orb" style={{['--scan-progress' as any]: `${progress * 3.6}deg`}}><div className="scan-success-mark" style={{fontSize:36}}>◈</div></div>
-          <div className="face-id-copy"><p className="scan-kicker pulse-text">QR VERIFICATION</p><h2>{instruction}</h2><div className="face-signal"><i/><span>{scanStatus}</span></div><div className="scan-progress-head"><span>Verifying QR</span><b>{progress}%</b></div><div className="scan-progress"><i style={{width:`${progress}%`}}/></div><small>QR + GPS only — no face scan.</small></div>
-        </section>
-      ) : stage === 'success' ? (
-        <section className="face-id-shell stage-success">
-          <div className="scan-success-mark">✓</div>
-          <div className="face-id-copy"><p className="scan-kicker success-label">DONE</p><h2>{record?.status==='CHECKED_OUT'?'Checked out!':'You are in!'}</h2><p>Location + QR verified. Attendance recorded.</p><div className="scan-details">{[{label:'Student',value:summary?.fullName||'Student'},{label:'Student ID',value:summary?.registrationNumber||'—'},{label:'Time',value:record?.checkOutAt?formatCampusTime(record.checkOutAt):record?.checkInAt?formatCampusTime(record.checkInAt):'—'},{label:'Status',value:record?.status||'Verified'},{label:'Method',value:'QR Scan'}].map(d=> <div key={d.label}><span>{d.label}</span><b>{d.value}</b></div>)}</div><button className="neon-button" onClick={reset}>Continue<span>→</span></button></div>
-        </section>
-      ) : (
-        <section className="face-id-shell stage-error">
-          <div className="scan-error-mark">!</div>
-          <div className="face-id-copy"><p className="scan-kicker error-label">FAILED</p><h2>{checkedIn?'Check-out unsuccessful':'Check-in unsuccessful'}</h2><p>{error || 'Could not verify QR. Please try again.'}</p><button className="retry-button" onClick={reset}>Try Again</button></div>
-        </section>
-      )
-    ) : (
-      <>
-        {!enrolled && stage==='intro' && <div className="error" style={{marginBottom:12}}>Face ID not enrolled — <Link to="/student/face-enrollment">enrol now</Link> to use Face lane, or switch to Venue Code (works immediately).</div>}
-        <FaceScanFlow
-          stage={stage}
-          videoRef={cam.video}
-          progress={progress}
-          instruction={instruction}
-          scanStatus={scanStatus}
-          faceLocked={monitor.reading.ready}
-          snapshot={snapshot}
-          error={error}
-          errorTitle={checkedIn?'Check-out unsuccessful':'Check-in unsuccessful'}
-          introTitle={introTitle}
-          introText={introText}
-          actionLabel={enrolled ? actionLabel : 'Enrol Face ID First'}
-          successTitle={record?.status==='CHECKED_OUT'?'Checked out!':'You are in!'}
-          successText="Your live face matched the encrypted profile successfully."
-          details={[
-            {label:'Student',value:summary?.fullName||'Student'},
-            {label:'Student ID',value:summary?.registrationNumber||'—'},
-            {label:'Face ID',value:record?.faceId?`${record.faceId.slice(0,8)}…`:'—'},
-            {label:'Time',value:record?.checkOutAt?formatCampusTime(record.checkOutAt):record?.checkInAt?formatCampusTime(record.checkInAt):'—'},
-            {label:'Status',value:record?.status||'Verified'},
-          ]}
-          disabled={!session || scheduleLocked || !enrolled}
-          onStart={scanFace}
-          onReset={reset}
-        />
-      </>
-    )}</div>
-  }
+    {!enrolled && stage==='intro' && <div className="error" style={{marginBottom:12}}>Face ID not enrolled — <Link to="/student/face-enrollment">enrol now</Link> to use Face ID here, or scan the room QR with your phone.</div>}
+    <FaceScanFlow
+      stage={stage}
+      videoRef={cam.video}
+      progress={progress}
+      instruction={instruction}
+      scanStatus={scanStatus}
+      faceLocked={monitor.reading.ready}
+      snapshot={snapshot}
+      error={error}
+      errorTitle={checkedIn?'Check-out unsuccessful':'Check-in unsuccessful'}
+      introTitle={introTitle}
+      introText={introText}
+      actionLabel={enrolled ? actionLabel : 'Enrol Face ID First'}
+      successTitle={record?.status==='CHECKED_OUT'?'Checked out!':'You are in!'}
+      successText="Your live face matched the encrypted profile successfully."
+      details={[
+        {label:'Student',value:summary?.fullName||'Student'},
+        {label:'Student ID',value:summary?.registrationNumber||'—'},
+        {label:'Face ID',value:record?.faceId?`${record.faceId.slice(0,8)}…`:'—'},
+        {label:'Time',value:record?.checkOutAt?formatCampusTime(record.checkOutAt):record?.checkInAt?formatCampusTime(record.checkInAt):'—'},
+        {label:'Status',value:record?.status||'Verified'},
+      ]}
+      disabled={!session || scheduleLocked || !enrolled}
+      onStart={scanFace}
+      onReset={reset}
+    />
+  </div>
+}
