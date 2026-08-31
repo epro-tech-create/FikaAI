@@ -34,12 +34,13 @@ from app.models.entities import (
     RecordSource,
     SessionStatus,
     Student,
+    VenueVerification,
     VerificationMethod,
 )
 from app.services.audit_service import audit_detached
 from app.services.session_service import campus_now, validate_window
 
-logger = logging.getLogger("fikaai.attendance")
+logger = logging.getLogger("ccd.attendance")
 
 
 def _advisory_key(session_id: uuid.UUID, student_id: uuid.UUID) -> int:
@@ -53,7 +54,7 @@ async def _lock_attendance_row(db: AsyncSession, session_id: uuid.UUID, student_
 
 async def _consume_token(
     db: AsyncSession,
-    model: type[LocationVerification] | type[FaceVerification],
+    model: type[LocationVerification] | type[FaceVerification] | type[VenueVerification],
     *,
     raw_token: str,
     student_id: uuid.UUID,
@@ -153,7 +154,8 @@ async def check_in(
     actor_user_id: uuid.UUID,
     session_id: uuid.UUID,
     location_verification_token: str,
-    face_verification_token: str,
+    face_verification_token: str | None = None,
+    venue_verification_token: str | None = None,
     idempotency_key: str,
     ip_address: str | None,
 ) -> dict[str, Any]:
@@ -199,19 +201,33 @@ async def check_in(
             student_id=student.id, session_id=session.id,
             invalid_code=ErrorCode.INVALID_LOCATION_TOKEN, label="location",
         )
-        face_verification_id = await _consume_token(
-            db, FaceVerification,
-            raw_token=face_verification_token,
-            student_id=student.id, session_id=session.id,
-            invalid_code=ErrorCode.INVALID_FACE_TOKEN, label="face",
-        )
-        face_enrollment_id = (
-            await db.execute(
-                select(FaceVerification.face_enrollment_id).where(FaceVerification.id == face_verification_id)
+        face_enrollment_id = None
+        verification_method = VerificationMethod.VENUE_GPS
+        if face_verification_token:
+            face_verification_id = await _consume_token(
+                db, FaceVerification,
+                raw_token=face_verification_token,
+                student_id=student.id, session_id=session.id,
+                invalid_code=ErrorCode.INVALID_FACE_TOKEN, label="face",
             )
-        ).scalar_one()
-        if face_enrollment_id is None:
-            raise ApiError(ErrorCode.INVALID_FACE_TOKEN, "The face verification has no enrolled FaceID reference.", 400)
+            face_enrollment_id = (
+                await db.execute(
+                    select(FaceVerification.face_enrollment_id).where(FaceVerification.id == face_verification_id)
+                )
+            ).scalar_one()
+            if face_enrollment_id is None:
+                raise ApiError(ErrorCode.INVALID_FACE_TOKEN, "The face verification has no enrolled FaceID reference.", 400)
+            verification_method = VerificationMethod.FACE_GPS
+        elif venue_verification_token:
+            await _consume_token(
+                db, VenueVerification,
+                raw_token=venue_verification_token,
+                student_id=student.id, session_id=session.id,
+                invalid_code=ErrorCode.INVALID_VENUE_TOKEN, label="venue",
+            )
+            verification_method = VerificationMethod.VENUE_GPS
+        else:
+            raise ApiError(ErrorCode.INVALID_FACE_TOKEN, "Provide face or venue verification token.", 400)
 
         # Server time is authoritative; LATE beyond open + threshold
         now_local = clock.now_local
@@ -230,7 +246,7 @@ async def check_in(
             check_in_at=now_local,
             minutes_late=minutes_late,
             status=status,
-            verification_method=VerificationMethod.FACE_GPS,
+            verification_method=verification_method,
             source=RecordSource.ONLINE,
             idempotency_key=idem_uuid,
         )
@@ -250,10 +266,10 @@ async def check_in(
         actor_user_id=actor_user_id,
         entity_type="attendance_record",
         entity_id=record.id,
-        details={"session_id": str(session.id), "face_id": str(face_enrollment_id), "minutes_late": minutes_late},
+        details={"session_id": str(session.id), "face_id": str(face_enrollment_id) if face_enrollment_id else None, "verification_method": verification_method.value, "minutes_late": minutes_late},
         ip_address=ip_address,
     )
-    logger.info("Check-in recorded student=%s session=%s status=%s", student.id, session.id, status.value)
+    logger.info("Check-in recorded student=%s session=%s status=%s method=%s", student.id, session.id, status.value, verification_method.value)
     return _record_dto(record)
 
 
@@ -264,7 +280,8 @@ async def check_out(
     actor_user_id: uuid.UUID,
     session_id: uuid.UUID,
     location_verification_token: str,
-    face_verification_token: str,
+    face_verification_token: str | None = None,
+    venue_verification_token: str | None = None,
     idempotency_key: str,
     ip_address: str | None,
 ) -> dict[str, Any]:
@@ -301,19 +318,30 @@ async def check_out(
             student_id=student.id, session_id=session.id,
             invalid_code=ErrorCode.INVALID_LOCATION_TOKEN, label="location",
         )
-        face_verification_id = await _consume_token(
-            db, FaceVerification,
-            raw_token=face_verification_token,
-            student_id=student.id, session_id=session.id,
-            invalid_code=ErrorCode.INVALID_FACE_TOKEN, label="face",
-        )
-        checkout_face_id = (
-            await db.execute(
-                select(FaceVerification.face_enrollment_id).where(FaceVerification.id == face_verification_id)
+        checkout_face_id = None
+        if face_verification_token:
+            face_verification_id = await _consume_token(
+                db, FaceVerification,
+                raw_token=face_verification_token,
+                student_id=student.id, session_id=session.id,
+                invalid_code=ErrorCode.INVALID_FACE_TOKEN, label="face",
             )
-        ).scalar_one()
-        if checkout_face_id is None:
-            raise ApiError(ErrorCode.INVALID_FACE_TOKEN, "The face verification has no enrolled FaceID reference.", 400)
+            checkout_face_id = (
+                await db.execute(
+                    select(FaceVerification.face_enrollment_id).where(FaceVerification.id == face_verification_id)
+                )
+            ).scalar_one()
+            if checkout_face_id is None:
+                raise ApiError(ErrorCode.INVALID_FACE_TOKEN, "The face verification has no enrolled FaceID reference.", 400)
+        elif venue_verification_token:
+            await _consume_token(
+                db, VenueVerification,
+                raw_token=venue_verification_token,
+                student_id=student.id, session_id=session.id,
+                invalid_code=ErrorCode.INVALID_VENUE_TOKEN, label="venue",
+            )
+        else:
+            raise ApiError(ErrorCode.INVALID_FACE_TOKEN, "Provide face or venue verification token.", 400)
 
         now_local = clock.now_local
         record.check_out_at = now_local
@@ -325,7 +353,7 @@ async def check_out(
         actor_user_id=actor_user_id,
         entity_type="attendance_record",
         entity_id=record.id,
-        details={"session_id": str(session.id), "face_id": str(checkout_face_id), "time_spent_minutes": record.time_spent_minutes},
+        details={"session_id": str(session.id), "face_id": str(checkout_face_id) if checkout_face_id else None, "time_spent_minutes": record.time_spent_minutes},
         ip_address=ip_address,
     )
     logger.info("Check-out recorded student=%s session=%s", student.id, session.id)

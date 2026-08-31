@@ -36,7 +36,7 @@ Keep this converted URL; it is the Render `DATABASE_URL`. Migrations run automat
 
 1. Push this repository to GitHub/GitLab/Bitbucket (it is not yet a git repo).
 2. Render dashboard → **New → Blueprint**, select the repo. `render.yaml` provisions:
-   - web service `fikaai-backend` (Docker, root dir `backend`, plan **pro** 4 GB/2 CPU, region frankfurt)
+   - web service `ccd-attendance-backend` (Docker, root dir `backend`, plan **pro** 4 GB/2 CPU, region frankfurt)
    - health check `/ready` (verifies Neon `SELECT 1` + model files)
    - persistent disk 2 GB at `/app/models_data` (models survive deploys)
 3. When prompted for the `sync: false` variables:
@@ -65,9 +65,9 @@ Create **three** projects from the same repo, each with Root Directory `frontend
 
 | Project | Build command | `VITE_APP_ROLE` |
 | --- | --- | --- |
-| fikaai-student | `npm run build:student` | `student` |
-| fikaai-admin | `npm run build:admin` | `admin` |
-| fikaai-instructor | `npm run build:instructor` | `instructor` |
+| ccd-student | `npm run build:student` | `student` |
+| ccd-admin | `npm run build:admin` | `admin` |
+| ccd-instructor | `npm run build:instructor` | `instructor` |
 
 For every project set (Production + Preview):
 

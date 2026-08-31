@@ -29,7 +29,7 @@ from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
 from app.models.entities import LivenessChallengeType
 
-logger = logging.getLogger("fikaai.liveness")
+logger = logging.getLogger("ccd.liveness")
 
 # MediaPipe FaceMesh canonical landmark indices
 NOSE_TIP = 1

@@ -72,6 +72,7 @@ class AttendanceStatus(str, enum.Enum):
 
 class VerificationMethod(str, enum.Enum):
     FACE_GPS = "face_gps"
+    VENUE_GPS = "venue_gps"
     MANUAL = "manual"
 
 
@@ -321,6 +322,32 @@ class FaceVerification(UUIDPrimaryKeyMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (Index("ix_faceverif_student_session", "student_id", "session_id"),)
+
+
+class VenueVerification(UUIDPrimaryKeyMixin, Base):
+    """One-time venue proof (static 8-char code / QR) bound to student+session.
+
+    Static code is hashed in settings (VENUE_STATIC_CODE_HASH); this table
+    mints a short-lived single-use token after successful code check,
+    consumed atomically by check-in/out like LocationVerification.
+    """
+
+    __tablename__ = "venue_verifications"
+
+    token: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), unique=True, default=uuid.uuid4, nullable=False)
+    student_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("students.id", ondelete="CASCADE"), nullable=False
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("attendance_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    verified: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # sha256 of normalized code
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("ix_venueverif_student_session", "student_id", "session_id"),)
 
 
 class AttendanceRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):

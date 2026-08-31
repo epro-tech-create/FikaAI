@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import FaceScanFlow, { type ScanStage } from '../../components/FaceScanFlow'
 import { api, message } from '../../services/api'
 import { useCameraFrames } from '../../hooks/useCameraFrames'
 import { useFaceMonitor, type FaceReading } from '../../hooks/useFaceMonitor'
 import { isContinuousReading, isFreshReading } from '../../lib/captureQuality'
-import { clearAuthentication, storeFaceEnrollment } from '../../lib/auth'
+import { storeFaceEnrollment } from '../../lib/auth'
 
 const sleep = (milliseconds:number) => new Promise(resolve => window.setTimeout(resolve,milliseconds))
 
@@ -119,8 +119,7 @@ export default function FaceEnrollmentPage() {
 
   function reset() { runId.current += 1; monitor.stop(); cam.stop(); setProgress(0); setInstruction(''); setError(''); setStage('intro') }
 
-  return <main className="app">
-    <header className="student-header"><Link className="brand" to="/">CCD-<span>Attendance</span></Link><nav><Link to="/student/attendance">Attendance</Link><Link to="/student/face-enrollment">Face enrolment</Link><button className="ghost" onClick={() => { clearAuthentication(); window.location.href = '/login' }}>Sign out</button></nav></header>
+  return <>
     <section className="hero compact-hero"><p className="eyebrow">BIOMETRIC IDENTITY SETUP</p><h1>Create your secure Face ID</h1><p className="date">Five verified captures across front, left, right and downward angles generate one encrypted facial profile.</p></section>
     {stage === 'intro' && <label className="consent consent-dark"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)}/><span><b>Biometric consent</b>I consent to encrypted face-embedding storage for attendance verification.</span></label>}
     <FaceScanFlow
@@ -150,5 +149,5 @@ export default function FaceEnrollmentPage() {
       onReset={reset}
       onSuccess={() => navigate('/student/attendance')}
     />
-  </main>
+  </>
 }

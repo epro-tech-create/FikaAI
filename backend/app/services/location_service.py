@@ -24,7 +24,7 @@ from app.services.session_service import (
     validate_window,
 )
 
-logger = logging.getLogger("fikaai.geo")
+logger = logging.getLogger("ccd.geo")
 
 EARTH_RADIUS_METERS = 6_371_000.0
 

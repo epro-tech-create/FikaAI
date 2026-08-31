@@ -22,7 +22,7 @@ from app.core.errors import ApiError, ErrorCode
 from app.face_ai.recognition_service import BaseFaceRecognitionService, cosine_similarity
 from app.models.entities import FaceEnrollment, Student
 
-logger = logging.getLogger("fikaai.enroll")
+logger = logging.getLogger("ccd.enroll")
 
 MIN_SAMPLES = 5
 MAX_SAMPLES = 10

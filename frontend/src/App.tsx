@@ -12,6 +12,8 @@ import InstructorPage from './pages/portal/InstructorPage'
 import StudentPage from './pages/portal/StudentPage'
 import CoursePage from './pages/portal/CoursePage'
 import ReportsPage from './pages/portal/ReportsPage'
+import VenueQrPage from './pages/portal/VenueQrPage'
+import StudentLayout from './pages/student/StudentLayout'
 import { adminPages, instructorPages } from './pages/portal/config'
 import { clearAuthentication, getStoredRole, parseRole, storeAuthentication } from './lib/auth'
 import { applicationConfig, currentApplication, instructorLoginUrl, portalTitleForRole, type Application } from './lib/application'
@@ -89,8 +91,9 @@ function Signup() {
   return <main className="center"><form className="panel login signup" onSubmit={submit}><div className="brand">CCD-<span>Attendance</span></div><p className="eyebrow">NEW STUDENT REGISTRATION</p><h1>Create your account</h1><p className="signup-intro">Register for cybersecurity practical attendance. You will enrol your face on the next step.</p><label>Full name<input value={fullName} onChange={event => setFullName(event.target.value)} autoComplete="name" placeholder="Amina Mushi" required/></label><label>Email address<input value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="student@example.com" required/></label><label>Registration number<input value={registrationNumber} onChange={event => setRegistrationNumber(event.target.value.replace(/\D/g,'').slice(0,50))} inputMode="numeric" pattern="[0-9]{3,50}" minLength={3} maxLength={50} placeholder="e.g. 2402424123456" required/></label><div className="signup-passwords"><label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label><label>Confirm password<input value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label></div><p className="password-hint">Use at least 8 characters with uppercase, lowercase and a number.</p>{error && <div className="error">{error}</div>}<button disabled={busy}>{busy ? 'Creating account…' : 'Create student account'}</button><p className="auth-switch">Already registered? <Link to="/login">Sign in</Link></p></form></main>
 }
 
+function hasAccess() { return Boolean(localStorage.getItem('ccd.access') || localStorage.getItem('fikaai.access')) }
 function Guard({ application, children }: { application: Application; children: React.ReactNode }) {
-  if (!localStorage.getItem('fikaai.access')) return <Navigate to="/login" replace/>
+  if (!hasAccess()) return <Navigate to="/login" replace/>
   if (getStoredRole() !== applicationConfig(application).role) {
     clearAuthentication()
     return <Navigate to="/login" replace/>
@@ -101,7 +104,7 @@ function Guard({ application, children }: { application: Application; children: 
 function HomeRedirect({ application }: { application: Application }) {
   const config = applicationConfig(application)
   const signedInRole = getStoredRole()
-  const validSession = Boolean(localStorage.getItem('fikaai.access')) && signedInRole === config.role
+  const validSession = hasAccess() && signedInRole === config.role
   return <Navigate to={validSession ? config.home : '/login'} replace/>
 }
 
@@ -124,7 +127,7 @@ export default function App({ application }: { application?: Application }) {
     trackPageView(path)
   }, [app, location.pathname])
   useEffect(() => {
-    if (!localStorage.getItem('fikaai.access')) return
+    if (!hasAccess()) return
     return startInactivityTimer(() => {
       clearAuthentication()
       window.location.replace('/login')
@@ -135,13 +138,17 @@ export default function App({ application }: { application?: Application }) {
     {app === 'student' && <>
       <Route path="/" element={<LandingPage instructorLoginUrl={instructorLoginUrl()}/>}/>
       <Route path="/signup" element={<Signup/>}/>
-      <Route path="/student/attendance" element={<Guard application={app}><AttendancePage/></Guard>}/>
-      <Route path="/student/face-enrollment" element={<Guard application={app}><FaceEnrollmentPage/></Guard>}/>
+      <Route path="/student" element={<Guard application={app}><StudentLayout/></Guard>}>
+        <Route index element={<Navigate to="attendance" replace/>}/>
+        <Route path="attendance" element={<AttendancePage/>}/>
+        <Route path="face-enrollment" element={<FaceEnrollmentPage/>}/>
+      </Route>
     </>}
     {app === 'admin' && (
       <Route path="/admin" element={<Guard application={app}><PortalLayout role="admin"/></Guard>}>
         <Route index element={<Navigate to="dashboard" replace/>}/>
         <Route path="dashboard" element={<DashboardPage role="admin"/>}/>
+        <Route path="venue-qr" element={<VenueQrPage role="admin"/>}/>
         <Route path="students" element={<StudentPage/>}/>
         <Route path="instructors" element={<InstructorPage/>}/>
         <Route path="courses" element={<CoursePage/>}/>
@@ -155,6 +162,7 @@ export default function App({ application }: { application?: Application }) {
       <Route path="/instructor" element={<Guard application={app}><PortalLayout role="instructor"/></Guard>}>
         <Route index element={<Navigate to="dashboard" replace/>}/>
         <Route path="dashboard" element={<DashboardPage role="instructor"/>}/>
+        <Route path="venue-qr" element={<VenueQrPage role="instructor"/>}/>
         {Object.entries(instructorPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
         <Route path="notifications" element={<InfoPage title="Notifications"/>}/>
         <Route path="profile" element={<InfoPage title="Profile"/>}/>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { clearAuthentication, type Role } from '../lib/auth'
 import { portalNavigation } from '../lib/portal'
+import ThemeToggle from './ThemeToggle'
 
 export default function PortalLayout({ role }: { role: Extract<Role, 'admin' | 'instructor'> }) {
   const [open, setOpen] = useState(false)
@@ -39,11 +40,11 @@ export default function PortalLayout({ role }: { role: Extract<Role, 'admin' | '
       <nav className="portal-nav" aria-label={`${role} navigation`}>
         {nav.map(item => <NavLink key={item.path} to={item.path} onClick={() => setOpen(false)}><span>{item.mark}</span>{item.label}</NavLink>)}
       </nav>
-      <div className="sidebar-account"><div className="avatar">{(localStorage.getItem('fikaai.name') || role).slice(0, 2).toUpperCase()}</div><div><b>{localStorage.getItem('fikaai.name') || role}</b><small>{role}</small></div><button onClick={signOut} title="Sign out" aria-label="Sign out">Exit</button></div>
+      <div className="sidebar-account"><div className="avatar">{(localStorage.getItem('ccd.name') || role).slice(0, 2).toUpperCase()}</div><div><b>{localStorage.getItem('ccd.name') || role}</b><small>{role}</small></div><button onClick={signOut} title="Sign out" aria-label="Sign out">Exit</button></div>
     </aside>
     {open && <button className="sidebar-scrim" aria-label="Close navigation" onClick={() => setOpen(false)}/>} 
     <section className="portal-main">
-      <header className="portal-topbar"><button ref={menuButton} className="menu-button" onClick={() => setOpen(value => !value)} aria-label={open ? 'Close navigation' : 'Open navigation'} aria-expanded={open} aria-controls="portal-navigation">Menu</button><div><span>Workspace</span><b>{active?.label || 'Portal'}</b></div><div className="topbar-status"><i/>Secure session</div></header>
+      <header className="portal-topbar"><button ref={menuButton} className="menu-button" onClick={() => setOpen(value => !value)} aria-label={open ? 'Close navigation' : 'Open navigation'} aria-expanded={open} aria-controls="portal-navigation">Menu</button><div><span>Workspace</span><b>{active?.label || 'Portal'}</b></div><div style={{display:'flex',alignItems:'center',gap:14}}><ThemeToggle /><div className="topbar-status"><i/>Secure session</div></div></header>
       <Outlet/>
     </section>
   </div>

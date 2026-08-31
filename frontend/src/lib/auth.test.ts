@@ -36,6 +36,6 @@ describe('face enrollment session state', () => {
 
     expect(getStoredFaceEnrollment()).toBe(false)
     clearAuthentication()
-    expect(localStorage.getItem('fikaai.access')).toBeNull()
+    expect(localStorage.getItem('ccd.access')).toBeNull()
   })
 })

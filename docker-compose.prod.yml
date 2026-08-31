@@ -1,4 +1,4 @@
-name: fikaai-production
+name: ccd-attendance-production
 
 services:
   db:
@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - fikaai_pgdata:/var/lib/postgresql/data
+      - ccd_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -26,7 +26,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       MODELS_DIR: /app/models_data
     volumes:
-      - fikaai_models:/app/models_data
+      - ccd_models:/app/models_data
     depends_on:
       db:
         condition: service_healthy
@@ -104,7 +104,7 @@ networks:
     driver: bridge
 
 volumes:
-  fikaai_pgdata:
-  fikaai_models:
+  ccd_pgdata:
+  ccd_models:
   caddy_data:
   caddy_config:

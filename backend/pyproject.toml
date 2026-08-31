@@ -1,7 +1,7 @@
 [project]
-name = "fikaai-backend"
+name = "ccd-attendance-backend"
 version = "0.1.0"
-description = "FikaAI Attendance System - FastAPI backend (student attendance MVP)"
+description = "CCD-Attendance System - FastAPI backend (student attendance MVP)"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115,<1",

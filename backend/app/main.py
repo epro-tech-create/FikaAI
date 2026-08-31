@@ -18,7 +18,7 @@ from app.core.deps import limiter
 from app.core.errors import error_response
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-logger = logging.getLogger("fikaai")
+logger = logging.getLogger("ccd")
 
 
 @asynccontextmanager
@@ -70,7 +70,7 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["system"])
     async def health() -> dict:
-        return {"status": "ok", "service": "fikaai-backend"}
+        return {"status": "ok", "service": "ccd-attendance-backend"}
 
     @app.get("/ready", tags=["system"])
     async def ready() -> JSONResponse:
@@ -102,9 +102,9 @@ def create_app() -> FastAPI:
         if problems:
             return JSONResponse(
                 status_code=503,
-                content={"status": "unavailable", "service": "fikaai-backend", "problems": problems},
+                content={"status": "unavailable", "service": "ccd-attendance-backend", "problems": problems},
             )
-        return JSONResponse(content={"status": "ready", "service": "fikaai-backend"})
+        return JSONResponse(content={"status": "ready", "service": "ccd-attendance-backend"})
 
     app.include_router(api_router, prefix="/api")
     return app

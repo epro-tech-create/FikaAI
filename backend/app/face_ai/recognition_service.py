@@ -21,7 +21,7 @@ import numpy as np
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
 
-logger = logging.getLogger("fikaai.face")
+logger = logging.getLogger("ccd.face")
 
 
 class NoFaceError(ApiError):

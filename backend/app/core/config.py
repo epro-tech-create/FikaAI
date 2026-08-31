@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from cryptography.fernet import Fernet
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger("fikaai.config")
+logger = logging.getLogger("ccd.config")
 
 
 class Settings(BaseSettings):
@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     liveness_challenge_ttl_seconds: int = 120
     location_token_ttl_seconds: int = 300
     face_token_ttl_seconds: int = 300
+    venue_token_ttl_seconds: int = 300
+
+    # Venue proof — static 8-char code for entire IPT (same for all days)
+    venue_static_code_hash: str = ""  # sha256 hex of 8-char code (uppercase alphanumeric)
+    venue_code_length: int = 8
+    # Optional: show hint like "A7K9****" in instructor UI (derived from hash check logs only)
 
     # Geofencing
     gps_verification_enabled: bool = False

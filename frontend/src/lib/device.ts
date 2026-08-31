@@ -1,9 +1,12 @@
-const REGISTRATION_DEVICE_KEY = 'fikaai.registration-device'
+const REGISTRATION_DEVICE_KEY = 'ccd.registration-device'
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export function getRegistrationDeviceId() {
-  const existing = localStorage.getItem(REGISTRATION_DEVICE_KEY)
-  if (existing && UUID_PATTERN.test(existing)) return existing
+  const existing = localStorage.getItem(REGISTRATION_DEVICE_KEY) ?? localStorage.getItem('fikaai.registration-device')
+  if (existing && UUID_PATTERN.test(existing)) {
+    if (!localStorage.getItem(REGISTRATION_DEVICE_KEY)) localStorage.setItem(REGISTRATION_DEVICE_KEY, existing)
+    return existing
+  }
   const deviceId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : fallbackUuid()
   localStorage.setItem(REGISTRATION_DEVICE_KEY,deviceId)
   return deviceId

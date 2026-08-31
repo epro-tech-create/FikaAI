@@ -4,8 +4,10 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { currentApplication } from './lib/application'
 import { initGoogleAnalytics } from './lib/analytics'
+import { initTheme } from './lib/theme'
 import './styles.css'
 
+initTheme()
 initGoogleAnalytics()
 
 const application = currentApplication()

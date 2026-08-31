@@ -3,7 +3,7 @@
 #   student (default), admin, instructor. See DEPLOY.md.
 services:
   - type: web
-    name: fikaai-backend
+    name: ccd-attendance-backend
     runtime: docker
     rootDir: backend
     plan: pro # 4 GB RAM / 2 CPU - required for InsightFace CPU inference

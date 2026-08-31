@@ -120,11 +120,12 @@ async def test_active_session_lookup_creates_fixed_daily_session(monkeypatch):
     assert session.course_id is None
     assert session.instructor_id is None
     assert session.is_automatic is True
-    assert session.check_in_open.strftime("%H:%M") == "08:00"
-    assert session.official_start.strftime("%H:%M") == "09:00"
-    assert session.check_in_close.strftime("%H:%M") == "14:00"
-    assert session.expected_end.strftime("%H:%M") == "14:00"
-    assert session.check_out_close.strftime("%H:%M") == "16:00"
+    # TESTING: whole-day window 00:00-23:59
+    assert session.check_in_open.strftime("%H:%M") == "00:00"
+    assert session.official_start.strftime("%H:%M") == "00:00"
+    assert session.check_in_close.strftime("%H:%M") == "23:59"
+    assert session.expected_end.strftime("%H:%M") == "00:00"
+    assert session.check_out_close.strftime("%H:%M") == "23:59"
     assert session.permitted_radius_meters == 100
     assert session.location.name == "DIT RAFIC Building"
     assert float(session.location.latitude) == -6.8137482

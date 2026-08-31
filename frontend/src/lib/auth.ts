@@ -1,7 +1,7 @@
 export type Role = 'admin' | 'instructor' | 'student'
 
-const ROLE_KEY = 'fikaai.role'
-const FACE_ENROLLED_KEY = 'fikaai.face-enrolled'
+const ROLE_KEY = 'ccd.role'
+const FACE_ENROLLED_KEY = 'ccd.face-enrolled'
 
 export function parseRole(value: unknown): Role | null {
   if (typeof value !== 'string') return null
@@ -17,7 +17,8 @@ export function roleHome(role: Role | null) {
 }
 
 export function getStoredRole() {
-  return parseRole(localStorage.getItem(ROLE_KEY))
+  const v = localStorage.getItem(ROLE_KEY) ?? localStorage.getItem('fikaai.role')
+  return parseRole(v)
 }
 
 export function storeAuthentication(data: Record<string, unknown>) {
@@ -25,15 +26,21 @@ export function storeAuthentication(data: Record<string, unknown>) {
   const fullName = data.full_name ?? data.fullName
   const role = parseRole(data.role)
   if (typeof accessToken !== 'string' || !role) throw new Error('The server returned an invalid sign-in response.')
-  localStorage.setItem('fikaai.access', accessToken)
+  localStorage.setItem('ccd.access', accessToken)
   localStorage.setItem(ROLE_KEY, role)
   localStorage.removeItem(FACE_ENROLLED_KEY)
-  if (typeof fullName === 'string') localStorage.setItem('fikaai.name', fullName)
+  if (typeof fullName === 'string') localStorage.setItem('ccd.name', fullName)
   return role
 }
 
 export function getStoredFaceEnrollment() {
-  return localStorage.getItem(FACE_ENROLLED_KEY) === 'true'
+  if (localStorage.getItem(FACE_ENROLLED_KEY) === 'true') return true
+  // legacy fikaai key migration
+  if (localStorage.getItem('fikaai.face-enrolled') === 'true') {
+    localStorage.setItem(FACE_ENROLLED_KEY, 'true')
+    return true
+  }
+  return false
 }
 
 export function storeFaceEnrollment(enrolled: boolean) {
@@ -42,8 +49,12 @@ export function storeFaceEnrollment(enrolled: boolean) {
 }
 
 export function clearAuthentication() {
+  localStorage.removeItem('ccd.access')
   localStorage.removeItem('fikaai.access')
+  localStorage.removeItem('ccd.name')
   localStorage.removeItem('fikaai.name')
   localStorage.removeItem(ROLE_KEY)
+  localStorage.removeItem('fikaai.role')
   localStorage.removeItem(FACE_ENROLLED_KEY)
+  localStorage.removeItem('fikaai.face-enrolled')
 }

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import ThemeToggle from '../components/ThemeToggle'
 
 export default function LandingPage({ instructorLoginUrl }: { instructorLoginUrl: string }) {
   return (
@@ -7,9 +8,12 @@ export default function LandingPage({ instructorLoginUrl }: { instructorLoginUrl
         <Link className="brand" to="/" aria-label="CCD-Attendance - Student Attendance System home">
           CCD-<span>Attendance</span>
         </Link>
-        <span className="landing-status">
-          <i aria-hidden="true" />Attendance systems online
-        </span>
+        <div style={{display:'flex',alignItems:'center',gap:14}}>
+          <ThemeToggle />
+          <span className="landing-status">
+            <i aria-hidden="true" />Attendance systems online
+          </span>
+        </div>
       </header>
 
       {/* Hero - primary SEO h1 */}

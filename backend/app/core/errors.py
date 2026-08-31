@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-logger = logging.getLogger("fikaai.errors")
+logger = logging.getLogger("ccd.errors")
 
 
 class ErrorCode(str, Enum):
@@ -64,6 +64,10 @@ class ErrorCode(str, Enum):
     # Attendance submission
     INVALID_LOCATION_TOKEN = "INVALID_LOCATION_TOKEN"
     INVALID_FACE_TOKEN = "INVALID_FACE_TOKEN"
+    INVALID_VENUE_TOKEN = "INVALID_VENUE_TOKEN"
+    INVALID_VENUE_CODE = "INVALID_VENUE_CODE"
+    VENUE_CODE_EXPIRED = "VENUE_CODE_EXPIRED"
+    VENUE_NOT_CONFIGURED = "VENUE_NOT_CONFIGURED"
     TOKEN_ALREADY_USED = "TOKEN_ALREADY_USED"
     DUPLICATE_CHECK_IN = "DUPLICATE_CHECK_IN"
     CHECKOUT_WITHOUT_CHECKIN = "CHECKOUT_WITHOUT_CHECKIN"

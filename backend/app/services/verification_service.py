@@ -37,7 +37,7 @@ from app.services.audit_service import audit_detached
 from app.services.enrollment_service import decode_frame, load_active_enrollment
 from app.services.session_service import get_active_session_or_error
 
-logger = logging.getLogger("fikaai.verify")
+logger = logging.getLogger("ccd.verify")
 
 MIN_MATCH_FRAMES = 3
 MAX_MATCH_FRAMES = 5

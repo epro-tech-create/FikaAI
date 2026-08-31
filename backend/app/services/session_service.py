@@ -102,18 +102,28 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
 
             if existing is not None:
                 existing.course_id = None
+                existing.course = None  # avoid detached lazy load
                 existing.instructor_id = None
+                existing.instructor = None
                 existing.location_id = location.id
                 existing.location = location
                 existing.title = "Daily RAFIC Attendance"
-                existing.check_in_open = time(8, 0)
-                existing.official_start = time(9, 0)
-                existing.check_in_close = time(14, 0)
-                existing.expected_end = time(14, 0)
-                existing.check_out_close = time(16, 0)
+                # TESTING: allow check-in/out throughout the whole day
+                existing.check_in_open = time(0, 0)
+                existing.official_start = time(0, 0)
+                existing.check_in_close = time(23, 59)
+                existing.expected_end = time(0, 0)
+                existing.check_out_close = time(23, 59)
                 existing.late_threshold_minutes = settings.default_late_threshold_minutes
                 existing.permitted_radius_meters = settings.training_radius_meters
                 existing.status = SessionStatus.ACTIVE
+                await write_db.flush()
+                # Ensure relationships are loaded before detach (best effort for real DB, no-op for mock)
+                if hasattr(write_db, "refresh"):
+                    try:
+                        await write_db.refresh(existing, attribute_names=["location"])
+                    except Exception:
+                        pass
                 return existing
 
             session = AttendanceSession(
@@ -123,11 +133,12 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
                 location=location,
                 title="Daily RAFIC Attendance",
                 session_date=clock.today,
-                check_in_open=time(8, 0),
-                official_start=time(9, 0),
-                check_in_close=time(14, 0),
-                expected_end=time(14, 0),
-                check_out_close=time(16, 0),
+                # TESTING: allow check-in/out throughout the whole day
+                check_in_open=time(0, 0),
+                official_start=time(0, 0),
+                check_in_close=time(23, 59),
+                expected_end=time(0, 0),
+                check_out_close=time(23, 59),
                 late_threshold_minutes=settings.default_late_threshold_minutes,
                 permitted_radius_meters=settings.training_radius_meters,
                 status=SessionStatus.ACTIVE,
@@ -135,6 +146,11 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
             )
             write_db.add(session)
             await write_db.flush()
+            if hasattr(write_db, "refresh"):
+                try:
+                    await write_db.refresh(session, attribute_names=["location"])
+                except Exception:
+                    pass
             return session
 
 

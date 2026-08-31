@@ -16,13 +16,17 @@ from app.schemas import (
     AttendanceRecordResponse,
     AttendanceSubmitRequest,
     LocationVerificationResponse,
+    VenueQrResponse,
+    VenueVerificationResponse,
     VerifyLocationRequest,
+    VerifyVenueRequest,
     StudentSummaryResponse,
 )
 from app.services.attendance_service import check_in as check_in_service
 from app.services.attendance_service import check_out as check_out_service
 from app.services.location_service import verify_location
 from app.services.session_service import find_active_session
+from app.services.venue_service import verify_venue
 
 router = APIRouter(prefix="/student/attendance", tags=["student-attendance"])
 profile_router = APIRouter(prefix="/student/profile", tags=["student-profile"])
@@ -121,6 +125,52 @@ async def verify_location_endpoint(
     )
 
 
+@router.post("/verify-venue", response_model=VenueVerificationResponse)
+@limiter.limit(settings.rate_limit_face)
+async def verify_venue_endpoint(
+    payload: VerifyVenueRequest,
+    request: Request,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+) -> VenueVerificationResponse:
+    row = await verify_venue(
+        db,
+        student=student,
+        actor_user_id=student.user_id,
+        session_id=payload.session_id,
+        code=payload.code,
+        qr_token=payload.qr_token,
+        ip_address=request.client.host if request.client else None,
+    )
+    return VenueVerificationResponse(
+        verified=True,
+        venue_verification_token=str(row.token),
+        expires_at=row.expires_at,
+        message="Venue code verified. You may now check in/out.",
+    )
+
+
+@router.get("/venue-qr", response_model=VenueQrResponse)
+async def get_venue_qr(
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+) -> VenueQrResponse:
+    from app.core.config import settings as _s
+    from datetime import datetime, timezone
+    if not _s.venue_static_code_hash:
+        from app.core.errors import ApiError, ErrorCode
+        raise ApiError(ErrorCode.VENUE_NOT_CONFIGURED, "Venue code not configured.", 503)
+    # Derive hint without leaking full code — keep for display if admin shares code separately
+    # Frontend will show codeHint; QR data is revealed only after venue verification flow?
+    # For static code, we return hint only; actual QR data is physical in room.
+    return VenueQrResponse(
+        qr_data="VENUE_CODE_IN_ROOM",  # placeholder — actual 8-char is on physical poster/projector
+        code_hint="****",
+        expires_at=None,
+        message="Scan the QR displayed in the RAFIC room. Code is static for entire IPT.",
+    )
+
+
 async def _submit(
     db: AsyncSession,
     request: Request,
@@ -134,6 +184,7 @@ async def _submit(
         session_id=payload.session_id,
         location_verification_token=payload.location_verification_token,
         face_verification_token=payload.face_verification_token,
+        venue_verification_token=payload.venue_verification_token,
         idempotency_key=payload.idempotency_key,
         ip_address=request.client.host if request.client else None,
     )

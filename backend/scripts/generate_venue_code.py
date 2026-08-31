@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Generate a static 8-char venue code hash + QR image for RAFIC room.
+
+Usage:
+  python scripts/generate_venue_code.py --code A7K9P2X4
+  python scripts/generate_venue_code.py --generate   # random 8-char
+
+Stores ONLY the sha256 hash in .env (VENUE_STATIC_CODE_HASH). Plaintext
+stays on the physical poster/projector in the RAFIC room for the entire IPT.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import re
+import secrets
+import string
+
+CODE_RE = re.compile(r"^[A-Z0-9]{8}$")
+ALPHABET = string.ascii_uppercase + string.digits
+# Avoid confusing chars
+ALPHABET = ALPHABET.replace("O", "").replace("0", "").replace("I", "").replace("1", "")
+
+
+def generate_random() -> str:
+    return "".join(secrets.choice(ALPHABET) for _ in range(8))
+
+
+def hash_code(code: str) -> str:
+    return hashlib.sha256(code.encode()).hexdigest()
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Generate static venue code hash")
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--code", help="8-char alphanumeric code (uppercase)")
+    g.add_argument("--generate", action="store_true", help="generate random 8-char code")
+    ap.add_argument("--qr", action="store_true", help="also generate QR PNG (requires qrcode)")
+    args = ap.parse_args()
+
+    if args.generate:
+        code = generate_random()
+        print(f"Generated code: {code}")
+    else:
+        code = args.code.strip().upper()
+        if not CODE_RE.fullmatch(code):
+            ap.error("code must be exactly 8 alphanumeric chars (A-Z, 0-9)")
+
+    h = hash_code(code)
+    hint = f"{code[:2]}****{code[-2:]}"
+    print(f"Code: {code}")
+    print(f"Hint: {hint}")
+    print(f"SHA256: {h}")
+    print(f"\nAdd to .env / Render env:")
+    print(f"VENUE_STATIC_CODE_HASH={h}")
+
+    if args.qr:
+        try:
+            import qrcode
+            img = qrcode.make(code)
+            path = "venue-qr.png"
+            img.save(path)
+            print(f"QR saved to {path} (scans to: {code})")
+        except ImportError:
+            print("qrcode not installed: pip install qrcode[pil]")
+
+
+if __name__ == "__main__":
+    main()

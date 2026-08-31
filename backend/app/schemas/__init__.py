@@ -293,12 +293,54 @@ class FaceVerificationResponse(CamelModel):
     message: str
 
 
+# ------------------------------------------------------------ venue proof (static 8-char code / QR)
+class VerifyVenueRequest(CamelModel):
+    session_id: uuid.UUID
+    code: str | None = None
+    qr_token: str | None = None
+
+    @model_validator(mode="after")
+    def require_one(self):
+        if not self.code and not self.qr_token:
+            raise ValueError("Provide venue code or QR token.")
+        if self.code and self.qr_token:
+            raise ValueError("Provide only one of code or QR token, not both.")
+        if self.code is not None:
+            normalized = self.code.strip().upper()
+            if len(normalized) != 8 or not normalized.isalnum():
+                raise ValueError("Venue code must be exactly 8 alphanumeric characters.")
+        return self
+
+
+class VenueVerificationResponse(CamelModel):
+    verified: bool
+    venue_verification_token: str
+    expires_at: datetime
+    message: str
+
+
+class VenueQrResponse(CamelModel):
+    qr_data: str  # the static 8-char code (uppercase) — plaintext for display/QR
+    code_hint: str  # e.g. "A7K9****"
+    expires_at: datetime | None = None
+    message: str = "Static venue code for entire IPT — display in RAFIC room"
+
+
 # ------------------------------------------------------------ attendance
 class AttendanceSubmitRequest(CamelModel):
     session_id: uuid.UUID
     location_verification_token: str
-    face_verification_token: str
+    face_verification_token: str | None = None
+    venue_verification_token: str | None = None
     idempotency_key: str
+
+    @model_validator(mode="after")
+    def require_proof(self):
+        if not self.face_verification_token and not self.venue_verification_token:
+            raise ValueError("Provide face or venue verification token.")
+        if self.face_verification_token and self.venue_verification_token:
+            raise ValueError("Provide only one proof token (face or venue).")
+        return self
 
 
 class AttendanceRecordResponse(CamelModel):

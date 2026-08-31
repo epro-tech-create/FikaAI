@@ -196,11 +196,12 @@ async def main() -> None:
         active.location_id = location.id
         active.title = f"Cybersecurity Fundamentals Practical - {today.isoformat()}"
         active.session_date = today
-        active.check_in_open = time(8, 0)
-        active.official_start = time(9, 0)
-        active.check_in_close = time(14, 0)
-        active.expected_end = time(14, 0)
-        active.check_out_close = time(16, 0)
+        # TESTING: whole-day window
+        active.check_in_open = time(0, 0)
+        active.official_start = time(0, 0)
+        active.check_in_close = time(23, 59)
+        active.expected_end = time(0, 0)
+        active.check_out_close = time(23, 59)
         active.late_threshold_minutes = settings.default_late_threshold_minutes
         active.permitted_radius_meters = location.radius_meters
         active.instructions = "Complete face and location verification to record attendance."

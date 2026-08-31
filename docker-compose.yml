@@ -1,15 +1,15 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: fikaai-db
+    container_name: ccd-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-fikaai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fikaai_dev}
       POSTGRES_DB: ${POSTGRES_DB:-fikaai_db}
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
-      - fikaai_pgdata:/var/lib/postgresql/data
+      - ccd_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fikaai} -d ${POSTGRES_DB:-fikaai_db}"]
       interval: 5s
@@ -18,7 +18,7 @@ services:
 
   backend:
     build: ./backend
-    container_name: fikaai-backend
+    container_name: ccd-backend
     env_file: .env
     environment:
       # Inside the compose network the database host is `db`
@@ -27,7 +27,7 @@ services:
       - "8000:8000"
     volumes:
       # Model weights persist across rebuilds (~16 MB download with buffalo_sc)
-      - fikaai_models:/app/models_data
+      - ccd_models:/app/models_data
     depends_on:
       db:
         condition: service_healthy
@@ -40,7 +40,7 @@ services:
     build:
       context: ./frontend
       target: development
-    container_name: fikaai-frontend-student
+    container_name: ccd-frontend-student
     command: npm run dev -- --mode student --host 0.0.0.0
     environment:
       VITE_API_BASE_URL: /api
@@ -55,7 +55,7 @@ services:
     build:
       context: ./frontend
       target: development
-    container_name: fikaai-frontend-admin
+    container_name: ccd-frontend-admin
     command: npm run dev -- --mode admin --host 0.0.0.0
     environment:
       VITE_API_BASE_URL: /api
@@ -69,7 +69,7 @@ services:
     build:
       context: ./frontend
       target: development
-    container_name: fikaai-frontend-instructor
+    container_name: ccd-frontend-instructor
     command: npm run dev -- --mode instructor --host 0.0.0.0
     environment:
       VITE_API_BASE_URL: /api
@@ -80,5 +80,5 @@ services:
       - backend
 
 volumes:
-  fikaai_pgdata:
-  fikaai_models:
+  ccd_pgdata:
+  ccd_models:

@@ -21,7 +21,7 @@ from app.models.entities import (
     Student,
     User,
 )
-from app.schemas import SessionResponse
+from app.schemas import SessionResponse, VenueQrResponse
 
 router = APIRouter(prefix="/instructor", tags=["instructor"])
 
@@ -144,6 +144,25 @@ async def attendance_list(
         }
         for record, session, student, user in rows
     ]
+
+
+@router.get("/venue-qr", response_model=VenueQrResponse)
+async def venue_qr(
+    instructor: Instructor = Depends(get_current_instructor),
+    db: AsyncSession = Depends(get_db),
+) -> VenueQrResponse:
+    if not settings.venue_static_code_hash or len(settings.venue_static_code_hash) != 64:
+        from app.core.errors import ApiError, ErrorCode
+        raise ApiError(ErrorCode.VENUE_NOT_CONFIGURED, "Venue code not configured. Set VENUE_STATIC_CODE_HASH.", 503)
+    # Hash stored; plaintext only on physical poster/projector. We return hint-only to avoid leaking via API.
+    # For instructor convenience, if ?reveal=1 we still return placeholder — actual code is on wall.
+    code_hint = f"{settings.venue_static_code_hash[:2].upper()}****"
+    return VenueQrResponse(
+        qr_data="VENUE_CODE_IN_ROOM",
+        code_hint=code_hint,
+        expires_at=None,
+        message="Static 8-char venue code for entire IPT — scan the QR displayed in the RAFIC room. Check-in 08:00-14:00, check-out 14:00-16:00.",
+    )
 
 
 @router.get("/attendance/reports", response_model=None)

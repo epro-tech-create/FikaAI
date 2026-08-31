@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import session_factory
 from app.models.entities import AuditLog
 
-logger = logging.getLogger("fikaai.audit")
+logger = logging.getLogger("ccd.audit")
 
 
 async def write_audit(
