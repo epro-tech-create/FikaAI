@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api, message } from '../../services/api'
 import { getLocation } from '../../hooks/useGeolocation'
 import { formatCampusTime } from '../../lib/campusTime'
@@ -135,7 +135,12 @@ export default function AutoCheckInPage() {
     : record?.checkInAt
       ? formatCampusTime(record.checkInAt)
       : '—'
+  const isLate = record?.status === 'LATE'
   const celebrating = phase === 'done' && !/already/i.test(status)
+  const checkInHeadline = isLate
+    ? 'You checked in late'
+    : 'Congratulations! You arrived early'
+  const checkInStatusLabel = isLate ? 'Late' : 'Arrived early'
 
   return (
     <section className={`face-id-shell auto-checkin ${phase === 'done' ? 'stage-success auto-checkin-success' : phase === 'error' ? 'stage-error' : 'stage-intro'}`}>
@@ -159,14 +164,16 @@ export default function AutoCheckInPage() {
             </p>
             <h2 className="auto-checkin-ok-title">
               {celebrating
-                ? (isOut ? 'Congratulations! You successfully checked out' : 'Congratulations! You successfully checked in')
+                ? (isOut ? 'Congratulations! You successfully checked out' : checkInHeadline)
                 : status}
             </h2>
             <p>
               {celebrating
                 ? (isOut
                   ? 'Well done — your departure is verified and saved.'
-                  : 'Well done — your attendance is verified and saved.')
+                  : isLate
+                    ? 'Your arrival is verified. Official start is 11:00, so this check-in is late.'
+                    : 'Well done — you arrived early. Official start is 11:00.')
                 : 'No further action needed for this session.'}
             </p>
             <div className="scan-details auto-checkin-details">
@@ -174,11 +181,15 @@ export default function AutoCheckInPage() {
                 { label: 'Student', value: name },
                 { label: 'Student ID', value: summary?.registrationNumber || '—' },
                 { label: 'Time', value: timeValue },
-                { label: 'Status', value: record?.status || '—' },
+                { label: 'Status', value: isOut ? (record?.status || '—') : checkInStatusLabel },
               ].map(d => (
                 <div key={d.label}><span>{d.label}</span><b>{d.value}</b></div>
               ))}
             </div>
+            <p className="auto-checkin-nav">
+              <Link to="/student/attendance">Attendance</Link>
+              <Link to="/student/face-enrollment">Enrollment</Link>
+            </p>
           </>
         )}
 
@@ -189,6 +200,10 @@ export default function AutoCheckInPage() {
             <h2>Could not complete {action === 'check-out' ? 'check-out' : 'check-in'}</h2>
             <p>{error || 'Please scan the room QR again and try once more.'}</p>
             <button className="retry-button" type="button" onClick={() => window.location.reload()}>Try again</button>
+            <p className="auto-checkin-nav">
+              <Link to="/student/attendance">Attendance</Link>
+              <Link to="/student/face-enrollment">Enrollment</Link>
+            </p>
           </>
         )}
       </div>

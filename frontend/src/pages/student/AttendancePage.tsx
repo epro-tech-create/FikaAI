@@ -184,14 +184,14 @@ export default function AttendancePage() {
       introTitle={introTitle}
       introText={introText}
       actionLabel={enrolled ? actionLabel : 'Enrol Face ID First'}
-      successTitle={record?.status==='CHECKED_OUT'?'Checked out!':'You are in!'}
-      successText="Your live face matched the encrypted profile successfully."
+      successTitle={record?.status==='CHECKED_OUT'?'Checked out!':record?.status==='LATE'?'You are late':'You arrived early'}
+      successText={record?.status==='CHECKED_OUT'?'Your live face matched the encrypted profile successfully.':record?.status==='LATE'?'Your arrival is verified. Official start is 11:00, so this check-in is late.':'You arrived before 11:00, so this check-in is early.'}
       details={[
         {label:'Student',value:summary?.fullName||'Student'},
         {label:'Student ID',value:summary?.registrationNumber||'—'},
         {label:'Face ID',value:record?.faceId?`${record.faceId.slice(0,8)}…`:'—'},
         {label:'Time',value:record?.checkOutAt?formatCampusTime(record.checkOutAt):record?.checkInAt?formatCampusTime(record.checkInAt):'—'},
-        {label:'Status',value:record?.status||'Verified'},
+        {label:'Status',value:record?.status==='CHECKED_OUT'?'Checked out':record?.status==='LATE'?'Late':record?.status==='PRESENT'?'Arrived early':record?.status||'Verified'},
       ]}
       disabled={!session || scheduleLocked || !enrolled}
       onStart={scanFace}

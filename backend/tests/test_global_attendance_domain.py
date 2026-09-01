@@ -5,9 +5,9 @@ import pytest
 
 from app.core.errors import ApiError, ErrorCode
 from app.models.base import Base
-from app.models.entities import AttendanceSession
+from app.models.entities import AttendanceSession, AttendanceStatus
 from app.services import session_service
-from app.services.session_service import CampusClock, find_active_session, validate_window
+from app.services.session_service import CampusClock, classify_check_in, find_active_session, validate_window
 
 
 def test_domain_metadata_has_no_class_or_enrollment_tables():
@@ -120,12 +120,12 @@ async def test_active_session_lookup_creates_fixed_daily_session(monkeypatch):
     assert session.course_id is None
     assert session.instructor_id is None
     assert session.is_automatic is True
-    # TESTING: whole-day window 00:00-23:59
-    assert session.check_in_open.strftime("%H:%M") == "00:00"
-    assert session.official_start.strftime("%H:%M") == "00:00"
-    assert session.check_in_close.strftime("%H:%M") == "23:59"
-    assert session.expected_end.strftime("%H:%M") == "00:00"
-    assert session.check_out_close.strftime("%H:%M") == "23:59"
+    assert session.check_in_open.strftime("%H:%M") == "08:00"
+    assert session.official_start.strftime("%H:%M") == "11:00"
+    assert session.check_in_close.strftime("%H:%M") == "14:00"
+    assert session.expected_end.strftime("%H:%M") == "14:00"
+    assert session.check_out_close.strftime("%H:%M") == "16:00"
+    assert session.late_threshold_minutes == 0
     assert session.permitted_radius_meters == 100
     assert session.location.name == "DIT RAFIC Building"
     assert float(session.location.latitude) == -6.8137482
@@ -210,3 +210,43 @@ def test_window_rejects_a_different_session_date():
         validate_window(session, "check_in", clock)
 
     assert error.value.code == ErrorCode.SESSION_INACTIVE
+
+
+def arrival_session():
+    return type(
+        "Session",
+        (),
+        {
+            "session_date": date(2026, 8, 25),
+            "official_start": datetime.strptime("11:00", "%H:%M").time(),
+            "late_threshold_minutes": 0,
+        },
+    )()
+
+
+def test_check_in_from_nine_to_eleven_is_early_present():
+    session = arrival_session()
+    for stamp in ("09:00:00", "10:59:59"):
+        status, minutes_late = classify_check_in(
+            session,
+            CampusClock(datetime.fromisoformat(f"2026-08-25T{stamp}+03:00")),
+        )
+        assert status == AttendanceStatus.PRESENT
+        assert minutes_late == 0
+
+
+def test_check_in_from_eleven_is_late():
+    session = arrival_session()
+    status, minutes_late = classify_check_in(
+        session,
+        CampusClock(datetime.fromisoformat("2026-08-25T11:00:00+03:00")),
+    )
+    assert status == AttendanceStatus.LATE
+    assert minutes_late == 0
+
+    status, minutes_late = classify_check_in(
+        session,
+        CampusClock(datetime.fromisoformat("2026-08-25T11:30:00+03:00")),
+    )
+    assert status == AttendanceStatus.LATE
+    assert minutes_late == 30

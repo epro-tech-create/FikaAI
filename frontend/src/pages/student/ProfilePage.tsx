@@ -33,7 +33,8 @@ export default function ProfilePage() {
           <h3>About</h3>
           <p style={{color:'var(--muted)',fontSize:13,lineHeight:1.6}}>CCD-Attendance — QR + GPS. Face ID optional. Verified inside 100 m of DIT RAFIC Building.</p>
           <ul style={{marginTop:12,paddingLeft:18,color:'var(--muted)',fontSize:13,lineHeight:1.8}}>
-            <li>Check-in/out open all day (testing)</li>
+            <li>Check-in 08:00–14:00, check-out 14:00–16:00</li>
+            <li>Arrive 09:00–11:00 early; late from 11:00</li>
             <li>Same QR all days</li>
             <li>Encrypted Face ID if enrolled</li>
           </ul>

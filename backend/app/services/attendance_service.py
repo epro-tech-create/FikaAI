@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import uuid
 import zlib
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select, text, update
@@ -38,7 +38,7 @@ from app.models.entities import (
     VerificationMethod,
 )
 from app.services.audit_service import audit_detached
-from app.services.session_service import campus_now, validate_window
+from app.services.session_service import campus_now, classify_check_in, validate_window
 
 logger = logging.getLogger("ccd.attendance")
 
@@ -229,15 +229,9 @@ async def check_in(
         else:
             raise ApiError(ErrorCode.INVALID_FACE_TOKEN, "Provide face or venue verification token.", 400)
 
-        # Server time is authoritative; LATE beyond open + threshold
+        # Server time is authoritative: PRESENT (early) until official start, LATE from then on.
         now_local = clock.now_local
-        official_start = datetime.combine(
-            session.session_date, session.official_start, tzinfo=clock.now_local.tzinfo
-        )
-        grace_deadline = official_start + timedelta(minutes=session.late_threshold_minutes)
-        late = now_local > grace_deadline
-        minutes_late = max(0, int((now_local - official_start).total_seconds() // 60)) if late else 0
-        status = AttendanceStatus.LATE if late else AttendanceStatus.PRESENT
+        status, minutes_late = classify_check_in(session, clock)
 
         record = AttendanceRecord(
             session_id=session.id,

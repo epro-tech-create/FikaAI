@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import datetime, timedelta, time
 from typing import Literal
 
 from sqlalchemy import select, text
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
 from app.db.session import session_factory
-from app.models.entities import AttendanceSession, LocationType, PracticalLocation, SessionStatus
+from app.models.entities import AttendanceSession, AttendanceStatus, LocationType, PracticalLocation, SessionStatus
 
 AUTOMATIC_SESSION_LOCK_KEY = 742_006_815
 
@@ -108,13 +108,12 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
                 existing.location_id = location.id
                 existing.location = location
                 existing.title = "Daily RAFIC Attendance"
-                # TESTING: allow check-in/out throughout the whole day
-                existing.check_in_open = time(0, 0)
-                existing.official_start = time(0, 0)
-                existing.check_in_close = time(23, 59)
-                existing.expected_end = time(0, 0)
-                existing.check_out_close = time(23, 59)
-                existing.late_threshold_minutes = settings.default_late_threshold_minutes
+                existing.check_in_open = time(8, 0)
+                existing.official_start = time(11, 0)
+                existing.check_in_close = time(14, 0)
+                existing.expected_end = time(14, 0)
+                existing.check_out_close = time(16, 0)
+                existing.late_threshold_minutes = 0
                 existing.permitted_radius_meters = settings.training_radius_meters
                 existing.status = SessionStatus.ACTIVE
                 await write_db.flush()
@@ -133,13 +132,12 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
                 location=location,
                 title="Daily RAFIC Attendance",
                 session_date=clock.today,
-                # TESTING: allow check-in/out throughout the whole day
-                check_in_open=time(0, 0),
-                official_start=time(0, 0),
-                check_in_close=time(23, 59),
-                expected_end=time(0, 0),
-                check_out_close=time(23, 59),
-                late_threshold_minutes=settings.default_late_threshold_minutes,
+                check_in_open=time(8, 0),
+                official_start=time(11, 0),
+                check_in_close=time(14, 0),
+                expected_end=time(14, 0),
+                check_out_close=time(16, 0),
+                late_threshold_minutes=0,
                 permitted_radius_meters=settings.training_radius_meters,
                 status=SessionStatus.ACTIVE,
                 is_automatic=True,
@@ -204,3 +202,19 @@ def validate_window(
                 f"Check-out closed at {session.check_out_close.strftime('%H:%M')}.",
                 409,
             )
+
+
+def classify_check_in(
+    session: AttendanceSession,
+    now_campus: CampusClock | None = None,
+) -> tuple[AttendanceStatus, int]:
+    """PRESENT (early) until official start; LATE from official start onward."""
+    clock = now_campus or campus_now()
+    official_start = datetime.combine(
+        session.session_date, session.official_start, tzinfo=clock.now_local.tzinfo
+    )
+    deadline = official_start + timedelta(minutes=session.late_threshold_minutes)
+    if clock.now_local >= deadline:
+        minutes_late = max(0, int((clock.now_local - official_start).total_seconds() // 60))
+        return AttendanceStatus.LATE, minutes_late
+    return AttendanceStatus.PRESENT, 0

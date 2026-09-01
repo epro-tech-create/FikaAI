@@ -232,6 +232,11 @@ nav{display:flex;align-items:center;gap:22px}nav a,.ghost{border:0;background:no
 /* Student shell — scan page only */
 .student-shell .student-header{margin-bottom:8px}
 .student-shell .student-header nav{gap:12px}
+.student-brand-row{display:flex;align-items:center;gap:12px;min-width:0}
+.student-header nav a.active{color:var(--blue);font-weight:600}
+.auto-checkin-nav{display:flex;justify-content:center;gap:18px;margin:22px 0 0;flex-wrap:wrap}
+.auto-checkin-nav a{color:var(--blue);font-weight:600;text-decoration:none;font-size:14px}
+.auto-checkin-nav a:hover{text-decoration:underline}
 .student-checkin-head{text-align:center;margin:8px 0 16px}
 .student-checkin-head h2{margin:0;font:700 24px 'Space Grotesk';letter-spacing:-.6px;color:var(--text)}
 .student-checkin-head p{margin:6px auto 0;max-width:520px;color:var(--muted);font-size:13px;line-height:1.6}

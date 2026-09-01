@@ -48,8 +48,10 @@ export default function HomePage() {
     },
     {
       date: dateLabel,
-      time: '00:00 – 23:59',
-      title: checkedIn ? 'Check-out open' : 'Check-in open',
+      time: checkedIn
+        ? `${session?.expectedEnd || '14:00'} – ${session?.checkOutClose || '16:00'}`
+        : `${session?.checkInOpen || '08:00'} – ${session?.checkInClose || '14:00'}`,
+      title: checkedIn ? 'Check-out window' : 'Check-in window',
       meta: 'Venue QR + GPS',
     },
     ...(msgs[0] ? [{ date: dateLabel, time: msgs[0].time || 'Today', title: msgs[0].title, meta: 'Message' }] : []),
