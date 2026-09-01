@@ -1,7 +1,32 @@
-import type { ReactNode } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 
 export function PageHeading({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
   return <div className="portal-heading"><div><p>{eyebrow}</p><h1>{title}</h1><span>{description}</span></div>{action}</div>
+}
+
+export type CardSearch = {
+  value: string
+  onChange: (value: string) => void
+  onSubmit: () => void
+  placeholder: string
+  label: string
+}
+
+export function CardToolbar({ title, meta, search, onRefresh }: { title: string; meta: string; search?: CardSearch; onRefresh: () => void }) {
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    search?.onSubmit()
+  }
+  return <div className="card-toolbar">
+    <div className="card-toolbar-title"><b>{title}</b><span>{meta}</span></div>
+    <div className="card-toolbar-actions">
+      {search && <form className="table-search" onSubmit={submit}>
+        <input type="search" value={search.value} onChange={event => search.onChange(event.target.value)} placeholder={search.placeholder} aria-label={search.label}/>
+        <button type="submit" className="portal-primary">Search</button>
+      </form>}
+      <button type="button" className="toolbar-refresh" onClick={onRefresh}>Refresh</button>
+    </div>
+  </div>
 }
 
 export function StatePanel({ kind, children }: { kind: 'loading' | 'error' | 'empty'; children?: ReactNode }) {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import { clearAuthentication } from '../../lib/auth'
+import { displayMembershipId, displayRegistration } from '../../lib/studentId'
 import ThemeToggle from '../../components/ThemeToggle'
 
 export default function ProfilePage() {
@@ -18,8 +19,10 @@ export default function ProfilePage() {
         <article className="content-card profile-card">
           <div className="profile-avatar">{(summary?.fullName || localStorage.getItem('ccd.name') || 'S').slice(0,1).toUpperCase()}</div>
           <h3>{summary?.fullName || localStorage.getItem('ccd.name') || 'Student'}</h3>
-          <small>{summary?.registrationNumber || '—'} · {summary?.status || 'ACTIVE'}</small>
+          <small>{summary?.status || 'ACTIVE'}</small>
           <div className="profile-meta">
+            <div><span>Student ID</span><b>{displayMembershipId(summary || {})}</b></div>
+            <div><span>Registration</span><b>{displayRegistration(summary || {})}</b></div>
             <div><span>Email</span><b>{summary?.email || '—'}</b></div>
             <div><span>Face ID</span><b>{enrolled == null ? '—' : enrolled ? 'Enrolled ✓' : 'Not enrolled'}</b></div>
             <div><span>Theme</span><span style={{display:'inline-flex',alignItems:'center',gap:8}}><ThemeToggle /> <small>Light / Dark</small></span></div>

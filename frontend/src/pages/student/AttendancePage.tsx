@@ -10,6 +10,7 @@ import { isContinuousReading, isFreshReading, parseChallengeType, type Challenge
 import { getStoredFaceEnrollment, storeFaceEnrollment } from '../../lib/auth'
 import { checkoutWindow } from '../../lib/checkout'
 import { campusGreeting, formatCampusDate, formatCampusTime } from '../../lib/campusTime'
+import { displayMembershipId, displayRegistration } from '../../lib/studentId'
 import { readStoredVenueCode, studentCheckinPath } from '../../lib/venueCheckin'
 
 type Session = {
@@ -22,7 +23,7 @@ type Session = {
   checkoutOpensAt:string
   checkoutClosesAt:string
 }
-type Summary = { fullName:string; registrationNumber:string }
+type Summary = { fullName:string; registrationNumber:string; membershipId?:string | null }
 const sleep = (ms:number) => new Promise(r => window.setTimeout(r,ms))
 const MAX_CAPTURE_FRAMES = 16
 
@@ -160,7 +161,7 @@ export default function AttendancePage() {
         <div>
           <span>DAILY PRESENCE</span>
           <b>{session.courseTitle || 'Daily practical attendance'}</b>
-          <small>{session.title} · {summary.registrationNumber}</small>
+          <small>{session.title} · {displayMembershipId(summary)} · {displayRegistration(summary)}</small>
         </div>
         <div>
           <span>TRAINING AREA</span>
@@ -193,7 +194,8 @@ export default function AttendancePage() {
       successText={record?.status==='CHECKED_OUT'?'Your live face matched the encrypted profile successfully.':record?.status==='LATE'?'Your arrival is verified. Official start is 11:00, so this check-in is late.':'You arrived before 11:00, so this check-in is early.'}
       details={[
         {label:'Student',value:summary?.fullName||'Student'},
-        {label:'Student ID',value:summary?.registrationNumber||'—'},
+        {label:'Student ID',value:displayMembershipId(summary || {})},
+        {label:'Registration',value:displayRegistration(summary || {})},
         {label:'Face ID',value:record?.faceId?`${record.faceId.slice(0,8)}…`:'—'},
         {label:'Time',value:record?.checkOutAt?formatCampusTime(record.checkOutAt):record?.checkInAt?formatCampusTime(record.checkInAt):'—'},
         {label:'Status',value:record?.status==='CHECKED_OUT'?'Checked out':record?.status==='LATE'?'Late':record?.status==='PRESENT'?'Arrived early':record?.status||'Verified'},

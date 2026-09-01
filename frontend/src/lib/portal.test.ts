@@ -16,11 +16,11 @@ describe('role routing', () => {
 
   it('provides exact role navigation and rejects cross-role paths', () => {
     expect(portalNavigation('admin').map(item => item.label)).toEqual([
-      'Dashboard', 'Venue QR', 'Students', 'Instructors', 'Courses', 'Face Enrolments', 'Reports',
+      'Dashboard', 'Students', 'Instructors', 'Courses', 'Face Enrolments', 'Reports',
       'Users and Roles', 'Audit Logs', 'System Settings', 'Profile',
     ])
     expect(portalNavigation('instructor').map(item => item.label)).toEqual([
-      'Dashboard', 'Venue QR', 'My Courses', 'Live Attendance', 'Student Attendance', 'Reports', 'Notifications', 'Profile',
+      'Dashboard', 'My Courses', 'Live Attendance', 'Student Attendance', 'Reports', 'Notifications', 'Profile',
     ])
     expect(portalNavigation('admin').some(item => item.path.includes('locations') || item.path.includes('attendance-sessions'))).toBe(false)
     expect(portalNavigation('instructor').some(item => item.path.includes('attendance-sessions'))).toBe(false)

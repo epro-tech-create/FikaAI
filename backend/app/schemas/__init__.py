@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import date, datetime, time
 
@@ -12,6 +13,20 @@ from pydantic.alias_generators import to_camel
 class CamelModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True,
                               from_attributes=True, serialize_by_alias=True)
+
+
+MEMBERSHIP_ID_PATTERN = re.compile(r"^CCD-\d{4}-\d{3}$")
+
+
+def normalize_membership_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().upper().replace(" ", "")
+    if not normalized:
+        return None
+    if not MEMBERSHIP_ID_PATTERN.fullmatch(normalized):
+        raise ValueError("Student ID must look like CCD-2026-015.")
+    return normalized
 
 
 # ------------------------------------------------------------------ auth
@@ -29,6 +44,7 @@ class StudentRegisterRequest(CamelModel):
     full_name: str = Field(min_length=3, max_length=200)
     email: str = Field(min_length=5, max_length=255)
     registration_number: str = Field(min_length=3, max_length=50)
+    membership_id: str | None = Field(default=None, max_length=30)
     device_id: uuid.UUID | None = None
     password: str = Field(min_length=8, max_length=200)
 
@@ -52,6 +68,11 @@ class StudentRegisterRequest(CamelModel):
         if not normalized.isdigit():
             raise ValueError("Registration number must contain numbers only.")
         return normalized
+
+    @field_validator("membership_id", mode="before")
+    @classmethod
+    def normalize_membership(cls, value: str | None) -> str | None:
+        return normalize_membership_id(value)
 
     @field_validator("password")
     @classmethod
@@ -99,6 +120,7 @@ class StudentAdminCreateRequest(CamelModel):
     full_name: str = Field(min_length=3, max_length=200)
     email: str = Field(min_length=5, max_length=255)
     registration_number: str = Field(min_length=3, max_length=50)
+    membership_id: str | None = Field(default=None, max_length=30)
     password: str = Field(min_length=8, max_length=200)
     course_of_study: str | None = Field(default=None, max_length=120)
     year_of_study: int | None = Field(default=None, ge=1, le=20)
@@ -107,6 +129,7 @@ class StudentAdminCreateRequest(CamelModel):
     _normalize_name = field_validator("full_name")(StudentRegisterRequest.normalize_name.__func__)
     _normalize_email = field_validator("email")(StudentRegisterRequest.normalize_registration_email.__func__)
     _normalize_registration = field_validator("registration_number")(StudentRegisterRequest.normalize_registration_number.__func__)
+    _normalize_membership = field_validator("membership_id", mode="before")(StudentRegisterRequest.normalize_membership.__func__)
     _validate_password = field_validator("password")(StudentRegisterRequest.validate_password_strength.__func__)
 
 
@@ -114,6 +137,7 @@ class StudentAdminUpdateRequest(CamelModel):
     full_name: str = Field(default=None, min_length=3, max_length=200)
     email: str = Field(default=None, min_length=5, max_length=255)
     registration_number: str = Field(default=None, min_length=3, max_length=50)
+    membership_id: str | None = Field(default=None, max_length=30)
     password: str = Field(default=None, min_length=8, max_length=200)
     course_of_study: str | None = Field(default=None, max_length=120)
     year_of_study: int | None = Field(default=None, ge=1, le=20)
@@ -122,6 +146,7 @@ class StudentAdminUpdateRequest(CamelModel):
     _normalize_name = field_validator("full_name")(StudentRegisterRequest.normalize_name.__func__)
     _normalize_email = field_validator("email")(StudentRegisterRequest.normalize_registration_email.__func__)
     _normalize_registration = field_validator("registration_number")(StudentRegisterRequest.normalize_registration_number.__func__)
+    _normalize_membership = field_validator("membership_id", mode="before")(StudentRegisterRequest.normalize_membership.__func__)
     _validate_password = field_validator("password")(StudentRegisterRequest.validate_password_strength.__func__)
 
 
@@ -213,6 +238,7 @@ class NoActiveSessionResponse(CamelModel):
 class StudentSummaryResponse(CamelModel):
     full_name: str
     registration_number: str
+    membership_id: str | None = None
     status: str
     current_session_id: uuid.UUID | None = None
     course_code: str | None = None

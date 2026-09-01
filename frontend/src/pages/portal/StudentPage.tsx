@@ -1,12 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { DataTable, PageHeading, StatePanel } from '../../components/PortalUI'
+import { CardToolbar, DataTable, PageHeading, StatePanel } from '../../components/PortalUI'
 import { matchesSearch } from '../../lib/tableSearch'
+import { membershipIdError, normalizeMembershipIdInput } from '../../lib/studentId'
 import { api, message } from '../../services/api'
 
 type Student = Record<string, unknown> & {
   id: string
   fullName: string
   email: string
+  membershipId?: string | null
   registrationNumber: string
   courseOfStudy?: string | null
   yearOfStudy?: number | null
@@ -16,6 +18,7 @@ type Student = Record<string, unknown> & {
 type StudentForm = {
   fullName: string
   email: string
+  membershipId: string
   registrationNumber: string
   courseOfStudy: string
   yearOfStudy: string
@@ -24,10 +27,12 @@ type StudentForm = {
   confirmPassword: string
 }
 
-const emptyForm: StudentForm = { fullName: '', email: '', registrationNumber: '', courseOfStudy: '', yearOfStudy: '', isActive: true, password: '', confirmPassword: '' }
+const emptyForm: StudentForm = { fullName: '', email: '', membershipId: '', registrationNumber: '', courseOfStudy: '', yearOfStudy: '', isActive: true, password: '', confirmPassword: '' }
 
 export function studentFormError(form: StudentForm, isEditing = false) {
   if (!/^\d{3,50}$/.test(form.registrationNumber)) return 'Registration number must contain only digits.'
+  const studentIdError = membershipIdError(form.membershipId)
+  if (studentIdError) return studentIdError
   if (form.yearOfStudy && (!/^\d+$/.test(form.yearOfStudy) || Number(form.yearOfStudy) < 1 || Number(form.yearOfStudy) > 20)) return 'Year of study must be between 1 and 20.'
   if (!isEditing || form.password || form.confirmPassword) {
     if (form.password !== form.confirmPassword) return 'Passwords do not match.'
@@ -40,6 +45,7 @@ function formFrom(student: Student): StudentForm {
   return {
     fullName: student.fullName,
     email: student.email,
+    membershipId: student.membershipId || '',
     registrationNumber: student.registrationNumber,
     courseOfStudy: student.courseOfStudy || '',
     yearOfStudy: student.yearOfStudy ? String(student.yearOfStudy) : '',
@@ -100,6 +106,7 @@ export default function StudentPage() {
     const payload: Record<string, unknown> = {
       fullName: form.fullName.trim(),
       email: form.email.trim(),
+      membershipId: form.membershipId.trim() || null,
       registrationNumber: form.registrationNumber,
       courseOfStudy: form.courseOfStudy.trim() || null,
       yearOfStudy: form.yearOfStudy ? Number(form.yearOfStudy) : null,
@@ -145,7 +152,7 @@ export default function StudentPage() {
     setSearchQuery(searchInput)
   }
 
-  const visibleStudents = students.filter(student => matchesSearch(student, searchQuery, ['fullName', 'registrationNumber', 'email', 'courseOfStudy']))
+  const visibleStudents = students.filter(student => matchesSearch(student, searchQuery, ['fullName', 'membershipId', 'registrationNumber', 'email', 'courseOfStudy']))
 
   return <main className="portal-content">
     <PageHeading eyebrow="STUDENT MANAGEMENT" title="Students" description="Manage student identity, registration details, and account access." action={<button className="portal-primary" onClick={() => { if (showForm) closeForm(); else { setShowForm(true); setEditing(null); setForm(emptyForm); setError(''); setNotice('') } }}>{showForm ? 'Close form' : 'Add student'}</button>}/>
@@ -154,6 +161,7 @@ export default function StudentPage() {
       <div className="form-grid">
         <label className="wide">Full name<input required minLength={3} autoComplete="name" value={form.fullName} onChange={event => setForm({ ...form, fullName: event.target.value })}/></label>
         <label className="wide">Email address<input required type="email" autoComplete="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })}/></label>
+        <label>Student ID <small>(CCD membership)</small><input value={form.membershipId} onChange={event => setForm({ ...form, membershipId: normalizeMembershipIdInput(event.target.value) })} placeholder="CCD-2026-015" maxLength={12}/></label>
         <label>Registration number<input required inputMode="numeric" pattern="[0-9]{3,50}" value={form.registrationNumber} onChange={event => setForm({ ...form, registrationNumber: event.target.value.replace(/\D/g, '').slice(0, 50) })}/></label>
         <label>Course of study <small>(optional)</small><input value={form.courseOfStudy} onChange={event => setForm({ ...form, courseOfStudy: event.target.value })}/></label>
         <label>Year of study <small>(optional)</small><input inputMode="numeric" value={form.yearOfStudy} onChange={event => setForm({ ...form, yearOfStudy: event.target.value.replace(/\D/g, '').slice(0, 2) })}/></label>
@@ -164,19 +172,17 @@ export default function StudentPage() {
       <p className="password-hint">Use at least 8 characters with uppercase, lowercase, and a number.</p>
       <div className="form-actions"><button type="button" className="secondary-button" onClick={closeForm}>Cancel</button><button className="portal-primary" disabled={saving}>{saving ? 'Saving...' : editing ? 'Save changes' : 'Add student'}</button></div>
     </form>}
-    {viewing && <section className="content-card record-details" aria-label={`${viewing.fullName} details`}><div className="form-heading"><div><p>STUDENT DETAILS</p><h2>{viewing.fullName}</h2></div><button className="secondary-button" onClick={() => setViewing(null)}>Close</button></div><dl><div><dt>Email</dt><dd>{viewing.email}</dd></div><div><dt>Registration</dt><dd>{viewing.registrationNumber}</dd></div><div><dt>Course</dt><dd>{viewing.courseOfStudy || 'Not set'}</dd></div><div><dt>Year</dt><dd>{viewing.yearOfStudy || 'Not set'}</dd></div><div><dt>Status</dt><dd>{viewing.isActive ? 'Active' : 'Inactive'}</dd></div></dl></section>}
+    {viewing && <section className="content-card record-details" aria-label={`${viewing.fullName} details`}><div className="form-heading"><div><p>STUDENT DETAILS</p><h2>{viewing.fullName}</h2></div><button className="secondary-button" onClick={() => setViewing(null)}>Close</button></div><dl><div><dt>Student ID</dt><dd>{viewing.membershipId || 'Not set'}</dd></div><div><dt>Registration</dt><dd>{viewing.registrationNumber}</dd></div><div><dt>Email</dt><dd>{viewing.email}</dd></div><div><dt>Course</dt><dd>{viewing.courseOfStudy || 'Not set'}</dd></div><div><dt>Year</dt><dd>{viewing.yearOfStudy || 'Not set'}</dd></div><div><dt>Status</dt><dd>{viewing.isActive ? 'Active' : 'Inactive'}</dd></div></dl></section>}
     {notice && <div className="success">{notice}</div>}
     {error && !loading && <StatePanel kind="error">{error}</StatePanel>}
-    <section className="content-card"><div className="card-toolbar"><div><b>Student directory</b><span>{searchQuery ? `${visibleStudents.length} of ${students.length} records` : `${students.length} records`}</span></div>
-      <div className="card-toolbar-actions">
-        <form className="table-search" onSubmit={applySearch}>
-          <input type="search" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Name, registration, email…" aria-label="Search students"/>
-          <button type="submit" className="portal-primary">Search</button>
-        </form>
-        <button type="button" onClick={() => void load()}>Refresh</button>
-      </div>
-    </div>
-      {loading ? <StatePanel kind="loading"/> : visibleStudents.length ? <DataTable columns={[{ key: 'fullName', label: 'Student' }, { key: 'registrationNumber', label: 'Registration' }, { key: 'email', label: 'Email' }, { key: 'courseOfStudy', label: 'Course' }, { key: 'isActive', label: 'Status' }]} items={visibleStudents} renderActions={item => { const student = item as Student; return <><button onClick={() => { setViewing(student); setShowForm(false); setEditing(null) }}>View</button><button onClick={() => startEdit(student)}>Edit</button><button className="danger-button" disabled={deletingId === student.id} onClick={() => void remove(student)}>{deletingId === student.id ? 'Deleting...' : 'Delete'}</button></> }}/> : !error && <StatePanel kind="empty">{students.length ? 'No students match this search.' : 'Add the first student account to begin.'}</StatePanel>}
+    <section className="content-card">
+      <CardToolbar
+        title="Student directory"
+        meta={searchQuery ? `${visibleStudents.length} of ${students.length} records` : `${students.length} records`}
+        search={{ value: searchInput, onChange: setSearchInput, onSubmit: () => applySearch(), placeholder: 'Name, student ID, registration…', label: 'Search students' }}
+        onRefresh={() => void load()}
+      />
+      {loading ? <StatePanel kind="loading"/> : visibleStudents.length ? <DataTable columns={[{ key: 'fullName', label: 'Student' }, { key: 'membershipId', label: 'Student ID' }, { key: 'registrationNumber', label: 'Registration' }, { key: 'email', label: 'Email' }, { key: 'courseOfStudy', label: 'Course' }, { key: 'isActive', label: 'Status' }]} items={visibleStudents} renderActions={item => { const student = item as Student; return <><button onClick={() => { setViewing(student); setShowForm(false); setEditing(null) }}>View</button><button onClick={() => startEdit(student)}>Edit</button><button className="danger-button" disabled={deletingId === student.id} onClick={() => void remove(student)}>{deletingId === student.id ? 'Deleting...' : 'Delete'}</button></> }}/> : !error && <StatePanel kind="empty">{students.length ? 'No students match this search.' : 'Add the first student account to begin.'}</StatePanel>}
     </section>
   </main>
 }

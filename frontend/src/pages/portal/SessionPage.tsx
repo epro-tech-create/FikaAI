@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { api, message } from '../../services/api'
-import { DataTable, PageHeading, StatePanel } from '../../components/PortalUI'
+import { CardToolbar, DataTable, PageHeading, StatePanel } from '../../components/PortalUI'
+import { matchesSearch } from '../../lib/tableSearch'
 import type { Role } from '../../lib/auth'
 
 type Option = { id: string; title?: string; name?: string; fullName?: string; code?: string }
@@ -26,6 +27,8 @@ export default function SessionPage({ role }: { role: Extract<Role, 'admin' | 'i
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
   function load() {
     setLoading(true); setError('')
@@ -55,6 +58,11 @@ export default function SessionPage({ role }: { role: Extract<Role, 'admin' | 'i
   }
 
   const optionLabel = (option: Option) => option.title || option.name || option.fullName || option.code || option.id
+  function applySearch(event?: FormEvent) {
+    event?.preventDefault()
+    setSearchQuery(searchInput)
+  }
+  const visibleSessions = sessions.filter(session => matchesSearch(session, searchQuery, ['title', 'courseTitle', 'locationName', 'status']))
   return <main className="portal-content"><PageHeading eyebrow="ATTENDANCE OPERATIONS" title="Attendance Sessions" description="Schedule, monitor, and review time-bound attendance activity." action={<button className="portal-primary" onClick={() => setShowForm(value => !value)}>{showForm ? 'Close form' : 'Create session'}</button>}/>
     {showForm && <form className="content-card session-form" onSubmit={create}><div className="form-heading"><div><p>NEW SESSION</p><h2>Session details</h2></div><span>All fields are required</span></div><div className="form-grid">
       <label className="wide">Session title<input required value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="Morning practical attendance"/></label>
@@ -67,6 +75,14 @@ export default function SessionPage({ role }: { role: Extract<Role, 'admin' | 'i
       <label>Late threshold (minutes)<input required min="0" type="number" value={form.lateThresholdMinutes} onChange={event => setForm({ ...form, lateThresholdMinutes: event.target.value })}/></label>
     </div><div className="form-actions"><button type="button" onClick={() => setShowForm(false)}>Cancel</button><button className="portal-primary" disabled={saving}>{saving ? 'Creating...' : 'Create session'}</button></div></form>}
     {notice && <div className="success">{notice}</div>}{error && !loading && <StatePanel kind="error">{error}</StatePanel>}
-    <section className="content-card"><div className="card-toolbar"><div><b>Session schedule</b><span>{sessions.length} records</span></div><button onClick={load}>Refresh</button></div>{loading ? <StatePanel kind="loading"/> : sessions.length ? <DataTable columns={[{ key: 'title', label: 'Session' }, { key: 'courseTitle', label: 'Course' }, { key: 'locationName', label: 'Location' }, { key: 'sessionDate', label: 'Date' }, { key: 'officialStart', label: 'Starts' }, { key: 'status', label: 'Status' }]} items={sessions}/> : !error && <StatePanel kind="empty">Create the first attendance session to begin.</StatePanel>}</section>
+    <section className="content-card">
+      <CardToolbar
+        title="Session schedule"
+        meta={searchQuery ? `${visibleSessions.length} of ${sessions.length} records` : `${sessions.length} records`}
+        search={{ value: searchInput, onChange: setSearchInput, onSubmit: () => applySearch(), placeholder: 'Session, course, location…', label: 'Search sessions' }}
+        onRefresh={load}
+      />
+      {loading ? <StatePanel kind="loading"/> : visibleSessions.length ? <DataTable columns={[{ key: 'title', label: 'Session' }, { key: 'courseTitle', label: 'Course' }, { key: 'locationName', label: 'Location' }, { key: 'sessionDate', label: 'Date' }, { key: 'officialStart', label: 'Starts' }, { key: 'status', label: 'Status' }]} items={visibleSessions}/> : !error && <StatePanel kind="empty">{sessions.length ? 'No sessions match this search.' : 'Create the first attendance session to begin.'}</StatePanel>}
+    </section>
   </main>
 }

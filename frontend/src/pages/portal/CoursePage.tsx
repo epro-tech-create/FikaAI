@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { DataTable, PageHeading, StatePanel } from '../../components/PortalUI'
+import { useEffect, useState, type FormEvent } from 'react'
+import { CardToolbar, DataTable, PageHeading, StatePanel } from '../../components/PortalUI'
+import { matchesSearch } from '../../lib/tableSearch'
 import { api, message } from '../../services/api'
 
 type Course = Record<string, unknown> & { id: string; code: string; title: string }
@@ -27,6 +28,8 @@ export default function CoursePage() {
   const [deletingId, setDeletingId] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
   function load() {
     setLoading(true)
@@ -87,6 +90,13 @@ export default function CoursePage() {
     }
   }
 
+  function applySearch(event?: FormEvent) {
+    event?.preventDefault()
+    setSearchQuery(searchInput)
+  }
+
+  const visibleCourses = courses.filter(course => matchesSearch(course, searchQuery, ['code', 'title']))
+
   return <main className="portal-content">
     <PageHeading eyebrow="ACADEMIC CATALOGUE" title="Courses" description="Maintain the course codes and titles used throughout attendance records." action={<button className="portal-primary" onClick={() => { if (showForm) closeForm(); else { setShowForm(true); setEditing(null); setForm(emptyForm); setError(''); setNotice('') } }}>{showForm ? 'Close form' : 'Add course'}</button>}/>
     {showForm && <form className="content-card session-form" onSubmit={save}>
@@ -99,8 +109,14 @@ export default function CoursePage() {
     </form>}
     {notice && <div className="success">{notice}</div>}
     {error && !loading && <StatePanel kind="error">{error}</StatePanel>}
-    <section className="content-card"><div className="card-toolbar"><div><b>Course catalogue</b><span>{courses.length} records</span></div><button onClick={() => void load()}>Refresh</button></div>
-      {loading ? <StatePanel kind="loading"/> : courses.length ? <DataTable columns={[{ key: 'code', label: 'Code' }, { key: 'title', label: 'Course' }, { key: 'createdAt', label: 'Created' }]} items={courses} renderActions={item => { const course = item as Course; return <><button onClick={() => { setEditing(course); setForm({ code: course.code, title: course.title }); setShowForm(true); setError(''); setNotice('') }}>Edit</button><button className="danger-button" disabled={deletingId === course.id} onClick={() => void remove(course)}>{deletingId === course.id ? 'Deleting...' : 'Delete'}</button></> }}/> : !error && <StatePanel kind="empty">Add the first course to begin.</StatePanel>}
+    <section className="content-card">
+      <CardToolbar
+        title="Course catalogue"
+        meta={searchQuery ? `${visibleCourses.length} of ${courses.length} records` : `${courses.length} records`}
+        search={{ value: searchInput, onChange: setSearchInput, onSubmit: () => applySearch(), placeholder: 'Code or title…', label: 'Search courses' }}
+        onRefresh={() => void load()}
+      />
+      {loading ? <StatePanel kind="loading"/> : visibleCourses.length ? <DataTable columns={[{ key: 'code', label: 'Code' }, { key: 'title', label: 'Course' }, { key: 'createdAt', label: 'Created' }]} items={visibleCourses} renderActions={item => { const course = item as Course; return <><button onClick={() => { setEditing(course); setForm({ code: course.code, title: course.title }); setShowForm(true); setError(''); setNotice('') }}>Edit</button><button className="danger-button" disabled={deletingId === course.id} onClick={() => void remove(course)}>{deletingId === course.id ? 'Deleting...' : 'Delete'}</button></> }}/> : !error && <StatePanel kind="empty">{courses.length ? 'No courses match this search.' : 'Add the first course to begin.'}</StatePanel>}
     </section>
   </main>
 }

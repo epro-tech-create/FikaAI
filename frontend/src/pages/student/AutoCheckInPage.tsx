@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { api, message } from '../../services/api'
 import { getLocation } from '../../hooks/useGeolocation'
 import { formatCampusTime } from '../../lib/campusTime'
+import { displayMembershipId, displayRegistration } from '../../lib/studentId'
 
 import { extractVenueCode, readStoredVenueCode, storeVenueCode, clearStoredVenueCode } from '../../lib/venueCheckin'
 
@@ -16,7 +17,7 @@ export default function AutoCheckInPage() {
   const [status, setStatus] = useState('Preparing…')
   const [error, setError] = useState('')
   const [record, setRecord] = useState<any>(null)
-  const [summary, setSummary] = useState<{ fullName?: string; registrationNumber?: string } | null>(null)
+  const [summary, setSummary] = useState<{ fullName?: string; registrationNumber?: string; membershipId?: string | null } | null>(null)
   const sessionRef = useRef<{ sessionId: string } | null>(null)
   const codeRef = useRef('')
   const checkingOutRef = useRef(false)
@@ -207,7 +208,8 @@ export default function AutoCheckInPage() {
             <div className="scan-details auto-checkin-details">
               {[
                 { label: 'Student', value: name },
-                { label: 'Student ID', value: summary?.registrationNumber || '—' },
+                { label: 'Student ID', value: displayMembershipId(summary || {}) },
+                { label: 'Registration', value: displayRegistration(summary || {}) },
                 { label: 'Time', value: timeValue },
                 { label: 'Status', value: isOut ? (record?.status || '—') : checkInStatusLabel },
               ].map(d => (

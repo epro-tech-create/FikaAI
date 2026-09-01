@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { DataTable, PageHeading, StatePanel } from '../../components/PortalUI'
+import { useEffect, useState, type FormEvent } from 'react'
+import { CardToolbar, DataTable, PageHeading, StatePanel } from '../../components/PortalUI'
+import { matchesSearch } from '../../lib/tableSearch'
 import { api, message } from '../../services/api'
 
 type Instructor = Record<string, unknown> & { id: string; fullName: string; email: string; isActive: boolean }
@@ -26,6 +27,8 @@ export default function InstructorPage() {
   const [deletingId, setDeletingId] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
   function load() {
     setLoading(true)
@@ -97,6 +100,13 @@ export default function InstructorPage() {
     }
   }
 
+  function applySearch(event?: FormEvent) {
+    event?.preventDefault()
+    setSearchQuery(searchInput)
+  }
+
+  const visibleInstructors = instructors.filter(instructor => matchesSearch(instructor, searchQuery, ['fullName', 'email']))
+
   return <main className="portal-content">
     <PageHeading eyebrow="ACCESS MANAGEMENT" title="Instructors" description="Register instructor accounts and manage access to the teaching portal." action={<button className="portal-primary" onClick={() => { if (showForm) closeForm(); else { setShowForm(true); setEditing(null); setForm(emptyForm); setError(''); setNotice('') } }}>{showForm ? 'Close form' : 'Register instructor'}</button>}/>
     {showForm && <form className="content-card session-form" onSubmit={save}>
@@ -113,8 +123,14 @@ export default function InstructorPage() {
     </form>}
     {notice && <div className="success">{notice}</div>}
     {error && !loading && <StatePanel kind="error">{error}</StatePanel>}
-    <section className="content-card"><div className="card-toolbar"><div><b>Instructor directory</b><span>{instructors.length} records</span></div><button onClick={() => void load()}>Refresh</button></div>
-      {loading ? <StatePanel kind="loading"/> : instructors.length ? <DataTable columns={[{ key: 'fullName', label: 'Instructor' }, { key: 'email', label: 'Email' }, { key: 'isActive', label: 'Status' }, { key: 'createdAt', label: 'Created' }]} items={instructors} renderActions={item => { const instructor = item as Instructor; return <><button onClick={() => startEdit(instructor)}>Edit</button><button className="danger-button" disabled={deletingId === instructor.id} onClick={() => void remove(instructor)}>{deletingId === instructor.id ? 'Deleting...' : 'Delete'}</button></> }}/> : !error && <StatePanel kind="empty">Register the first instructor account to begin.</StatePanel>}
+    <section className="content-card">
+      <CardToolbar
+        title="Instructor directory"
+        meta={searchQuery ? `${visibleInstructors.length} of ${instructors.length} records` : `${instructors.length} records`}
+        search={{ value: searchInput, onChange: setSearchInput, onSubmit: () => applySearch(), placeholder: 'Name or email…', label: 'Search instructors' }}
+        onRefresh={() => void load()}
+      />
+      {loading ? <StatePanel kind="loading"/> : visibleInstructors.length ? <DataTable columns={[{ key: 'fullName', label: 'Instructor' }, { key: 'email', label: 'Email' }, { key: 'isActive', label: 'Status' }, { key: 'createdAt', label: 'Created' }]} items={visibleInstructors} renderActions={item => { const instructor = item as Instructor; return <><button onClick={() => startEdit(instructor)}>Edit</button><button className="danger-button" disabled={deletingId === instructor.id} onClick={() => void remove(instructor)}>{deletingId === instructor.id ? 'Deleting...' : 'Delete'}</button></> }}/> : !error && <StatePanel kind="empty">{instructors.length ? 'No instructors match this search.' : 'Register the first instructor account to begin.'}</StatePanel>}
     </section>
   </main>
 }

@@ -63,6 +63,10 @@ async def register_student(
             "This registration number is already registered.",
             409,
         )
+    if payload.membership_id and (await db.execute(
+        select(Student.id).where(Student.membership_id == payload.membership_id)
+    )).scalar_one_or_none():
+        raise ApiError(ErrorCode.MEMBERSHIP_ID_EXISTS, "This student ID is already assigned.", 409)
     if device_hash and (await db.execute(
         select(Student.id).where(Student.registration_device_hash == device_hash)
     )).scalar_one_or_none():
@@ -85,6 +89,7 @@ async def register_student(
         student = Student(
             user_id=user.id,
             registration_number=payload.registration_number,
+            membership_id=payload.membership_id,
             registration_device_hash=device_hash,
             registration_ip=registration_ip,
             course_of_study="Industrial Practical Training - Cybersecurity",

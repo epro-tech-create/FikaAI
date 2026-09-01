@@ -13,7 +13,6 @@ import InstructorPage from './pages/portal/InstructorPage'
 import StudentPage from './pages/portal/StudentPage'
 import CoursePage from './pages/portal/CoursePage'
 import ReportsPage from './pages/portal/ReportsPage'
-import VenueQrPage from './pages/portal/VenueQrPage'
 import StudentLayout from './pages/student/StudentLayout'
 import { adminPages, instructorPages } from './pages/portal/config'
 import { clearAuthentication, getStoredRole, parseRole, storeAuthentication } from './lib/auth'
@@ -101,6 +100,7 @@ function Signup() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [registrationNumber, setRegistrationNumber] = useState('')
+  const [membershipId, setMembershipId] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
@@ -123,6 +123,7 @@ function Signup() {
         fullName,
         email,
         registrationNumber,
+        membershipId: membershipId || null,
         deviceId:getRegistrationDeviceId(),
         password,
       })
@@ -137,7 +138,7 @@ function Signup() {
 
   const fromQr = Boolean(params.get('code') || readStoredVenueCode())
   const loginTo = fromQr ? studentLoginPath(studentCheckinPath(), params.get('code') || readStoredVenueCode()) : '/login'
-  return <main className="center"><form className="panel login signup" onSubmit={submit}><div className="brand">CCD-<span>Attendance</span></div><p className="eyebrow">NEW STUDENT REGISTRATION</p><h1>Create your account</h1><p className="signup-intro">{fromQr ? 'Register, then you will check in or check out at RAFIC — Face ID is optional.' : 'Register for cybersecurity practical attendance. You will enrol your face on the next step.'}</p><label>Full name<input value={fullName} onChange={event => setFullName(event.target.value)} autoComplete="name" placeholder="Amina Mushi" required/></label><label>Email address<input value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="student@example.com" required/></label><label>Registration number<input value={registrationNumber} onChange={event => setRegistrationNumber(event.target.value.replace(/\D/g,'').slice(0,50))} inputMode="numeric" pattern="[0-9]{3,50}" minLength={3} maxLength={50} placeholder="e.g. 2402424123456" required/></label><div className="signup-passwords"><label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label><label>Confirm password<input value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label></div><p className="password-hint">Use at least 8 characters with uppercase, lowercase and a number.</p>{error && <div className="error">{error}</div>}<button disabled={busy}>{busy ? 'Creating account…' : 'Create student account'}</button><p className="auth-switch">Already registered? <Link to={loginTo}>Sign in</Link></p></form></main>
+  return <main className="center"><form className="panel login signup" onSubmit={submit}><div className="brand">CCD-<span>Attendance</span></div><p className="eyebrow">NEW STUDENT REGISTRATION</p><h1>Create your account</h1><p className="signup-intro">{fromQr ? 'Register, then you will check in or check out at RAFIC — Face ID is optional.' : 'Register for cybersecurity practical attendance. You will enrol your face on the next step.'}</p><label>Full name<input value={fullName} onChange={event => setFullName(event.target.value)} autoComplete="name" placeholder="Amina Mushi" required/></label><label>Email address<input value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="student@example.com" required/></label><label>Registration number<input value={registrationNumber} onChange={event => setRegistrationNumber(event.target.value.replace(/\D/g,'').slice(0,50))} inputMode="numeric" pattern="[0-9]{3,50}" minLength={3} maxLength={50} placeholder="e.g. 2402424123456" required/></label><label>Student ID <small>(optional, CCD-2026-015)</small><input value={membershipId} onChange={event => setMembershipId(event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,12))} placeholder="CCD-2026-015" maxLength={12} pattern="CCD-[0-9]{4}-[0-9]{3}"/></label><div className="signup-passwords"><label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label><label>Confirm password<input value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label></div><p className="password-hint">Use at least 8 characters with uppercase, lowercase and a number.</p>{error && <div className="error">{error}</div>}<button disabled={busy}>{busy ? 'Creating account…' : 'Create student account'}</button><p className="auth-switch">Already registered? <Link to={loginTo}>Sign in</Link></p></form></main>
 }
 
 function hasAccess() { return Boolean(localStorage.getItem('ccd.access') || localStorage.getItem('fikaai.access')) }
@@ -204,11 +205,10 @@ export default function App({ application }: { application?: Application }) {
       <Route path="/admin" element={<Guard application={app}><PortalLayout role="admin"/></Guard>}>
         <Route index element={<Navigate to="dashboard" replace/>}/>
         <Route path="dashboard" element={<DashboardPage role="admin"/>}/>
-        <Route path="venue-qr" element={<VenueQrPage role="admin"/>}/>
         <Route path="students" element={<StudentPage/>}/>
         <Route path="instructors" element={<InstructorPage/>}/>
         <Route path="courses" element={<CoursePage/>}/>
-        <Route path="reports" element={<ReportsPage/>}/>
+        <Route path="reports" element={<ReportsPage role="admin"/>}/>
         {Object.entries(adminPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
         <Route path="system-settings" element={<InfoPage title="System Settings"/>}/>
         <Route path="profile" element={<InfoPage title="Profile"/>}/>
@@ -218,7 +218,7 @@ export default function App({ application }: { application?: Application }) {
       <Route path="/instructor" element={<Guard application={app}><PortalLayout role="instructor"/></Guard>}>
         <Route index element={<Navigate to="dashboard" replace/>}/>
         <Route path="dashboard" element={<DashboardPage role="instructor"/>}/>
-        <Route path="venue-qr" element={<VenueQrPage role="instructor"/>}/>
+        <Route path="reports" element={<ReportsPage role="instructor"/>}/>
         {Object.entries(instructorPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
         <Route path="notifications" element={<InfoPage title="Notifications"/>}/>
         <Route path="profile" element={<InfoPage title="Profile"/>}/>

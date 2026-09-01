@@ -37,6 +37,7 @@ from app.schemas import (
     StudentAdminUpdateRequest,
     VenueQrResponse,
 )
+from app.services.report_service import build_attendance_report, parse_period, render_attendance_pdf, weekly_attendance_series
 
 router = APIRouter(
     prefix="/admin",
@@ -133,28 +134,26 @@ async def dashboard(db: AsyncSession = Depends(get_db)) -> dict:
         "arrivalsToday": len(records),
         "departuresToday": sum(record.check_out_at is not None for record in records),
         "timeline": _daily_timeline(list(records)),
+        "weeklySeries": await weekly_attendance_series(db, today),
         "activeFaceEnrollments": await _count(db, FaceEnrollment, FaceEnrollment.is_active.is_(True)),
     }
 
 
 @router.get("/students", response_model=None)
 async def list_students(db: AsyncSession = Depends(get_db)) -> list[dict]:
-    students = (await db.execute(select(Student).order_by(Student.registration_number))).scalars().all()
-    return [
-        {
-            "id": student.id,
-            "userId": student.user_id,
-            "fullName": student.user.full_name,
-            "email": student.user.email,
-            "registrationNumber": student.registration_number,
-            "courseOfStudy": student.course_of_study,
-            "yearOfStudy": student.year_of_study,
-            "status": student.status.value,
-            "isActive": student.user.is_active,
-            "createdAt": student.created_at,
-        }
-        for student in students
-    ]
+    students = (await db.execute(select(Student).order_by(Student.membership_id.asc().nulls_last(), Student.registration_number))).scalars().all()
+    return [_student_response(student) for student in students]
+
+
+def _student_conflict(exc: IntegrityError) -> ApiError:
+    detail = str(getattr(exc, "orig", exc)).lower()
+    if "membership_id" in detail:
+        return ApiError(ErrorCode.MEMBERSHIP_ID_EXISTS, "This student ID is already assigned.", 409)
+    return ApiError(
+        ErrorCode.REGISTRATION_NUMBER_EXISTS,
+        "The email address, student ID, or registration number is already registered.",
+        409,
+    )
 
 
 def _student_response(student: Student) -> dict:
@@ -163,6 +162,7 @@ def _student_response(student: Student) -> dict:
         "userId": student.user_id,
         "fullName": student.user.full_name,
         "email": student.user.email,
+        "membershipId": student.membership_id,
         "registrationNumber": student.registration_number,
         "courseOfStudy": student.course_of_study,
         "yearOfStudy": student.year_of_study,
@@ -189,6 +189,7 @@ async def create_student(
     student = Student(
         user=user,
         registration_number=payload.registration_number,
+        membership_id=payload.membership_id,
         course_of_study=payload.course_of_study,
         year_of_study=payload.year_of_study,
         status=StudentStatus.ACTIVE if payload.is_active else StudentStatus.INACTIVE,
@@ -201,17 +202,13 @@ async def create_student(
             action="student_created",
             entity_type="student",
             entity_id=student.id,
-            details={"email": user.email, "registration_number": student.registration_number},
+            details={"email": user.email, "registration_number": student.registration_number, "membership_id": student.membership_id},
             ip_address=request.client.host if request.client else None,
         ))
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
-        raise ApiError(
-            ErrorCode.REGISTRATION_NUMBER_EXISTS,
-            "The email address or registration number is already registered.",
-            409,
-        ) from exc
+        raise _student_conflict(exc) from exc
     return _student_response(student)
 
 
@@ -232,7 +229,7 @@ async def update_student(
             setattr(student.user, field, values[field])
     if "password" in values:
         student.user.password_hash = hash_password(values["password"])
-    for field in ("registration_number", "course_of_study", "year_of_study"):
+    for field in ("registration_number", "membership_id", "course_of_study", "year_of_study"):
         if field in values:
             setattr(student, field, values[field])
     if "is_active" in values:
@@ -251,11 +248,7 @@ async def update_student(
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
-        raise ApiError(
-            ErrorCode.REGISTRATION_NUMBER_EXISTS,
-            "The email address or registration number is already registered.",
-            409,
-        ) from exc
+        raise _student_conflict(exc) from exc
     return _student_response(student)
 
 
@@ -275,7 +268,7 @@ async def delete_student(
         action="student_deleted",
         entity_type="student",
         entity_id=student.id,
-        details={"email": user.email, "registration_number": student.registration_number},
+        details={"email": user.email, "registration_number": student.registration_number, "membership_id": student.membership_id},
         ip_address=request.client.host if request.client else None,
     ))
     await db.flush()
@@ -548,6 +541,7 @@ async def list_face_enrollments(db: AsyncSession = Depends(get_db)) -> list[dict
             "id": enrollment.id,
             "studentId": student.id,
             "studentName": user.full_name,
+            "membershipId": student.membership_id,
             "registrationNumber": student.registration_number,
             "provider": enrollment.provider,
             "sampleCount": enrollment.sample_count,
@@ -597,29 +591,32 @@ async def reports_summary(db: AsyncSession = Depends(get_db)) -> dict:
 @router.get("/reports/attendance", response_model=None)
 async def attendance_report(
     report_date: date | None = Query(default=None, alias="date"),
+    period: str = Query(default="daily"),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    try:
+        selected_period = parse_period(period)
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
     selected_date = report_date or datetime.now(settings.campus_tz).date()
-    rows = (await db.execute(
-        select(AttendanceRecord, Student, User)
-        .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
-        .join(Student, Student.id == AttendanceRecord.student_id)
-        .join(User, User.id == Student.user_id)
-        .where(AttendanceSession.session_date == selected_date)
-        .order_by(AttendanceRecord.check_in_at, Student.registration_number)
-    )).all()
-    return {
-        "date": selected_date.isoformat(),
-        "timezone": settings.campus_timezone,
-        "rows": [
-            {
-                "id": record.id,
-                "studentName": user.full_name,
-                "registrationNumber": student.registration_number,
-                "arrivedAt": record.check_in_at,
-                "checkedOutAt": record.check_out_at,
-                "status": record.status.value,
-            }
-            for record, student, user in rows
-        ],
-    }
+    return await build_attendance_report(db, selected_period, selected_date)
+
+
+@router.get("/reports/attendance.pdf", response_model=None)
+async def attendance_report_pdf(
+    report_date: date | None = Query(default=None, alias="date"),
+    period: str = Query(default="daily"),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    try:
+        selected_period = parse_period(period)
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+    selected_date = report_date or datetime.now(settings.campus_tz).date()
+    report = await build_attendance_report(db, selected_period, selected_date)
+    filename = f"ccd-attendance-{period}-{report['startDate']}.pdf"
+    return Response(
+        content=render_attendance_pdf(report),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

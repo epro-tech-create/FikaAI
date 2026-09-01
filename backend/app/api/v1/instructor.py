@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.admin import _daily_timeline, session_response
 from app.core.config import settings
+from app.core.errors import ApiError, ErrorCode
 from app.core.deps import get_current_instructor, get_db
 from app.models.entities import (
     AttendanceRecord,
@@ -22,6 +23,7 @@ from app.models.entities import (
     User,
 )
 from app.schemas import SessionResponse, VenueQrResponse
+from app.services.report_service import build_attendance_report, parse_period, render_attendance_pdf, weekly_attendance_series
 
 router = APIRouter(prefix="/instructor", tags=["instructor"])
 
@@ -63,6 +65,7 @@ async def dashboard(
         "arrivalsToday": len(attendance),
         "departuresToday": sum(record.check_out_at is not None for record in attendance),
         "timeline": _daily_timeline(list(attendance)),
+        "weeklySeries": await weekly_attendance_series(db, today),
     }
 
 
@@ -134,6 +137,7 @@ async def attendance_list(
             "courseCode": session.course.code if session.course else None,
             "studentId": student.id,
             "studentName": user.full_name,
+            "membershipId": student.membership_id,
             "registrationNumber": student.registration_number,
             "checkInAt": record.check_in_at,
             "checkOutAt": record.check_out_at,
@@ -168,15 +172,35 @@ async def venue_qr(
 @router.get("/attendance/reports", response_model=None)
 @router.get("/reports/attendance", response_model=None)
 async def attendance_report(
-    instructor: Instructor = Depends(get_current_instructor),
+    _: Instructor = Depends(get_current_instructor),
+    report_date: date | None = Query(default=None, alias="date"),
+    period: str = Query(default="daily"),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    rows = (await db.execute(
-        select(AttendanceRecord.status, func.count(AttendanceRecord.id))
-        .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
-        .group_by(AttendanceRecord.status)
-    )).all()
-    return {
-        "totalAttendanceRecords": sum(count for _, count in rows),
-        "byStatus": {status.value: count for status, count in rows},
-    }
+    try:
+        selected_period = parse_period(period)
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+    selected_date = report_date or datetime.now(settings.campus_tz).date()
+    return await build_attendance_report(db, selected_period, selected_date)
+
+
+@router.get("/reports/attendance.pdf", response_model=None)
+async def attendance_report_pdf(
+    _: Instructor = Depends(get_current_instructor),
+    report_date: date | None = Query(default=None, alias="date"),
+    period: str = Query(default="daily"),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    try:
+        selected_period = parse_period(period)
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+    selected_date = report_date or datetime.now(settings.campus_tz).date()
+    report = await build_attendance_report(db, selected_period, selected_date)
+    filename = f"ccd-attendance-{period}-{report['startDate']}.pdf"
+    return Response(
+        content=render_attendance_pdf(report),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

@@ -127,6 +127,36 @@ def test_student_device_guard_is_a_unique_partial_index():
     assert str(index.dialect_options["postgresql"]["where"]) == "registration_device_hash IS NOT NULL"
 
 
+def test_membership_id_is_a_unique_partial_index():
+    index = next(index for index in Student.__table__.indexes if index.name == "uq_students_membership_id")
+
+    assert index.unique
+    assert str(index.dialect_options["postgresql"]["where"]) == "membership_id IS NOT NULL"
+
+
+def test_student_registration_normalizes_optional_membership_id():
+    from app.schemas import StudentRegisterRequest, StudentAdminCreateRequest, normalize_membership_id
+
+    request = StudentRegisterRequest(
+        fullName="New Student",
+        email="student@example.com",
+        registrationNumber="2402424123456",
+        membershipId=" ccd-2026-015 ",
+        password="SecurePass9",
+    )
+    assert request.membership_id == "CCD-2026-015"
+    assert StudentAdminCreateRequest(
+        fullName="New Student",
+        email="admin-created@example.com",
+        registrationNumber="2402424123456",
+        membershipId="",
+        password="SecurePass9",
+    ).membership_id is None
+    assert normalize_membership_id("") is None
+    with pytest.raises(ValueError):
+        normalize_membership_id("REG-123")
+
+
 def test_instructor_creation_normalizes_identity_fields():
     request = InstructorCreateRequest(
         fullName="  New   Instructor  ",

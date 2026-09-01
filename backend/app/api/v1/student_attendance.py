@@ -42,6 +42,7 @@ async def student_summary(
     return StudentSummaryResponse(
         full_name=student.user.full_name,
         registration_number=student.registration_number,
+        membership_id=student.membership_id,
         status=student.status.value,
         current_session_id=session.id if session else None,
         course_code=session.course.code if session and session.course else None,

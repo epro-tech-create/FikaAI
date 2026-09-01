@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { api, message } from '../../services/api'
-import { DataTable, PageHeading, StatePanel, type TableColumn } from '../../components/PortalUI'
+import { CardToolbar, DataTable, PageHeading, StatePanel, type TableColumn } from '../../components/PortalUI'
+import { matchesSearch } from '../../lib/tableSearch'
 
 export type DataPageConfig = { title: string; description: string; endpoint: string; columns: TableColumn[]; eyebrow?: string }
 
@@ -18,17 +19,36 @@ export default function DataPage({ config }: { config: DataPageConfig }) {
   const [items, setItems] = useState<Record<string, unknown>[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
-  useEffect(() => {
-    let active = true
-    setLoading(true); setError('')
-    api.get(config.endpoint).then(response => { if (active) setItems(rowsFrom(response.data)) }).catch(requestError => { if (active) setError(message(requestError)) }).finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
-  }, [config.endpoint])
+  function load() {
+    setLoading(true)
+    setError('')
+    return api.get(config.endpoint)
+      .then(response => setItems(rowsFrom(response.data)))
+      .catch(requestError => setError(message(requestError)))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { void load() }, [config.endpoint])
+
+  function applySearch(event?: FormEvent) {
+    event?.preventDefault()
+    setSearchQuery(searchInput)
+  }
+
+  const visibleItems = items.filter(item => matchesSearch(item, searchQuery, config.columns.map(column => column.key)))
 
   return <main className="portal-content"><PageHeading eyebrow={config.eyebrow || 'OPERATIONS'} title={config.title} description={config.description}/>
-    <section className="content-card"><div className="card-toolbar"><div><b>{config.title}</b><span>{items.length} records</span></div><button onClick={() => window.location.reload()}>Refresh</button></div>
-      {loading ? <StatePanel kind="loading"/> : error ? <StatePanel kind="error">{error}</StatePanel> : items.length ? <DataTable columns={config.columns} items={items}/> : <StatePanel kind="empty"/>}
+    <section className="content-card">
+      <CardToolbar
+        title={config.title}
+        meta={searchQuery ? `${visibleItems.length} of ${items.length} records` : `${items.length} records`}
+        search={{ value: searchInput, onChange: setSearchInput, onSubmit: () => applySearch(), placeholder: 'Search records…', label: `Search ${config.title}` }}
+        onRefresh={() => void load()}
+      />
+      {loading ? <StatePanel kind="loading"/> : error ? <StatePanel kind="error">{error}</StatePanel> : visibleItems.length ? <DataTable columns={config.columns} items={visibleItems}/> : <StatePanel kind="empty">{items.length ? 'No records match this search.' : undefined}</StatePanel>}
     </section>
   </main>
 }
