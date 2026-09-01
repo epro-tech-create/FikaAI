@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import FaceScanFlow, { type ScanStage } from '../../components/FaceScanFlow'
 import { api, message } from '../../services/api'
 import { useCameraFrames } from '../../hooks/useCameraFrames'
@@ -10,6 +10,7 @@ import { isContinuousReading, isFreshReading, parseChallengeType, type Challenge
 import { getStoredFaceEnrollment, storeFaceEnrollment } from '../../lib/auth'
 import { checkoutWindow } from '../../lib/checkout'
 import { campusGreeting, formatCampusDate, formatCampusTime } from '../../lib/campusTime'
+import { readStoredVenueCode, studentCheckinPath } from '../../lib/venueCheckin'
 
 type Session = {
   sessionId:string
@@ -113,10 +114,12 @@ export default function AttendancePage() {
     setStage('scanning'); setProgress(2); setInstruction('Loading secure face scanner…'); setScanStatus('Allow camera access when asked'); setError('')
     let timer:number|undefined
     try{
+      // Start GPS on the same tap as Face ID so iOS Safari still treats it as a user gesture.
+      const locPromise=getLocation()
       await cam.start(); await monitor.start(); await waitForPosition(activeRun)
       if(runId.current!==activeRun) return
       setScanStatus('Checking training area')
-      const loc=await getLocation()
+      const loc=await locPromise
       const location=await api.post('/student/attendance/verify-location',{ sessionId:session.sessionId, ...loc })
       setProgress(18); setScanStatus('Face locked')
       const ch=await api.post('/student/liveness/challenge',{sessionId:session.sessionId})
@@ -143,6 +146,8 @@ export default function AttendancePage() {
   const introTitle = checkInClosed?`Check-in closed at ${session?formatCampusTime(session.checkInCloseAt):'2:00 PM'}`:checkout?.state==='before'?`Checkout opens at ${checkoutOpenTime}`:checkout?.state==='closed'?`Checkout closed at ${checkoutCloseTime}`:checkedIn?'Face scan to check out':'Face ID check-in'
   const introText = checkInClosed?'Today’s check-in window has ended.':checkout?.state==='before'?`Checkout is available from ${checkoutOpenTime} to ${checkoutCloseTime} campus time.`:checkout?.state==='closed'?`Today’s checkout window was ${checkoutOpenTime} to ${checkoutCloseTime}.`:checkedIn?'Complete a live Face ID scan to check out — or scan the room QR with your phone camera.':'Preferred: scan the room QR with your phone camera. Face ID below is the in-app option.'
   const actionLabel = checkout?.state==='before'?`Checkout at ${checkoutOpenTime}`:checkout?.state==='closed'?'Checkout closed':checkInClosed?'Check-in closed':checkedIn?'Ready to Check Out':'Ready to Check In'
+  const pendingVenue = readStoredVenueCode()
+  if (pendingVenue) return <Navigate to={studentCheckinPath(pendingVenue)} replace />
 
   return <div>
     <section className="hero compact-hero">

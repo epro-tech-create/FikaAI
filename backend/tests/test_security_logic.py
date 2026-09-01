@@ -8,7 +8,18 @@ from app.api.v1.auth import _client_ip, _registration_device_hash
 from app.face_ai.recognition_service import cosine_similarity
 from app.models.entities import Student
 from app.services.location_service import haversine_meters
-from app.schemas import InstructorCreateRequest, StudentRegisterRequest
+from app.schemas import InstructorCreateRequest, StudentRegisterRequest, VerifyLocationRequest
+
+
+def test_location_request_accepts_coarse_iphone_accuracy():
+    request = VerifyLocationRequest(
+        sessionId=uuid.uuid4(),
+        latitude=-6.8137,
+        longitude=39.2801,
+        accuracyMeters=65_000,
+        capturedAt="2026-09-01T08:15:00+03:00",
+    )
+    assert request.accuracy_meters == 65_000
 
 
 def test_haversine_same_point_is_zero():

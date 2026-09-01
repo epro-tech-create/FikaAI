@@ -65,9 +65,8 @@ class Settings(BaseSettings):
 
     # Geofencing
     gps_verification_enabled: bool = False
-    # Phone/browser GPS, especially indoors, commonly reports 30-100m accuracy.
-    # Keep this configurable and calibrate it for the real training site.
-    gps_max_accuracy_meters: float = 100.0
+    # Indoor phone GPS at RAFIC often reports 80-250 m even when the student is on site.
+    gps_max_accuracy_meters: float = 400.0
     gps_max_age_seconds: int = 120
 
     # Attendance

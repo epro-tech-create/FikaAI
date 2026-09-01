@@ -1,11 +1,12 @@
 import axios from 'axios'
 import { clearAuthentication } from '../lib/auth'
+import { loginPathPreservingVenue } from '../lib/venueCheckin'
 export const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL || '/api' })
 api.interceptors.request.use((config) => { const token = localStorage.getItem('ccd.access') ?? localStorage.getItem('fikaai.access'); if (token) config.headers.Authorization = `Bearer ${token}`; return config })
 api.interceptors.response.use(response => response,error => {
   if (axios.isAxiosError(error) && error.response?.status === 401 && (localStorage.getItem('ccd.access') || localStorage.getItem('fikaai.access'))) {
     clearAuthentication()
-    window.location.assign('/login')
+    window.location.assign(loginPathPreservingVenue())
   }
   return Promise.reject(error)
 })

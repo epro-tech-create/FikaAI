@@ -1,8 +1,10 @@
 """GPS geofencing: Haversine distance + backend-side location verification.
 
 The frontend NEVER decides whether a student is inside the area. This service
-validates coordinate freshness, GPS accuracy and radius, then mints a one-time
+validates coordinate freshness and radius, then mints a one-time
 signed-by-database location token consumed later by check-in / check-out.
+Indoor GPS often reports a huge accuracy circle; we do not reject on that
+number if the reported point is already inside the permitted radius.
 """
 
 from __future__ import annotations
@@ -67,7 +69,7 @@ async def verify_location(
     captured_at_raw: str,
     ip_address: str | None = None,
 ) -> LocationVerification:
-    """Validate the session, GPS freshness/accuracy/radius; persist a one-time token."""
+    """Validate the session, GPS freshness, and radius; persist a one-time token."""
     session = await get_active_session_or_error(db, session_id)
     assert isinstance(session, AttendanceSession)
 
@@ -122,21 +124,8 @@ async def verify_location(
                        "Your location data is outdated. Refresh your GPS position and retry.", 400,
                        {"ageSeconds": int(age_seconds)})
 
-    # GPS accuracy gate
-    if accuracy_meters > settings.gps_max_accuracy_meters:
-        await audit_detached(
-            action="location_verification_failed",
-            actor_user_id=actor_user_id,
-            entity_type="attendance_session",
-            entity_id=session_id,
-            details={"reason": "POOR_GPS_ACCURACY", "accuracy": accuracy_meters},
-            ip_address=ip_address,
-        )
-        raise ApiError(ErrorCode.POOR_GPS_ACCURACY,
-                       "GPS accuracy is too poor. Move to an open area and retry.", 400,
-                       {"accuracyMeters": accuracy_meters, "maxAccuracyMeters": settings.gps_max_accuracy_meters})
-
-    # Radius gate (Haversine on server side)
+    # Radius first: a student already inside RAFIC should not fail just because
+    # indoor GPS reports a large accuracy circle.
     distance = haversine_meters(
         latitude, longitude,
         float(session.location.latitude), float(session.location.longitude),

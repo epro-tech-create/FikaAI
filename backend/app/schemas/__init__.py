@@ -227,7 +227,7 @@ class VerifyLocationRequest(CamelModel):
     session_id: uuid.UUID
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
-    accuracy_meters: float = Field(ge=0, le=10_000)
+    accuracy_meters: float = Field(ge=0, le=100_000)
     captured_at: str  # ISO-8601 with offset
 
 

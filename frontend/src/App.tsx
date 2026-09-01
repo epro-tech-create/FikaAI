@@ -22,13 +22,16 @@ import { getRegistrationDeviceId } from './lib/device'
 import { startInactivityTimer } from './lib/inactivity'
 import { applySeo, seoForApplication } from './lib/seo'
 import { trackPageView } from './lib/analytics'
-
-const VENUE_CODE_KEY = 'ccd.venueCode'
-
-function safeNextPath(value: string | null) {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return null
-  return value
-}
+import {
+  loginPathPreservingVenue,
+  readStoredVenueCode,
+  safeNextPath,
+  storeVenueCode,
+  studentCheckinPath,
+  studentLoginPath,
+  studentPostAuthPath,
+  studentPostSignupPath,
+} from './lib/venueCheckin'
 
 function Login({ application }: { application: Application }) {
   const navigate = useNavigate()
@@ -40,9 +43,19 @@ function Login({ application }: { application: Application }) {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    const code = (params.get('code') || '').trim().toUpperCase()
-    if (/^[A-Z0-9]{8}$/.test(code)) sessionStorage.setItem(VENUE_CODE_KEY, code)
+    storeVenueCode(params.get('code') || '')
   }, [params])
+
+  const next = safeNextPath(params.get('next'))
+  const qrCode = storeVenueCode(params.get('code') || '') || readStoredVenueCode()
+  const alreadyIn = Boolean(localStorage.getItem('ccd.access') || localStorage.getItem('fikaai.access'))
+    && getStoredRole() === config.role
+  if (alreadyIn) {
+    const dest = application === 'student'
+      ? studentPostAuthPath(next, qrCode)
+      : (next || config.home)
+    return <Navigate to={dest} replace />
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -56,12 +69,10 @@ function Login({ application }: { application: Application }) {
         return
       }
       storeAuthentication(response.data)
-      const next = safeNextPath(params.get('next'))
-      const code = (params.get('code') || '').trim().toUpperCase()
-      const fromQr = Boolean(next?.includes('/checkin') || /^[A-Z0-9]{8}$/.test(code))
-      if (!fromQr) sessionStorage.removeItem(VENUE_CODE_KEY)
-      // Normal login (no QR) → face attendance. QR login → auto check-in/out.
-      navigate(fromQr && next ? next : (application === 'student' ? '/student/attendance' : (next || config.home)))
+      const dest = application === 'student'
+        ? studentPostAuthPath(safeNextPath(params.get('next')), params.get('code') || '')
+        : (safeNextPath(params.get('next')) || config.home)
+      navigate(dest)
     } catch (requestError) {
       setError(message(requestError))
     } finally {
@@ -69,25 +80,24 @@ function Login({ application }: { application: Application }) {
     }
   }
 
-  return <main className="center"><form className="panel login" onSubmit={submit}><div className="brand">CCD-<span>Attendance</span></div><p className="eyebrow">{config.eyebrow}</p><h1>{config.title}</h1><label>Email<input value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="username" required/></label><label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete="current-password" autoFocus required/></label>{error && <div className="error">{error}</div>}<button disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button><small>Enter your password whenever the app is opened or refreshed.</small>{application === 'student' && <p className="auth-switch">New student? <Link to="/signup">Create an account</Link></p>}</form></main>
+  const signupTo = qrCode ? `/signup?code=${encodeURIComponent(qrCode)}` : '/signup'
+  return <main className="center"><form className="panel login" onSubmit={submit}><div className="brand">CCD-<span>Attendance</span></div><p className="eyebrow">{config.eyebrow}</p><h1>{config.title}</h1>{qrCode && application === 'student' && <p className="signup-intro">You scanned the RAFIC QR. After sign in you will check in or check out — not Face ID.</p>}<label>Email<input value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="username" required/></label><label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete="current-password" autoFocus required/></label>{error && <div className="error">{error}</div>}<button disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button><small>Enter your password whenever the app is opened or refreshed.</small>{application === 'student' && <p className="auth-switch">New student? <Link to={signupTo}>Create an account</Link></p>}</form></main>
 }
 
 function CheckInEntry() {
   const [params] = useSearchParams()
-  const code = (params.get('code') || '').trim().toUpperCase()
-  if (/^[A-Z0-9]{8}$/.test(code)) sessionStorage.setItem(VENUE_CODE_KEY, code)
-  const dest = code ? `/student/checkin?code=${encodeURIComponent(code)}` : '/student/checkin'
+  const code = storeVenueCode(params.get('code') || '') || readStoredVenueCode()
+  const dest = studentCheckinPath(code)
   const signedIn = Boolean(localStorage.getItem('ccd.access') || localStorage.getItem('fikaai.access'))
   if (!signedIn || getStoredRole() !== 'student') {
-    const next = encodeURIComponent(dest)
-    const login = code ? `/login?next=${next}&code=${encodeURIComponent(code)}` : `/login?next=${next}`
-    return <Navigate to={login} replace />
+    return <Navigate to={studentLoginPath(dest, code)} replace />
   }
   return <Navigate to={dest} replace />
 }
 
 function Signup() {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [registrationNumber, setRegistrationNumber] = useState('')
@@ -95,6 +105,10 @@ function Signup() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    storeVenueCode(params.get('code') || '')
+  }, [params])
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -113,7 +127,7 @@ function Signup() {
         password,
       })
       storeAuthentication(response.data)
-      navigate('/student/face-enrollment')
+      navigate(studentPostSignupPath(params.get('code') || ''))
     } catch (requestError) {
       setError(message(requestError))
     } finally {
@@ -121,15 +135,19 @@ function Signup() {
     }
   }
 
-  return <main className="center"><form className="panel login signup" onSubmit={submit}><div className="brand">CCD-<span>Attendance</span></div><p className="eyebrow">NEW STUDENT REGISTRATION</p><h1>Create your account</h1><p className="signup-intro">Register for cybersecurity practical attendance. You will enrol your face on the next step.</p><label>Full name<input value={fullName} onChange={event => setFullName(event.target.value)} autoComplete="name" placeholder="Amina Mushi" required/></label><label>Email address<input value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="student@example.com" required/></label><label>Registration number<input value={registrationNumber} onChange={event => setRegistrationNumber(event.target.value.replace(/\D/g,'').slice(0,50))} inputMode="numeric" pattern="[0-9]{3,50}" minLength={3} maxLength={50} placeholder="e.g. 2402424123456" required/></label><div className="signup-passwords"><label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label><label>Confirm password<input value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label></div><p className="password-hint">Use at least 8 characters with uppercase, lowercase and a number.</p>{error && <div className="error">{error}</div>}<button disabled={busy}>{busy ? 'Creating account…' : 'Create student account'}</button><p className="auth-switch">Already registered? <Link to="/login">Sign in</Link></p></form></main>
+  const fromQr = Boolean(params.get('code') || readStoredVenueCode())
+  const loginTo = fromQr ? studentLoginPath(studentCheckinPath(), params.get('code') || readStoredVenueCode()) : '/login'
+  return <main className="center"><form className="panel login signup" onSubmit={submit}><div className="brand">CCD-<span>Attendance</span></div><p className="eyebrow">NEW STUDENT REGISTRATION</p><h1>Create your account</h1><p className="signup-intro">{fromQr ? 'Register, then you will check in or check out at RAFIC — Face ID is optional.' : 'Register for cybersecurity practical attendance. You will enrol your face on the next step.'}</p><label>Full name<input value={fullName} onChange={event => setFullName(event.target.value)} autoComplete="name" placeholder="Amina Mushi" required/></label><label>Email address<input value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="student@example.com" required/></label><label>Registration number<input value={registrationNumber} onChange={event => setRegistrationNumber(event.target.value.replace(/\D/g,'').slice(0,50))} inputMode="numeric" pattern="[0-9]{3,50}" minLength={3} maxLength={50} placeholder="e.g. 2402424123456" required/></label><div className="signup-passwords"><label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label><label>Confirm password<input value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} type="password" autoComplete="new-password" minLength={8} required/></label></div><p className="password-hint">Use at least 8 characters with uppercase, lowercase and a number.</p>{error && <div className="error">{error}</div>}<button disabled={busy}>{busy ? 'Creating account…' : 'Create student account'}</button><p className="auth-switch">Already registered? <Link to={loginTo}>Sign in</Link></p></form></main>
 }
 
 function hasAccess() { return Boolean(localStorage.getItem('ccd.access') || localStorage.getItem('fikaai.access')) }
 function Guard({ application, children }: { application: Application; children: React.ReactNode }) {
-  if (!hasAccess()) return <Navigate to="/login" replace/>
-  if (getStoredRole() !== applicationConfig(application).role) {
-    clearAuthentication()
-    return <Navigate to="/login" replace/>
+  const location = useLocation()
+  const allowed = hasAccess() && getStoredRole() === applicationConfig(application).role
+  if (!allowed) {
+    if (hasAccess()) clearAuthentication()
+    const here = `${location.pathname}${location.search}`
+    return <Navigate to={application === 'student' ? loginPathPreservingVenue(here) : '/login'} replace/>
   }
   return <>{children}</>
 }
@@ -138,6 +156,9 @@ function HomeRedirect({ application }: { application: Application }) {
   const config = applicationConfig(application)
   const signedInRole = getStoredRole()
   const validSession = hasAccess() && signedInRole === config.role
+  if (application === 'student' && readStoredVenueCode()) {
+    return <Navigate to={validSession ? studentCheckinPath() : loginPathPreservingVenue()} replace/>
+  }
   return <Navigate to={validSession ? config.home : '/login'} replace/>
 }
 
@@ -163,7 +184,7 @@ export default function App({ application }: { application?: Application }) {
     if (!hasAccess()) return
     return startInactivityTimer(() => {
       clearAuthentication()
-      window.location.replace('/login')
+      window.location.replace(loginPathPreservingVenue())
     })
   }, [location.pathname])
   return <Routes>
