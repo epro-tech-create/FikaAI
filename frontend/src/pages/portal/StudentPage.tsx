@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { DataTable, PageHeading, StatePanel } from '../../components/PortalUI'
+import { matchesSearch } from '../../lib/tableSearch'
 import { api, message } from '../../services/api'
 
 type Student = Record<string, unknown> & {
@@ -59,6 +60,8 @@ export default function StudentPage() {
   const [deletingId, setDeletingId] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
   function load() {
     setLoading(true)
@@ -137,6 +140,13 @@ export default function StudentPage() {
     }
   }
 
+  function applySearch(event?: FormEvent) {
+    event?.preventDefault()
+    setSearchQuery(searchInput)
+  }
+
+  const visibleStudents = students.filter(student => matchesSearch(student, searchQuery, ['fullName', 'registrationNumber', 'email', 'courseOfStudy']))
+
   return <main className="portal-content">
     <PageHeading eyebrow="STUDENT MANAGEMENT" title="Students" description="Manage student identity, registration details, and account access." action={<button className="portal-primary" onClick={() => { if (showForm) closeForm(); else { setShowForm(true); setEditing(null); setForm(emptyForm); setError(''); setNotice('') } }}>{showForm ? 'Close form' : 'Add student'}</button>}/>
     {showForm && <form className="content-card session-form" onSubmit={save}>
@@ -157,8 +167,16 @@ export default function StudentPage() {
     {viewing && <section className="content-card record-details" aria-label={`${viewing.fullName} details`}><div className="form-heading"><div><p>STUDENT DETAILS</p><h2>{viewing.fullName}</h2></div><button className="secondary-button" onClick={() => setViewing(null)}>Close</button></div><dl><div><dt>Email</dt><dd>{viewing.email}</dd></div><div><dt>Registration</dt><dd>{viewing.registrationNumber}</dd></div><div><dt>Course</dt><dd>{viewing.courseOfStudy || 'Not set'}</dd></div><div><dt>Year</dt><dd>{viewing.yearOfStudy || 'Not set'}</dd></div><div><dt>Status</dt><dd>{viewing.isActive ? 'Active' : 'Inactive'}</dd></div></dl></section>}
     {notice && <div className="success">{notice}</div>}
     {error && !loading && <StatePanel kind="error">{error}</StatePanel>}
-    <section className="content-card"><div className="card-toolbar"><div><b>Student directory</b><span>{students.length} records</span></div><button onClick={() => void load()}>Refresh</button></div>
-      {loading ? <StatePanel kind="loading"/> : students.length ? <DataTable columns={[{ key: 'fullName', label: 'Student' }, { key: 'registrationNumber', label: 'Registration' }, { key: 'email', label: 'Email' }, { key: 'courseOfStudy', label: 'Course' }, { key: 'isActive', label: 'Status' }]} items={students} renderActions={item => { const student = item as Student; return <><button onClick={() => { setViewing(student); setShowForm(false); setEditing(null) }}>View</button><button onClick={() => startEdit(student)}>Edit</button><button className="danger-button" disabled={deletingId === student.id} onClick={() => void remove(student)}>{deletingId === student.id ? 'Deleting...' : 'Delete'}</button></> }}/> : !error && <StatePanel kind="empty">Add the first student account to begin.</StatePanel>}
+    <section className="content-card"><div className="card-toolbar"><div><b>Student directory</b><span>{searchQuery ? `${visibleStudents.length} of ${students.length} records` : `${students.length} records`}</span></div>
+      <div className="card-toolbar-actions">
+        <form className="table-search" onSubmit={applySearch}>
+          <input type="search" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Name, registration, email…" aria-label="Search students"/>
+          <button type="submit" className="portal-primary">Search</button>
+        </form>
+        <button type="button" onClick={() => void load()}>Refresh</button>
+      </div>
+    </div>
+      {loading ? <StatePanel kind="loading"/> : visibleStudents.length ? <DataTable columns={[{ key: 'fullName', label: 'Student' }, { key: 'registrationNumber', label: 'Registration' }, { key: 'email', label: 'Email' }, { key: 'courseOfStudy', label: 'Course' }, { key: 'isActive', label: 'Status' }]} items={visibleStudents} renderActions={item => { const student = item as Student; return <><button onClick={() => { setViewing(student); setShowForm(false); setEditing(null) }}>View</button><button onClick={() => startEdit(student)}>Edit</button><button className="danger-button" disabled={deletingId === student.id} onClick={() => void remove(student)}>{deletingId === student.id ? 'Deleting...' : 'Delete'}</button></> }}/> : !error && <StatePanel kind="empty">{students.length ? 'No students match this search.' : 'Add the first student account to begin.'}</StatePanel>}
     </section>
   </main>
 }
