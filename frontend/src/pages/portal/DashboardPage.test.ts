@@ -1,30 +1,31 @@
 import { describe, expect, it } from 'vitest'
-import { areaPath, chartBottom, chartLeft, chartPoints, chartRight, emptyWeek, splinePath } from './DashboardPage'
+import { areaPath, chartBottom, chartLeft, chartPoints, chartRight, emptyTimeline, splinePath } from './DashboardPage'
 
 function pathYs(path: string) {
   return [...path.matchAll(/-?\d+(?:\.\d+)?/g)].map(Number).filter((_, index) => index % 2 === 1)
 }
 
-describe('weekly attendance spline', () => {
-  it('plots Monday through Friday at equal spacing', () => {
-    const points = chartPoints(emptyWeek(), 'arrivals', 1)
-    expect(points).toHaveLength(5)
+describe('daily attendance chart', () => {
+  it('plots 08:00 through 16:00 at equal spacing', () => {
+    const points = chartPoints(emptyTimeline(), 'arrivals', 1)
+    expect(emptyTimeline()).toHaveLength(17)
+    expect(emptyTimeline()[0].time).toBe('08:00')
+    expect(emptyTimeline()[emptyTimeline().length - 1]?.time).toBe('16:00')
     expect(points[0].x).toBe(chartLeft)
-    expect(points[4].x).toBe(chartRight)
+    expect(points[points.length - 1]?.x).toBe(chartRight)
   })
 
-  it('draws a curved path instead of straight segments', () => {
-    const path = splinePath(chartPoints([
-      { day: 'Mon', date: '2026-08-31', arrivals: 4, departures: 1 },
-      { day: 'Tue', date: '2026-09-01', arrivals: 12, departures: 8 },
-      { day: 'Wed', date: '2026-09-02', arrivals: 7, departures: 6 },
-      { day: 'Thu', date: '2026-09-03', arrivals: 15, departures: 9 },
-      { day: 'Fri', date: '2026-09-04', arrivals: 9, departures: 9 },
-    ], 'arrivals', 15))
-
-    expect(path.startsWith('M ')).toBe(true)
-    expect(path).toContain(' C ')
-    expect(path.includes(' L ')).toBe(false)
+  it('draws check-in and check-out as separate curves', () => {
+    const series = emptyTimeline().map((point, index) => ({
+      ...point,
+      arrivals: index,
+      departures: Math.max(0, index - 4),
+    }))
+    const arrivals = splinePath(chartPoints(series, 'arrivals', 16))
+    const departures = splinePath(chartPoints(series, 'departures', 16))
+    expect(arrivals).toContain(' C ')
+    expect(departures).toContain(' C ')
+    expect(arrivals).not.toBe(departures)
   })
 
   it('closes the brand fill under the spline', () => {
@@ -36,13 +37,8 @@ describe('weekly attendance spline', () => {
   })
 
   it('does not draw the curve below the zero line', () => {
-    const path = splinePath(chartPoints([
-      { day: 'Mon', date: '2026-08-31', arrivals: 1, departures: 0 },
-      { day: 'Tue', date: '2026-09-01', arrivals: 0, departures: 0 },
-      { day: 'Wed', date: '2026-09-02', arrivals: 0, departures: 0 },
-      { day: 'Thu', date: '2026-09-03', arrivals: 0, departures: 0 },
-      { day: 'Fri', date: '2026-09-04', arrivals: 0, departures: 0 },
-    ], 'arrivals', 1))
+    const series = emptyTimeline().map((point, index) => ({ ...point, arrivals: index === 0 ? 1 : 0, departures: 0 }))
+    const path = splinePath(chartPoints(series, 'arrivals', 1))
     expect(Math.max(...pathYs(path))).toBeLessThanOrEqual(chartBottom)
   })
 })

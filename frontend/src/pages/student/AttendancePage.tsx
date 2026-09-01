@@ -16,7 +16,6 @@ import { readStoredVenueCode, studentCheckinPath } from '../../lib/venueCheckin'
 type Session = {
   sessionId:string
   title:string
-  courseTitle?:string|null
   locationName:string
   permittedRadiusMeters:number
   checkInCloseAt:string
@@ -160,7 +159,7 @@ export default function AttendancePage() {
       <section className="training-strip">
         <div>
           <span>DAILY PRESENCE</span>
-          <b>{session.courseTitle || 'Daily practical attendance'}</b>
+          <b>Daily practical attendance</b>
           <small>{session.title} · {displayMembershipId(summary)} · {displayRegistration(summary)}</small>
         </div>
         <div>

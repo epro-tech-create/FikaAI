@@ -227,8 +227,8 @@ export default function ReportsPage({ role }: { role: Extract<Role, 'admin' | 'i
     {error && <StatePanel kind="error">{error}</StatePanel>}
     {report.summary && <section className="stat-grid report-summary" aria-label="Report summary">
       <StatCard label="Students present" value={report.summary.studentsPresent} note={rangeLabel}/>
-      <StatCard label="Arrived early" value={report.summary.arrivedEarly} note="Before 11:00"/>
-      <StatCard label="Late" value={report.summary.late} note="From 11:00"/>
+      <StatCard label="Arrived early" value={report.summary.arrivedEarly} note="All arrivals before 11:00"/>
+      <StatCard label="Late" value={report.summary.late} note="All arrivals from 11:00"/>
       <StatCard label="Checked out" value={report.summary.checkedOut} note="Recorded departures"/>
     </section>}
     <section className="content-card">

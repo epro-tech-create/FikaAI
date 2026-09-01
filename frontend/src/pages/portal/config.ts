@@ -7,7 +7,6 @@ export const adminPages: Record<string, DataPageConfig> = {
 }
 
 export const instructorPages: Record<string, DataPageConfig> = {
-  'my-courses': { title: 'My Courses', description: 'View the courses assigned to your instructor account.', endpoint: '/instructor/courses', columns: [{ key: 'title', label: 'Course' }, { key: 'code', label: 'Code' }] },
   'live-attendance': { title: 'Live Attendance', description: 'Follow verified arrivals and departures as they happen.', endpoint: '/instructor/attendance', eyebrow: 'LIVE MONITOR', columns: [{ key: 'studentName', label: 'Student' }, { key: 'membershipId', label: 'Student ID' }, { key: 'registrationNumber', label: 'Registration' }, { key: 'sessionTitle', label: 'Session' }, { key: 'status', label: 'Status' }, { key: 'checkInAt', label: 'Check-in' }] },
-  'student-attendance': { title: 'Student Attendance', description: 'Review individual attendance outcomes across your courses.', endpoint: '/instructor/attendance', columns: [{ key: 'studentName', label: 'Student' }, { key: 'membershipId', label: 'Student ID' }, { key: 'registrationNumber', label: 'Registration' }, { key: 'courseCode', label: 'Course' }, { key: 'minutesLate', label: 'Minutes late' }, { key: 'status', label: 'Status' }] },
+  'student-attendance': { title: 'Student Attendance', description: 'Review individual attendance outcomes.', endpoint: '/instructor/attendance', columns: [{ key: 'studentName', label: 'Student' }, { key: 'membershipId', label: 'Student ID' }, { key: 'registrationNumber', label: 'Registration' }, { key: 'minutesLate', label: 'Minutes late' }, { key: 'status', label: 'Status' }] },
 }

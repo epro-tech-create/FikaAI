@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { studentFormError } from './StudentPage'
 
-const validForm = { fullName: 'Amina Mushi', email: 'amina@example.com', membershipId: 'CCD-2026-015', registrationNumber: '2402424123456', courseOfStudy: '', yearOfStudy: '', isActive: true, password: 'SecurePass9', confirmPassword: 'SecurePass9' }
+const validForm = { fullName: 'Amina Mushi', email: 'amina@example.com', membershipId: 'CCD-2026-015', registrationNumber: '2402424123456', isActive: true, password: 'SecurePass9', confirmPassword: 'SecurePass9' }
 
 describe('student form', () => {
   it('requires numeric registration numbers', () => {
@@ -11,10 +11,6 @@ describe('student form', () => {
   it('accepts a CCD membership student ID', () => {
     expect(studentFormError({ ...validForm, membershipId: 'ccd-2026-015' })).toBe('')
     expect(studentFormError({ ...validForm, membershipId: 'REG-123' })).toContain('CCD-2026-015')
-  })
-
-  it('validates the optional year of study', () => {
-    expect(studentFormError({ ...validForm, yearOfStudy: '21' })).toContain('between 1 and 20')
   })
 
   it('requires a strong matching password for creation', () => {

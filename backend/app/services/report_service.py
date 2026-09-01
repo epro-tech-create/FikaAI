@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from calendar import monthrange
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from io import BytesIO
 from typing import Any, Literal
 
@@ -64,6 +64,20 @@ def status_label(status: str) -> str:
     if status == "CHECKED_OUT":
         return "Checked out"
     return status.replace("_", " ").title()
+
+
+def arrival_was_late(
+    check_in_at: datetime | None,
+    official_start: time,
+    session_date: date,
+    late_threshold_minutes: int = 0,
+) -> bool:
+    """True if the student arrived at or after official start (11:00 by default)."""
+    if check_in_at is None:
+        return False
+    local = check_in_at.astimezone(settings.campus_tz) if check_in_at.tzinfo else check_in_at.replace(tzinfo=settings.campus_tz)
+    official = datetime.combine(session_date, official_start, tzinfo=settings.campus_tz)
+    return local >= official + timedelta(minutes=late_threshold_minutes)
 
 
 def _cell_text(value: Any) -> str:
@@ -147,17 +161,23 @@ async def build_attendance_report(db: AsyncSession, period: Period, anchor: date
     start, end, title = _period_window(period, anchor)
     packed = await _records_between(db, start, end)
     rows = []
-    present = late = checked_out = 0
+    arrived_early = late = checked_out = 0
     students: dict[str, dict[str, Any]] = {}
     by_day: dict[str, int] = {}
     for record, session, student, user in packed:
         status = record.status.value if hasattr(record.status, "value") else str(record.status)
-        if status == "LATE":
+        was_late = status == "LATE" or arrival_was_late(
+            record.check_in_at,
+            session.official_start,
+            session.session_date,
+            session.late_threshold_minutes,
+        )
+        if was_late:
             late += 1
-        elif status == "CHECKED_OUT":
-            checked_out += 1
         else:
-            present += 1
+            arrived_early += 1
+        if record.check_out_at is not None or status == "CHECKED_OUT":
+            checked_out += 1
         day_key = session.session_date.isoformat()
         by_day[day_key] = by_day.get(day_key, 0) + 1
         weekday = WEEKDAY_LABELS[session.session_date.weekday()] if session.session_date.weekday() < 5 else session.session_date.strftime("%a")
@@ -181,10 +201,10 @@ async def build_attendance_report(db: AsyncSession, period: Period, anchor: date
             "days": {label: "—" for label in WEEKDAY_LABELS},
         })
         card["daysPresent"] += 1
-        if status == "LATE":
+        if was_late:
             card["lateDays"] += 1
         if session.session_date.weekday() < 5:
-            card["days"][WEEKDAY_LABELS[session.session_date.weekday()]] = "Late" if status == "LATE" else "Present"
+            card["days"][WEEKDAY_LABELS[session.session_date.weekday()]] = "Late" if was_late else "Present"
 
     return {
         "period": period,
@@ -197,7 +217,7 @@ async def build_attendance_report(db: AsyncSession, period: Period, anchor: date
         "summary": {
             "totalRecords": len(rows),
             "studentsPresent": len(students),
-            "arrivedEarly": present,
+            "arrivedEarly": arrived_early,
             "late": late,
             "checkedOut": checked_out,
         },

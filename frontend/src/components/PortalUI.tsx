@@ -1,4 +1,4 @@
-import type { FormEvent, ReactNode } from 'react'
+import { useEffect, type FormEvent, type ReactNode } from 'react'
 
 export function PageHeading({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
   return <div className="portal-heading"><div><p>{eyebrow}</p><h1>{title}</h1><span>{description}</span></div>{action}</div>
@@ -56,4 +56,25 @@ export function DataTable({ columns, items, renderActions }: { columns: TableCol
 
 export function StatCard({ label, value, note, tone = '' }: { label: string; value: unknown; note: string; tone?: string }) {
   return <article className={`stat-card ${tone}`}><span>{label}</span><b>{value === undefined || value === null ? '0' : String(value)}</b><small>{note}</small></article>
+}
+
+export function PortalDialog({ children, labelledBy, onClose }: { children: ReactNode; labelledBy: string; onClose: () => void }) {
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previous
+    }
+  }, [onClose])
+
+  return <div className="portal-dialog-backdrop" onClick={onClose} role="presentation">
+    <div className="portal-dialog content-card" role="dialog" aria-modal="true" aria-labelledby={labelledBy} onClick={event => event.stopPropagation()}>
+      {children}
+    </div>
+  </div>
 }

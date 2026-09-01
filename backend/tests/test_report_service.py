@@ -1,10 +1,12 @@
-from datetime import date
+from datetime import date, datetime, time
 
 import pytest
+from zoneinfo import ZoneInfo
 
 from app.services.report_service import (
     _public_student_id,
     _registration_number,
+    arrival_was_late,
     friday_of,
     monday_of,
     month_span,
@@ -89,3 +91,16 @@ def test_report_keeps_membership_id_and_registration_separate():
     assert _registration_number(row) == "240002"
     assert _public_student_id({"registrationNumber": "240002"}) == "—"
     assert _registration_number({"membershipId": "CCD-2026-016"}) == "—"
+
+
+def test_arrival_counts_use_check_in_time_not_checkout_status():
+    day = date(2026, 9, 1)
+    official = time(11, 0)
+    campus = ZoneInfo("Africa/Dar_es_Salaam")
+    early = datetime(2026, 9, 1, 9, 45, tzinfo=campus)
+    on_time_late = datetime(2026, 9, 1, 11, 0, tzinfo=campus)
+    after_start = datetime(2026, 9, 1, 11, 20, tzinfo=campus)
+    assert arrival_was_late(early, official, day) is False
+    assert arrival_was_late(on_time_late, official, day) is True
+    assert arrival_was_late(after_start, official, day) is True
+    assert arrival_was_late(None, official, day) is False
