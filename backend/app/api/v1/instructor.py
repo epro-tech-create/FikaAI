@@ -15,9 +15,7 @@ from app.core.deps import get_current_instructor, get_db
 from app.models.entities import (
     AttendanceRecord,
     AttendanceSession,
-    Course,
     Instructor,
-    InstructorCourseAssignment,
     PracticalLocation,
     Student,
     User,
@@ -50,37 +48,17 @@ async def dashboard(
         .where(AttendanceSession.session_date == today)
         .order_by(AttendanceRecord.check_in_at)
     )).scalars().all()
-    course_count = int((await db.execute(
-        select(func.count()).select_from(InstructorCourseAssignment).where(
-            InstructorCourseAssignment.instructor_id == instructor.id
-        )
-    )).scalar_one())
     return {
         "instructorId": instructor.id,
         "fullName": instructor.user.full_name,
         "date": today.isoformat(),
         "timezone": settings.campus_timezone,
-        "assignedCourses": course_count,
         "attendanceRecords": await _instructor_count(db, AttendanceRecord, instructor.id),
         "arrivalsToday": len(attendance),
         "departuresToday": sum(record.check_out_at is not None for record in attendance),
         "timeline": _daily_timeline(list(attendance)),
         "weeklySeries": await weekly_attendance_series(db, today),
     }
-
-
-@router.get("/courses", response_model=None)
-async def my_courses(
-    instructor: Instructor = Depends(get_current_instructor),
-    db: AsyncSession = Depends(get_db),
-) -> list[dict]:
-    courses = (await db.execute(
-        select(Course)
-        .join(InstructorCourseAssignment, InstructorCourseAssignment.course_id == Course.id)
-        .where(InstructorCourseAssignment.instructor_id == instructor.id)
-        .order_by(Course.code)
-    )).scalars().all()
-    return [{"id": item.id, "code": item.code, "title": item.title} for item in courses]
 
 
 @router.get("/locations", response_model=None)
@@ -134,7 +112,6 @@ async def attendance_list(
             "id": record.id,
             "sessionId": session.id,
             "sessionTitle": session.title,
-            "courseCode": session.course.code if session.course else None,
             "studentId": student.id,
             "studentName": user.full_name,
             "membershipId": student.membership_id,

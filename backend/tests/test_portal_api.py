@@ -9,7 +9,7 @@ from app.api.v1.admin import _daily_timeline
 from app.core.deps import require_roles
 from app.core.errors import ApiError, ErrorCode
 from app.main import app
-from app.schemas import CourseCreateRequest, CourseUpdateRequest, SessionCreateRequest
+from app.schemas import SessionCreateRequest
 
 
 def test_management_portal_routes_are_mounted():
@@ -19,7 +19,6 @@ def test_management_portal_routes_are_mounted():
         "/api/admin/dashboard",
         "/api/admin/students",
         "/api/admin/instructors",
-        "/api/admin/courses",
         "/api/admin/locations",
         "/api/admin/sessions",
         "/api/admin/face-enrollments",
@@ -29,7 +28,6 @@ def test_management_portal_routes_are_mounted():
         "/api/admin/reports/attendance",
         "/api/admin/reports/attendance.pdf",
         "/api/instructor/dashboard",
-        "/api/instructor/courses",
         "/api/instructor/sessions",
         "/api/instructor/attendance",
         "/api/instructor/reports/attendance",
@@ -40,8 +38,8 @@ def test_management_portal_routes_are_mounted():
     assert {"patch", "delete"} <= set(openapi_paths["/api/admin/students/{student_id}"])
     assert {"get", "post"} <= set(openapi_paths["/api/admin/instructors"])
     assert {"patch", "delete"} <= set(openapi_paths["/api/admin/instructors/{instructor_id}"])
-    assert {"get", "post"} <= set(openapi_paths["/api/admin/courses"])
-    assert {"patch", "delete"} <= set(openapi_paths["/api/admin/courses/{course_id}"])
+    assert "/api/admin/courses" not in paths
+    assert "/api/instructor/courses" not in paths
     assert "post" not in openapi_paths["/api/admin/sessions"]
     assert "post" not in openapi_paths["/api/instructor/sessions"]
 
@@ -66,14 +64,6 @@ def test_daily_timeline_counts_arrivals_and_departures_cumulatively():
     assert timeline[-1] == {"time": "16:00", "arrivals": 2, "departures": 1}
 
 
-def test_course_code_is_normalized_for_admin_mutations():
-    payload = CourseCreateRequest(code=" cs  101 ", title="  Network   Security ")
-    assert payload.code == "CS101"
-    assert payload.title == "Network Security"
-    with pytest.raises(ValidationError):
-        CourseUpdateRequest(code=None)
-
-
 @pytest.mark.asyncio
 async def test_admin_guard_rejects_other_roles():
     guard = require_roles("admin")
@@ -85,7 +75,6 @@ async def test_admin_guard_rejects_other_roles():
 def test_session_payload_rejects_out_of_order_times():
     with pytest.raises(ValidationError):
         SessionCreateRequest(
-            courseId=uuid4(),
             locationId=uuid4(),
             title="Practical",
             sessionDate=date(2026, 8, 25),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Seed global students, instructors, courses, assignments, and direct sessions.
+"""Seed global students, instructors, and direct sessions.
 
 No real biometric information is created. Passwords are development-only and
 are printed once when their corresponding users are created.
@@ -22,9 +22,7 @@ from app.core.security import hash_password  # noqa: E402
 from app.db.session import session_factory  # noqa: E402
 from app.models.entities import (  # noqa: E402
     AttendanceSession,
-    Course,
     Instructor,
-    InstructorCourseAssignment,
     LocationType,
     PracticalLocation,
     SessionStatus,
@@ -82,33 +80,6 @@ async def main() -> None:
             instructors.append(profile)
         print("Instructor login: instructor@fikaai.io / Instructor@123")
 
-        courses: dict[str, Course] = {}
-        for code, title in (
-            ("CYB201", "Cybersecurity Fundamentals"),
-            ("CYB220", "Network Defense Lab"),
-            ("CYB310", "Ethical Hacking Practical"),
-        ):
-            course = (await db.execute(select(Course).where(Course.code == code))).scalar_one_or_none()
-            if course is None:
-                course = Course(code=code, title=title)
-                db.add(course)
-                await db.flush()
-            course.title = title
-            courses[code] = course
-
-        for instructor in instructors:
-            for course in courses.values():
-                assignment = (
-                    await db.execute(
-                        select(InstructorCourseAssignment).where(
-                            InstructorCourseAssignment.instructor_id == instructor.id,
-                            InstructorCourseAssignment.course_id == course.id,
-                        )
-                    )
-                ).scalar_one_or_none()
-                if assignment is None:
-                    db.add(InstructorCourseAssignment(instructor_id=instructor.id, course_id=course.id))
-
         location_defs = [
             (
                 "Dar es Salaam Cybersecurity Training Area",
@@ -158,7 +129,6 @@ async def main() -> None:
                     Student(
                         user_id=user.id,
                         registration_number=registration_number,
-                        course_of_study="Industrial Practical Training - Cybersecurity",
                         year_of_study=(i % 3) + 2,
                         status=StudentStatus.ACTIVE,
                     )
@@ -183,18 +153,16 @@ async def main() -> None:
         location = locations["Dar es Salaam Cybersecurity Training Area"]
         if active is None:
             active = AttendanceSession(
-                course_id=courses["CYB201"].id,
                 instructor_id=instructors[0].id,
                 location_id=location.id,
-                title=f"Cybersecurity Fundamentals Practical - {today.isoformat()}",
+                title=f"Daily RAFIC Attendance - {today.isoformat()}",
                 session_date=today,
                 status=SessionStatus.ACTIVE,
             )
             db.add(active)
-        active.course_id = courses["CYB201"].id
         active.instructor_id = instructors[0].id
         active.location_id = location.id
-        active.title = f"Cybersecurity Fundamentals Practical - {today.isoformat()}"
+        active.title = f"Daily RAFIC Attendance - {today.isoformat()}"
         active.session_date = today
         active.check_in_open = time(8, 0)
         active.official_start = time(11, 0)

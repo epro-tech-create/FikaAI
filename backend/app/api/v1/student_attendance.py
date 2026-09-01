@@ -45,8 +45,6 @@ async def student_summary(
         membership_id=student.membership_id,
         status=student.status.value,
         current_session_id=session.id if session else None,
-        course_code=session.course.code if session and session.course else None,
-        course_title=session.course.title if session and session.course else None,
         location_name=session.location.name if session else None,
         location_address=session.location.address if session else None,
         permitted_radius_meters=float(session.permitted_radius_meters) if session else None,
@@ -60,8 +58,6 @@ def _session_dto(session) -> ActiveSessionResponse:
     return ActiveSessionResponse(
         session_id=session.id,
         title=session.title,
-        course_code=session.course.code if session.course else None,
-        course_title=session.course.title if session.course else None,
         instructor_id=session.instructor.id if session.instructor else None,
         instructor_name=session.instructor.user.full_name if session.instructor else None,
         location_name=session.location.name,

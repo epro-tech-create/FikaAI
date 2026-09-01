@@ -27,6 +27,8 @@ from app.models.entities import AttendanceRecord, AttendanceSession, Student, Us
 
 Period = Literal["daily", "weekly", "monthly"]
 WEEKDAY_LABELS = ("Mon", "Tue", "Wed", "Thu", "Fri")
+# One-off: 31 Aug 2026 is treated as arrived early. From 2 Sep scoring is live again.
+FORCED_EARLY_DATES = frozenset({date(2026, 8, 31)})
 
 
 def parse_period(value: str) -> Period:
@@ -78,6 +80,23 @@ def arrival_was_late(
     local = check_in_at.astimezone(settings.campus_tz) if check_in_at.tzinfo else check_in_at.replace(tzinfo=settings.campus_tz)
     official = datetime.combine(session_date, official_start, tzinfo=settings.campus_tz)
     return local >= official + timedelta(minutes=late_threshold_minutes)
+
+
+def record_was_late(
+    status: str,
+    check_in_at: datetime | None,
+    official_start: time,
+    session_date: date,
+    late_threshold_minutes: int = 0,
+) -> bool:
+    if session_date in FORCED_EARLY_DATES:
+        return False
+    return status == "LATE" or arrival_was_late(
+        check_in_at,
+        official_start,
+        session_date,
+        late_threshold_minutes,
+    )
 
 
 def _cell_text(value: Any) -> str:
@@ -166,7 +185,8 @@ async def build_attendance_report(db: AsyncSession, period: Period, anchor: date
     by_day: dict[str, int] = {}
     for record, session, student, user in packed:
         status = record.status.value if hasattr(record.status, "value") else str(record.status)
-        was_late = status == "LATE" or arrival_was_late(
+        was_late = record_was_late(
+            status,
             record.check_in_at,
             session.official_start,
             session.session_date,

@@ -104,3 +104,16 @@ def test_arrival_counts_use_check_in_time_not_checkout_status():
     assert arrival_was_late(on_time_late, official, day) is True
     assert arrival_was_late(after_start, official, day) is True
     assert arrival_was_late(None, official, day) is False
+
+
+def test_monday_31_aug_is_forced_early_in_weekly_cells():
+    monday = date(2026, 8, 31)
+    tuesday = date(2026, 9, 1)
+    official = time(8, 0)
+    campus = ZoneInfo("Africa/Dar_es_Salaam")
+    late_arrival = datetime(2026, 8, 31, 12, 30, tzinfo=campus)
+    tuesday_late = datetime(2026, 9, 1, 12, 30, tzinfo=campus)
+    from app.services.report_service import record_was_late
+
+    assert record_was_late("LATE", late_arrival, official, monday) is False
+    assert record_was_late("LATE", tuesday_late, official, tuesday) is True

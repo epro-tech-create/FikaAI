@@ -92,7 +92,6 @@ async def register_student(
             membership_id=payload.membership_id,
             registration_device_hash=device_hash,
             registration_ip=registration_ip,
-            course_of_study="Industrial Practical Training - Cybersecurity",
             status=StudentStatus.ACTIVE,
         )
         db.add(student)

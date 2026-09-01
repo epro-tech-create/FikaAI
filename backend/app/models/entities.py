@@ -1,7 +1,7 @@
 """SQLAlchemy 2.0 entities for the CCD-Attendance student-attendance MVP.
 
 Tables (UUID PKs, FKs, indexes, unique constraints):
-    users, students, instructors, courses, instructor_course_assignments,
+    users, students, instructors,
     practical_locations, attendance_sessions, face_enrollments,
     location_verifications, face_verifications, attendance_records, audit_logs
 """
@@ -123,7 +123,6 @@ class Student(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     membership_id: Mapped[str | None] = mapped_column(String(30))
     registration_device_hash: Mapped[str | None] = mapped_column(String(64))
     registration_ip: Mapped[str | None] = mapped_column(String(45))
-    course_of_study: Mapped[str | None] = mapped_column(String(120))
     year_of_study: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[StudentStatus] = mapped_column(
         _enum(StudentStatus, "student_status"), nullable=False, default=StudentStatus.ACTIVE
@@ -148,13 +147,6 @@ class Student(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
 
-class Course(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    __tablename__ = "courses"
-
-    code: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-
-
 class Instructor(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "instructors"
 
@@ -163,21 +155,6 @@ class Instructor(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     user: Mapped[User] = relationship(lazy="joined")
-
-
-class InstructorCourseAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    __tablename__ = "instructor_course_assignments"
-    __table_args__ = (UniqueConstraint("instructor_id", "course_id", name="uq_instructor_course"),)
-
-    instructor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("instructors.id", ondelete="CASCADE"), nullable=False
-    )
-    course_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
-    )
-
-    instructor: Mapped[Instructor] = relationship(lazy="joined")
-    course: Mapped[Course] = relationship(lazy="joined")
 
 
 class PracticalLocation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -198,9 +175,6 @@ class PracticalLocation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class AttendanceSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "attendance_sessions"
 
-    course_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="RESTRICT"), nullable=True
-    )
     instructor_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("instructors.id", ondelete="RESTRICT"), nullable=True
     )
@@ -220,7 +194,6 @@ class AttendanceSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     status: Mapped[SessionStatus] = mapped_column(_enum(SessionStatus, "session_status"), nullable=False)
     is_automatic: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
 
-    course: Mapped[Course | None] = relationship(lazy="joined")
     instructor: Mapped[Instructor | None] = relationship(lazy="joined")
     location: Mapped[PracticalLocation] = relationship(lazy="joined")
 

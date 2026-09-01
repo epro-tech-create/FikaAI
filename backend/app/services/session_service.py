@@ -101,8 +101,6 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
                 location.is_active = True
 
             if existing is not None:
-                existing.course_id = None
-                existing.course = None  # avoid detached lazy load
                 existing.instructor_id = None
                 existing.instructor = None
                 existing.location_id = location.id
@@ -126,7 +124,6 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
                 return existing
 
             session = AttendanceSession(
-                course_id=None,
                 instructor_id=None,
                 location_id=location.id,
                 location=location,

@@ -122,7 +122,6 @@ class StudentAdminCreateRequest(CamelModel):
     registration_number: str = Field(min_length=3, max_length=50)
     membership_id: str | None = Field(default=None, max_length=30)
     password: str = Field(min_length=8, max_length=200)
-    course_of_study: str | None = Field(default=None, max_length=120)
     year_of_study: int | None = Field(default=None, ge=1, le=20)
     is_active: bool = True
 
@@ -139,7 +138,6 @@ class StudentAdminUpdateRequest(CamelModel):
     registration_number: str = Field(default=None, min_length=3, max_length=50)
     membership_id: str | None = Field(default=None, max_length=30)
     password: str = Field(default=None, min_length=8, max_length=200)
-    course_of_study: str | None = Field(default=None, max_length=120)
     year_of_study: int | None = Field(default=None, ge=1, le=20)
     is_active: bool = None
 
@@ -159,29 +157,6 @@ class InstructorUpdateRequest(CamelModel):
     _normalize_name = field_validator("full_name")(InstructorCreateRequest.normalize_name.__func__)
     _normalize_email = field_validator("email")(InstructorCreateRequest.normalize_email.__func__)
     _validate_password = field_validator("password")(InstructorCreateRequest.validate_password_strength.__func__)
-
-
-class CourseCreateRequest(CamelModel):
-    code: str = Field(min_length=1, max_length=30)
-    title: str = Field(min_length=1, max_length=200)
-
-    @field_validator("code")
-    @classmethod
-    def normalize_code(cls, value: str) -> str:
-        return "".join(value.upper().split())
-
-    @field_validator("title")
-    @classmethod
-    def normalize_title(cls, value: str) -> str:
-        return " ".join(value.strip().split())
-
-
-class CourseUpdateRequest(CamelModel):
-    code: str = Field(default=None, min_length=1, max_length=30)
-    title: str = Field(default=None, min_length=1, max_length=200)
-
-    _normalize_code = field_validator("code")(CourseCreateRequest.normalize_code.__func__)
-    _normalize_title = field_validator("title")(CourseCreateRequest.normalize_title.__func__)
 
 
 class TokenPairResponse(CamelModel):
@@ -207,8 +182,6 @@ class MeResponse(CamelModel):
 class ActiveSessionResponse(CamelModel):
     session_id: uuid.UUID
     title: str
-    course_code: str | None
-    course_title: str | None
     instructor_id: uuid.UUID | None
     instructor_name: str | None
     location_name: str
@@ -241,8 +214,6 @@ class StudentSummaryResponse(CamelModel):
     membership_id: str | None = None
     status: str
     current_session_id: uuid.UUID | None = None
-    course_code: str | None = None
-    course_title: str | None = None
     location_name: str | None = None
     location_address: str | None = None
     permitted_radius_meters: float | None = None
@@ -390,7 +361,6 @@ class MessageResponse(CamelModel):
 
 # ----------------------------------------------------- management portals
 class SessionCreateRequest(CamelModel):
-    course_id: uuid.UUID
     instructor_id: uuid.UUID | None = None
     location_id: uuid.UUID
     title: str = Field(min_length=1, max_length=200)
@@ -436,9 +406,6 @@ class SessionCreateRequest(CamelModel):
 
 class SessionResponse(CamelModel):
     id: uuid.UUID
-    course_id: uuid.UUID | None
-    course_code: str | None
-    course_title: str | None
     instructor_id: uuid.UUID | None
     instructor_name: str | None
     location_id: uuid.UUID

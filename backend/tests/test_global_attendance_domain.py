@@ -13,15 +13,17 @@ from app.services.session_service import CampusClock, classify_check_in, find_ac
 def test_domain_metadata_has_no_class_or_enrollment_tables():
     assert "class_groups" not in Base.metadata.tables
     assert "student_class_enrollments" not in Base.metadata.tables
+    assert "courses" not in Base.metadata.tables
+    assert "instructor_course_assignments" not in Base.metadata.tables
 
 
-def test_session_metadata_supports_course_independent_automatic_rows():
+def test_session_metadata_supports_automatic_daily_rows():
     table = Base.metadata.tables["attendance_sessions"]
     columns = table.columns
 
     assert "class_group_id" not in columns
+    assert "course_id" not in columns
     assert {
-        "course_id",
         "instructor_id",
         "official_start",
         "expected_end",
@@ -30,7 +32,6 @@ def test_session_metadata_supports_course_independent_automatic_rows():
         "instructions",
         "is_automatic",
     } <= set(columns.keys())
-    assert columns.course_id.nullable
     assert columns.instructor_id.nullable
     assert not columns.is_automatic.nullable
     assert "fk_session_instructor_course_assignment" not in {
@@ -117,7 +118,6 @@ async def test_active_session_lookup_creates_fixed_daily_session(monkeypatch):
     assert isinstance(session, AttendanceSession)
     assert session.title == "Daily RAFIC Attendance"
     assert session.session_date == date(2026, 8, 25)
-    assert session.course_id is None
     assert session.instructor_id is None
     assert session.is_automatic is True
     assert session.check_in_open.strftime("%H:%M") == "08:00"

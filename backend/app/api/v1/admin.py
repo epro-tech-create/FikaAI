@@ -18,7 +18,6 @@ from app.models.entities import (
     AttendanceRecord,
     AttendanceSession,
     AuditLog,
-    Course,
     FaceEnrollment,
     Instructor,
     PracticalLocation,
@@ -28,8 +27,6 @@ from app.models.entities import (
     UserRole,
 )
 from app.schemas import (
-    CourseCreateRequest,
-    CourseUpdateRequest,
     InstructorCreateRequest,
     InstructorUpdateRequest,
     SessionResponse,
@@ -49,9 +46,6 @@ router = APIRouter(
 def session_response(session: AttendanceSession) -> SessionResponse:
     return SessionResponse(
         id=session.id,
-        course_id=session.course_id,
-        course_code=session.course.code if session.course else None,
-        course_title=session.course.title if session.course else None,
         instructor_id=session.instructor_id,
         instructor_name=session.instructor.user.full_name if session.instructor else None,
         location_id=session.location_id,
@@ -129,7 +123,6 @@ async def dashboard(db: AsyncSession = Depends(get_db)) -> dict:
         "timezone": settings.campus_timezone,
         "students": await _count(db, Student),
         "instructors": await _count(db, Instructor),
-        "courses": await _count(db, Course),
         "attendanceRecords": await _count(db, AttendanceRecord),
         "arrivalsToday": len(records),
         "departuresToday": sum(record.check_out_at is not None for record in records),
@@ -164,7 +157,6 @@ def _student_response(student: Student) -> dict:
         "email": student.user.email,
         "membershipId": student.membership_id,
         "registrationNumber": student.registration_number,
-        "courseOfStudy": student.course_of_study,
         "yearOfStudy": student.year_of_study,
         "status": student.status.value,
         "isActive": student.user.is_active,
@@ -190,7 +182,6 @@ async def create_student(
         user=user,
         registration_number=payload.registration_number,
         membership_id=payload.membership_id,
-        course_of_study=payload.course_of_study,
         year_of_study=payload.year_of_study,
         status=StudentStatus.ACTIVE if payload.is_active else StudentStatus.INACTIVE,
     )
@@ -229,7 +220,7 @@ async def update_student(
             setattr(student.user, field, values[field])
     if "password" in values:
         student.user.password_hash = hash_password(values["password"])
-    for field in ("registration_number", "membership_id", "course_of_study", "year_of_study"):
+    for field in ("registration_number", "membership_id", "year_of_study"):
         if field in values:
             setattr(student, field, values[field])
     if "is_active" in values:
@@ -404,89 +395,6 @@ async def delete_instructor(
     except IntegrityError as exc:
         await db.rollback()
         raise ApiError(ErrorCode.VALIDATION_ERROR, "Instructor is referenced by an attendance session.", 409) from exc
-    return Response(status_code=204)
-
-
-@router.get("/courses", response_model=None)
-async def list_courses(db: AsyncSession = Depends(get_db)) -> list[dict]:
-    courses = (await db.execute(select(Course).order_by(Course.code))).scalars().all()
-    return [{"id": item.id, "code": item.code, "title": item.title, "createdAt": item.created_at} for item in courses]
-
-
-@router.post("/courses", response_model=None, status_code=201)
-async def create_course(
-    payload: CourseCreateRequest,
-    request: Request,
-    admin: User = Depends(require_roles("admin")),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    course = Course(code=payload.code, title=payload.title)
-    db.add(course)
-    try:
-        await db.flush()
-        db.add(AuditLog(
-            actor_user_id=admin.id, action="course_created", entity_type="course",
-            entity_id=course.id, details={"code": course.code},
-            ip_address=request.client.host if request.client else None,
-        ))
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "A course already uses this code.", 409) from exc
-    return {"id": course.id, "code": course.code, "title": course.title, "createdAt": course.created_at}
-
-
-@router.patch("/courses/{course_id}", response_model=None)
-async def update_course(
-    course_id: uuid.UUID,
-    payload: CourseUpdateRequest,
-    request: Request,
-    admin: User = Depends(require_roles("admin")),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    course = await db.get(Course, course_id)
-    if course is None:
-        raise ApiError(ErrorCode.NOT_FOUND, "Course not found.", 404)
-    values = payload.model_dump(exclude_unset=True)
-    for field, value in values.items():
-        setattr(course, field, value)
-    try:
-        await db.flush()
-        db.add(AuditLog(
-            actor_user_id=admin.id, action="course_updated", entity_type="course",
-            entity_id=course.id, details={"fields": sorted(values)},
-            ip_address=request.client.host if request.client else None,
-        ))
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "A course already uses this code.", 409) from exc
-    return {"id": course.id, "code": course.code, "title": course.title, "createdAt": course.created_at}
-
-
-@router.delete("/courses/{course_id}", status_code=204)
-async def delete_course(
-    course_id: uuid.UUID,
-    request: Request,
-    admin: User = Depends(require_roles("admin")),
-    db: AsyncSession = Depends(get_db),
-) -> Response:
-    course = await db.get(Course, course_id)
-    if course is None:
-        raise ApiError(ErrorCode.NOT_FOUND, "Course not found.", 404)
-    try:
-        db.add(AuditLog(
-            actor_user_id=admin.id, action="course_deleted", entity_type="course",
-            entity_id=course.id, details={"code": course.code},
-            ip_address=request.client.host if request.client else None,
-        ))
-        await db.flush()
-        await db.delete(course)
-        await db.flush()
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "Course is referenced by an attendance session.", 409) from exc
     return Response(status_code=204)
 
 
