@@ -190,7 +190,7 @@ export default function AttendancePage() {
       introText={introText}
       actionLabel={enrolled ? actionLabel : 'Enrol Face ID First'}
       successTitle={record?.status==='CHECKED_OUT'?'Checked out!':record?.status==='LATE'?'You are late':'You arrived early'}
-      successText={record?.status==='CHECKED_OUT'?'Your live face matched the encrypted profile successfully.':record?.status==='LATE'?'Your arrival is verified. Official start is 11:00, so this check-in is late.':'You arrived before 11:00, so this check-in is early.'}
+      successText={record?.status==='CHECKED_OUT'?'Your live face matched the encrypted profile successfully.':record?.status==='LATE'?'Your arrival is verified. Official start is 09:30, so this check-in is late.':'You arrived before 09:30, so this check-in is early.'}
       details={[
         {label:'Student',value:summary?.fullName||'Student'},
         {label:'Student ID',value:displayMembershipId(summary || {})},

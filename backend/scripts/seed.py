@@ -165,10 +165,10 @@ async def main() -> None:
         active.title = f"Daily RAFIC Attendance - {today.isoformat()}"
         active.session_date = today
         active.check_in_open = time(8, 0)
-        active.official_start = time(11, 0)
-        active.check_in_close = time(14, 0)
-        active.expected_end = time(14, 0)
-        active.check_out_close = time(16, 0)
+        active.official_start = time(9, 30)
+        active.check_in_close = time(15, 0)
+        active.expected_end = time(15, 0)
+        active.check_out_close = time(17, 0)
         active.late_threshold_minutes = 0
         active.permitted_radius_meters = location.radius_meters
         active.instructions = "Complete face and location verification to record attendance."

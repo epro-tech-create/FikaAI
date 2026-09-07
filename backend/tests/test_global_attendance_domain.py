@@ -121,10 +121,10 @@ async def test_active_session_lookup_creates_fixed_daily_session(monkeypatch):
     assert session.instructor_id is None
     assert session.is_automatic is True
     assert session.check_in_open.strftime("%H:%M") == "08:00"
-    assert session.official_start.strftime("%H:%M") == "11:00"
-    assert session.check_in_close.strftime("%H:%M") == "14:00"
-    assert session.expected_end.strftime("%H:%M") == "14:00"
-    assert session.check_out_close.strftime("%H:%M") == "16:00"
+    assert session.official_start.strftime("%H:%M") == "09:30"
+    assert session.check_in_close.strftime("%H:%M") == "15:00"
+    assert session.expected_end.strftime("%H:%M") == "15:00"
+    assert session.check_out_close.strftime("%H:%M") == "17:00"
     assert session.late_threshold_minutes == 0
     assert session.permitted_radius_meters == 100
     assert session.location.name == "DIT RAFIC Building"
@@ -139,24 +139,24 @@ def automatic_session_window():
         {
             "session_date": date(2026, 8, 25),
             "check_in_open": datetime.strptime("08:00", "%H:%M").time(),
-            "check_in_close": datetime.strptime("14:00", "%H:%M").time(),
-            "expected_end": datetime.strptime("14:00", "%H:%M").time(),
-            "check_out_close": datetime.strptime("16:00", "%H:%M").time(),
+            "check_in_close": datetime.strptime("15:00", "%H:%M").time(),
+            "expected_end": datetime.strptime("15:00", "%H:%M").time(),
+            "check_out_close": datetime.strptime("17:00", "%H:%M").time(),
         },
     )()
 
 
-def test_check_in_and_checkout_are_allowed_at_two_pm():
+def test_check_in_and_checkout_are_allowed_at_three_pm():
     session = automatic_session_window()
-    clock = CampusClock(datetime.fromisoformat("2026-08-25T14:00:00+03:00"))
+    clock = CampusClock(datetime.fromisoformat("2026-08-25T15:00:00+03:00"))
 
     validate_window(session, "check_in", clock)
     validate_window(session, "check_out", clock)
 
 
-def test_check_in_is_rejected_after_two_pm():
+def test_check_in_is_rejected_after_three_pm():
     session = automatic_session_window()
-    clock = CampusClock(datetime.fromisoformat("2026-08-25T14:00:01+03:00"))
+    clock = CampusClock(datetime.fromisoformat("2026-08-25T15:00:01+03:00"))
 
     with pytest.raises(ApiError) as error:
         validate_window(session, "check_in", clock)
@@ -164,9 +164,9 @@ def test_check_in_is_rejected_after_two_pm():
     assert error.value.code == ErrorCode.CHECK_IN_CLOSED
 
 
-def test_checkout_is_rejected_before_two_pm():
+def test_checkout_is_rejected_before_three_pm():
     session = automatic_session_window()
-    clock = CampusClock(datetime.fromisoformat("2026-08-25T13:59:59+03:00"))
+    clock = CampusClock(datetime.fromisoformat("2026-08-25T14:59:59+03:00"))
 
     with pytest.raises(ApiError) as error:
         validate_window(session, "check_out", clock)
@@ -174,17 +174,17 @@ def test_checkout_is_rejected_before_two_pm():
     assert error.value.code == ErrorCode.CHECKOUT_TOO_EARLY
 
 
-def test_checkout_is_allowed_at_four_pm_boundary():
+def test_checkout_is_allowed_at_five_pm_boundary():
     validate_window(
         automatic_session_window(),
         "check_out",
-        CampusClock(datetime.fromisoformat("2026-08-25T16:00:00+03:00")),
+        CampusClock(datetime.fromisoformat("2026-08-25T17:00:00+03:00")),
     )
 
 
-def test_checkout_is_rejected_after_four_pm():
+def test_checkout_is_rejected_after_five_pm():
     session = automatic_session_window()
-    clock = CampusClock(datetime.fromisoformat("2026-08-25T16:00:01+03:00"))
+    clock = CampusClock(datetime.fromisoformat("2026-08-25T17:00:01+03:00"))
 
     with pytest.raises(ApiError) as error:
         validate_window(session, "check_out", clock)
@@ -199,8 +199,8 @@ def test_window_rejects_a_different_session_date():
         {
             "session_date": date(2026, 8, 25),
             "check_in_open": datetime.strptime("08:00", "%H:%M").time(),
-            "check_in_close": datetime.strptime("14:00", "%H:%M").time(),
-            "expected_end": datetime.strptime("14:00", "%H:%M").time(),
+            "check_in_close": datetime.strptime("15:00", "%H:%M").time(),
+            "expected_end": datetime.strptime("15:00", "%H:%M").time(),
             "check_out_close": datetime.strptime("12:00", "%H:%M").time(),
         },
     )()
@@ -218,15 +218,15 @@ def arrival_session():
         (),
         {
             "session_date": date(2026, 8, 25),
-            "official_start": datetime.strptime("11:00", "%H:%M").time(),
+            "official_start": datetime.strptime("09:30", "%H:%M").time(),
             "late_threshold_minutes": 0,
         },
     )()
 
 
-def test_check_in_from_nine_to_eleven_is_early_present():
+def test_check_in_from_eight_to_nine_thirty_is_early_present():
     session = arrival_session()
-    for stamp in ("09:00:00", "10:59:59"):
+    for stamp in ("08:00:00", "09:29:59"):
         status, minutes_late = classify_check_in(
             session,
             CampusClock(datetime.fromisoformat(f"2026-08-25T{stamp}+03:00")),
@@ -235,18 +235,18 @@ def test_check_in_from_nine_to_eleven_is_early_present():
         assert minutes_late == 0
 
 
-def test_check_in_from_eleven_is_late():
+def test_check_in_from_nine_thirty_is_late():
     session = arrival_session()
     status, minutes_late = classify_check_in(
         session,
-        CampusClock(datetime.fromisoformat("2026-08-25T11:00:00+03:00")),
+        CampusClock(datetime.fromisoformat("2026-08-25T09:30:00+03:00")),
     )
     assert status == AttendanceStatus.LATE
     assert minutes_late == 0
 
     status, minutes_late = classify_check_in(
         session,
-        CampusClock(datetime.fromisoformat("2026-08-25T11:30:00+03:00")),
+        CampusClock(datetime.fromisoformat("2026-08-25T10:00:00+03:00")),
     )
     assert status == AttendanceStatus.LATE
     assert minutes_late == 30

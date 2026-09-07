@@ -50,7 +50,7 @@ export default function HomePage() {
       date: dateLabel,
       time: checkedIn
         ? `${session?.expectedEnd || '14:00'} – ${session?.checkOutClose || '16:00'}`
-        : `${session?.checkInOpen || '08:00'} – ${session?.checkInClose || '14:00'}`,
+        : `${session?.checkInOpen || '08:00'} – ${session?.checkInClose || '15:00'}`,
       title: checkedIn ? 'Check-out window' : 'Check-in window',
       meta: 'Venue QR + GPS',
     },

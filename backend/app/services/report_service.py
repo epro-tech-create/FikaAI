@@ -74,7 +74,7 @@ def arrival_was_late(
     session_date: date,
     late_threshold_minutes: int = 0,
 ) -> bool:
-    """True if the student arrived at or after official start (11:00 by default)."""
+    """True if the student arrived at or after official start (09:30 by default)."""
     if check_in_at is None:
         return False
     local = check_in_at.astimezone(settings.campus_tz) if check_in_at.tzinfo else check_in_at.replace(tzinfo=settings.campus_tz)

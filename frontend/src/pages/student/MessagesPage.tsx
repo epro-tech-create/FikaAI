@@ -6,7 +6,7 @@ type Msg = { id: string; title: string; body: string; time: string; unread?: boo
 export default function MessagesPage() {
   const [msgs, setMsgs] = useState<Msg[]>([
     { id: '1', title: 'Welcome to CCD-Attendance', body: 'Your QR for IPT is available in RAFIC. Scan to check in — same QR all day.', time: 'Today 08:00', unread: true },
-    { id: '2', title: 'Attendance hours', body: 'Check-in 08:00–14:00. Arrive 09:00–11:00 and you are early. From 11:00 you are late. Check-out 14:00–16:00.', time: 'Today 08:05' },
+    { id: '2', title: 'Attendance hours', body: 'Check-in 08:00–15:00. Arrive 08:00–09:30 and you are early. From 09:30 you are late. Check-out 15:00–17:00.', time: 'Today 08:05' },
     { id: '3', title: 'GPS tip', body: 'Allow precise location when prompted — we verify inside 100 m of RAFIC.', time: 'Yesterday' },
   ])
   useEffect(() => { api.get('/student/messages').then(r => { if (Array.isArray(r.data)) setMsgs(r.data) }).catch(() => {}) }, [])

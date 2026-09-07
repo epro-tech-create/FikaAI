@@ -201,8 +201,8 @@ export default function AutoCheckInPage() {
                 ? (isOut
                   ? 'Well done — your departure is verified and saved.'
                   : isLate
-                    ? 'Your arrival is verified. Official start is 11:00, so this check-in is late.'
-                    : 'Well done — you arrived early. Official start is 11:00.')
+                    ? 'Your arrival is verified. Official start is 09:30, so this check-in is late.'
+                    : 'Well done — you arrived early. Official start is 09:30.')
                 : 'No further action needed for this session.'}
             </p>
             <div className="scan-details auto-checkin-details">

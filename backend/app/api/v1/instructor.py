@@ -142,7 +142,7 @@ async def venue_qr(
         qr_data="VENUE_CODE_IN_ROOM",
         code_hint=code_hint,
         expires_at=None,
-        message="Static 8-char venue code for entire IPT — scan the QR displayed in the RAFIC room. Check-in 08:00-14:00, check-out 14:00-16:00.",
+        message="Static 8-char venue code for entire IPT — scan the QR displayed in the RAFIC room. Check-in 08:00-15:00, check-out 15:00-17:00.",
     )
 
 
