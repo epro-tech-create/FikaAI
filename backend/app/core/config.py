@@ -26,11 +26,13 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://fikaai:fikaai_dev@localhost:5433/fikaai_db"
 
     # Security
+    env: str = "development"  # development | production
     jwt_secret: str = "dev-insecure-jwt-secret-change-me-please-1234567890abcdef"
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
     embedding_encryption_key: str = ""
+    trusted_hosts: str = ""  # comma-separated, e.g. attendance.cyberclubdit.org,admin-attendance.cyberclubdit.org
 
     # Face AI
     face_embedding_provider: str = "insightface"  # insightface | fake (dev-only)
@@ -92,6 +94,34 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def trusted_hosts_list(self) -> list[str] | None:
+        if not self.trusted_hosts.strip():
+            return None
+        return [h.strip().lower() for h in self.trusted_hosts.split(",") if h.strip()]
+
+    @property
+    def is_production(self) -> bool:
+        return self.env.lower() == "production"
+
+    def validate_production(self) -> None:
+        insecure_jwt = "dev-insecure-jwt-secret-change-me-please-1234567890abcdef"
+        if self.is_production:
+            if self.jwt_secret == insecure_jwt or len(self.jwt_secret) < 32:
+                raise RuntimeError("JWT_SECRET is insecure in production: set a random 32+ char secret (ENV=production)")
+            if self.jwt_algorithm != "HS256":
+                raise RuntimeError(f"JWT_ALGORITHM must be HS256 in production, got {self.jwt_algorithm}")
+            if not self.embedding_encryption_key:
+                logger.warning("EMBEDDING_ENCRYPTION_KEY is empty in production - embeddings will be ephemeral!")
+            if self.face_embedding_provider == "fake":
+                raise RuntimeError("FACE_EMBEDDING_PROVIDER=fake forbidden in production")
+            if self.fake_face_always_match:
+                logger.warning("FAKE_FACE_ALWAYS_MATCH=true in production - must be false")
+            if not self.gps_verification_enabled:
+                logger.warning("GPS_VERIFICATION_ENABLED=false in production - geofence bypassed!")
+            if not self.venue_static_code_hash or len(self.venue_static_code_hash) != 64:
+                logger.warning("VENUE_STATIC_CODE_HASH missing/invalid - venue proof disabled")
 
     @property
     def campus_tz(self) -> ZoneInfo:

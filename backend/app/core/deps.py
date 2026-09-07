@@ -23,8 +23,19 @@ from app.models.entities import Instructor, Student, StudentStatus, User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
-# Rate limiter keyed by client IP (behind proxies set FORWARDED_ALLOW_IPS / X-Forwarded-For handling)
-limiter = Limiter(key_func=get_remote_address)
+
+def _get_ip_key(request: Request) -> str:
+    # Trust only X-Real-IP set by our nginx (Caddy already strips client XFF).
+    # Fallback to get_remote_address for dev direct.
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        # Use only the trusted header, ignore client-supplied X-Forwarded-For
+        return real_ip.strip()
+    return get_remote_address(request)
+
+
+# Rate limiter keyed by client IP - uses X-Real-IP from trusted nginx proxy
+limiter = Limiter(key_func=_get_ip_key)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

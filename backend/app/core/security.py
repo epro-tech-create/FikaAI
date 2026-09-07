@@ -48,9 +48,19 @@ def create_refresh_token(user_id: uuid.UUID, role: str) -> str:
     return _create_token(str(user_id), role, "refresh", timedelta(days=settings.refresh_token_expire_days))
 
 
+_ALLOWED_ALGORITHMS = ["HS256"]
+
 def decode_token(token: str, expected_type: str) -> dict[str, Any]:
+    # Enforce HS256 only - reject none/RS* injection via config
+    if settings.jwt_algorithm not in _ALLOWED_ALGORITHMS:
+        raise ApiError(ErrorCode.TOKEN_INVALID, "Invalid authentication token.", 401)
     try:
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=_ALLOWED_ALGORITHMS,
+            options={"require": ["sub", "type", "exp", "iat", "jti"], "verify_aud": False},
+        )
     except jwt.ExpiredSignatureError as exc:
         raise ApiError(ErrorCode.TOKEN_EXPIRED, "Your session has expired. Please log in again.", 401) from exc
     except jwt.InvalidTokenError as exc:

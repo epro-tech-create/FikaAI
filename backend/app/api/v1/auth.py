@@ -32,15 +32,19 @@ def _registration_device_hash(device_id: uuid.UUID) -> str:
 
 
 def _client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for", "")
-    candidates = [part.strip() for part in forwarded.split(",") if part.strip()]
-    if request.client:
-        candidates.append(request.client.host)
-    for candidate in candidates:
+    # Trust only X-Real-IP from our nginx; ignore client-supplied X-Forwarded-For
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
         try:
-            return ipaddress.ip_address(candidate).compressed
+            return ipaddress.ip_address(real_ip.strip()).compressed
         except ValueError:
-            continue
+            pass
+    # Fallback for dev direct (no proxy) - use request.client.host only
+    if request.client:
+        try:
+            return ipaddress.ip_address(request.client.host).compressed
+        except ValueError:
+            return request.client.host
     return None
 
 
@@ -142,7 +146,8 @@ async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depe
 
 
 @router.post("/refresh", response_model=TokenPairResponse)
-async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -> TokenPairResponse:
+@limiter.limit(settings.rate_limit_login)
+async def refresh(payload: RefreshRequest, request: Request, db: AsyncSession = Depends(get_db)) -> TokenPairResponse:
     claims = decode_token(payload.refresh_token, expected_type="refresh")
     try:
         user_id = uuid.UUID(claims["sub"])

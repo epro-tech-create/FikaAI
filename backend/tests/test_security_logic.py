@@ -111,13 +111,20 @@ def test_registration_device_hash_is_stable_and_non_reversible():
 
 
 def test_registration_uses_forwarded_client_ip():
+    # Secure: trust only X-Real-IP from nginx, ignore client-supplied X-Forwarded-For
     request = Request({
+        "type": "http",
+        "headers": [(b"x-real-ip", b"203.0.113.9")],
+        "client": ("10.0.0.3", 1234),
+    })
+    assert _client_ip(request) == "203.0.113.9"
+    # X-Forwarded-For alone is NOT trusted - fallback to client.host
+    spoofed = Request({
         "type": "http",
         "headers": [(b"x-forwarded-for", b"203.0.113.9, 10.0.0.2")],
         "client": ("10.0.0.3", 1234),
     })
-
-    assert _client_ip(request) == "203.0.113.9"
+    assert _client_ip(spoofed) == "10.0.0.3"
 
 
 def test_student_device_guard_is_a_unique_partial_index():

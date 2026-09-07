@@ -68,16 +68,18 @@ The compose backend downloads models on first startup. With Podman, use a
 Compose-compatible wrapper or run PostgreSQL separately and use the native
 setup above.
 
-For a live HTTPS deployment on a VPS and domain, use the hardened production
-stack documented in [`DEPLOY.md`](DEPLOY.md). Do not expose the development
-Compose stack publicly; browsers require HTTPS for camera access.
+For a live HTTPS deployment on a VPS and domain, use the hardened production 
+stack documented in [`DEPLOY.md`](DEPLOY.md). Do not expose the development  
+Compose stack publicly; browsers require HTTPS for camera access.      
+
+
 
 ## First administrator
 
 After migration:
 
 ```bash
-python backend/scripts/bootstrap_admin.py --email admin@example.com --full-name "First Admin"
+python backend/scripts/bootstrap_admin.py --email admin@example.com --full-name "First Admin" N
 ```
 
 ## Privacy and calibration
@@ -86,3 +88,7 @@ Embeddings are encrypted at rest, raw images are processed in memory, and
 embeddings are never returned by APIs. Calibrate `FACE_MATCH_THRESHOLD` with
 genuine and impostor samples before deployment. See
 `docs/THRESHOLD_CALIBRATION.md`.
+
+
+
+

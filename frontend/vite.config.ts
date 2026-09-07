@@ -14,14 +14,16 @@ export default defineConfig(({ mode }) => {
           const ga = process.env.VITE_GA_MEASUREMENT_ID || ''
           const verif = process.env.VITE_GOOGLE_SITE_VERIFICATION || ''
           let out = html
+          const escapeAttr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
           if (ga && /^G-[A-Z0-9]{4,}$/.test(ga)) {
+            const safeGa = escapeAttr(ga)
             out = out.replace('content="REPLACE_WITH_GOOGLE_VERIFICATION_TOKEN"', `content="REPLACE_WITH_GOOGLE_VERIFICATION_TOKEN"`) // keep placeholder safe
-            // Only replace actual gtag script/src and config, leave instructional comments intact
-            out = out.replace('src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"', `src="https://www.googletagmanager.com/gtag/js?id=${ga}"`)
-            out = out.replace("gtag('config', 'G-XXXXXXXXXX'", `gtag('config', '${ga}'`)
+            out = out.replace('src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"', `src="https://www.googletagmanager.com/gtag/js?id=${safeGa}"`)
+            out = out.replace("gtag('config', 'G-XXXXXXXXXX'", `gtag('config', '${safeGa}'`)
           }
           if (verif && verif !== 'REPLACE_WITH_GOOGLE_VERIFICATION_TOKEN') {
-            out = out.replace('content="REPLACE_WITH_GOOGLE_VERIFICATION_TOKEN"', `content="${verif}"`)
+            const safeVerif = escapeAttr(verif)
+            out = out.replace('content="REPLACE_WITH_GOOGLE_VERIFICATION_TOKEN"', `content="${safeVerif}"`)
           }
           return out
         },

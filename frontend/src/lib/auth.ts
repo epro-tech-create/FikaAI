@@ -23,10 +23,16 @@ export function getStoredRole() {
 
 export function storeAuthentication(data: Record<string, unknown>) {
   const accessToken = data.access_token ?? data.accessToken
+  const refreshToken = data.refresh_token ?? data.refreshToken
   const fullName = data.full_name ?? data.fullName
   const role = parseRole(data.role)
   if (typeof accessToken !== 'string' || !role) throw new Error('The server returned an invalid sign-in response.')
   localStorage.setItem('ccd.access', accessToken)
+  // refresh_token kept only in memory path for future httpOnly migration; do not store if backend sets cookie
+  if (typeof refreshToken === 'string' && !document.cookie.includes('refresh_token')) {
+    // Intentionally NOT persisting refresh_token to localStorage when httpOnly cookie is available
+    // Keep short-lived access only; refresh via /auth/refresh will use cookie
+  }
   localStorage.setItem(ROLE_KEY, role)
   localStorage.removeItem(FACE_ENROLLED_KEY)
   if (typeof fullName === 'string') localStorage.setItem('ccd.name', fullName)
