@@ -10,6 +10,7 @@ export default function StudentLayout() {
   const nav = useNavigate()
   const [session, setSession] = useState<any>(null)
   const [unseen, setUnseen] = useState(0)
+  const [menuOpen, setMenuOpen] = useState(false)
   function signOut() { clearAuthentication(); nav('/login', { replace: true }) }
   useEffect(() => {
     api.get('/student/attendance/active-session').then(r => setSession(r.data)).catch(() => {})
@@ -18,15 +19,18 @@ export default function StudentLayout() {
     const stop = startReminderLoop()
     window.addEventListener('ccd-reminders', upd)
     window.addEventListener('storage', upd)
-    // poll reminders via getReminders
     const id = window.setInterval(upd, 5000)
     return () => { stop(); window.removeEventListener('ccd-reminders', upd); window.clearInterval(id) }
   }, [])
-  // also count API messages? simple local
   useEffect(() => {
     const id = window.setInterval(() => setUnseen(getReminders().length ? unseenCount() : 0), 5000)
     return () => window.clearInterval(id)
   }, [])
+  useEffect(() => {
+    if (menuOpen) document.body.classList.add('portal-menu-open')
+    else document.body.classList.remove('portal-menu-open')
+    return () => document.body.classList.remove('portal-menu-open')
+  }, [menuOpen])
   return (
     <div className="app student-shell">
       <header className="student-header">
@@ -34,18 +38,25 @@ export default function StudentLayout() {
           <div className="brand">CCD-<span>Attendance</span></div>
           <ThemeToggle />
         </div>
-        <nav aria-label="Student">
-          <NavLink to="/student/home">Home</NavLink>
-          <NavLink to="/student/attendance">Attendance</NavLink>
-          <NavLink to="/student/history">History</NavLink>
-          <NavLink to="/student/face-enrollment">Face ID</NavLink>
-          <NavLink to="/student/messages">Messages{unseen>0 && <span style={{ marginLeft:6, background:'var(--blue)', color:'white', borderRadius:999, padding:'1px 6px', fontSize:10 }}>{unseen}</span>}</NavLink>
-          <NavLink to="/student/profile">Profile</NavLink>
-          <button className="ghost" type="button" onClick={signOut}>Sign out</button>
+        <button className="student-menu-btn" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)}>
+          <span className="hamburger"><i/><i/><i/></span>
+          {menuOpen ? 'Close' : 'Menu'}
+        </button>
+        <nav aria-label="Student" className={menuOpen ? 'is-open' : ''}>
+          <NavLink to="/student/home" onClick={() => setMenuOpen(false)}>Home</NavLink>
+          <NavLink to="/student/attendance" onClick={() => setMenuOpen(false)}>Attendance</NavLink>
+          <NavLink to="/student/history" onClick={() => setMenuOpen(false)}>History</NavLink>
+          <NavLink to="/student/face-enrollment" onClick={() => setMenuOpen(false)}>Face ID</NavLink>
+          <NavLink to="/student/messages" onClick={() => setMenuOpen(false)}>Messages{unseen>0 && <span className="nav-badge">{unseen}</span>}</NavLink>
+          <NavLink to="/student/profile" onClick={() => setMenuOpen(false)}>Profile</NavLink>
+          <button className="ghost nav-signout" type="button" onClick={signOut}>Sign out</button>
         </nav>
       </header>
-      {session && <div style={{ marginBottom:12 }}><SessionCountdown session={session} /></div>}
-      <Outlet />
+      {menuOpen && <button className="student-scrim" aria-label="Close menu" onClick={() => setMenuOpen(false)} />}
+      {session && <div className="student-session-bar"><SessionCountdown session={session} /></div>}
+      <div className="student-content">
+        <Outlet />
+      </div>
     </div>
   )
 }
