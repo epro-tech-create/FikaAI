@@ -496,6 +496,72 @@ async def list_audit_logs(
     ]
 
 
+@router.delete("/audit-logs/{log_id}", status_code=204)
+async def delete_audit_log(
+    log_id: uuid.UUID,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    log = await db.get(AuditLog, log_id)
+    if log is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Audit log not found.", 404)
+    await db.delete(log)
+    await db.commit()
+    return Response(status_code=204)
+
+
+@router.delete("/audit-logs", status_code=200)
+async def delete_audit_logs_range(
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+    start_date: date | None = Query(default=None, alias="startDate"),
+    end_date: date | None = Query(default=None, alias="endDate"),
+    before: date | None = Query(default=None),
+    after: date | None = Query(default=None),
+) -> dict:
+    """Delete audit logs in a date range. At least one of start_date/end_date/before/after required.
+    Dates are inclusive and interpreted in campus timezone. Use startDate/endDate for range, or before/after for open-ended.
+    """
+    from sqlalchemy import delete
+
+    if not any([start_date, end_date, before, after]):
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide at least one of startDate, endDate, before, after.", 422)
+    # Build range in campus TZ then convert to UTC for comparison (AuditLog.created_at stored UTC)
+    def _day_start(d: date) -> datetime:
+        return datetime.combine(d, datetime.min.time(), tzinfo=settings.campus_tz).astimezone(timezone.utc)
+    def _day_end(d: date) -> datetime:
+        return datetime.combine(d, datetime.max.time(), tzinfo=settings.campus_tz).astimezone(timezone.utc)
+
+    conditions = []
+    if start_date:
+        conditions.append(AuditLog.created_at >= _day_start(start_date))
+    if end_date:
+        conditions.append(AuditLog.created_at <= _day_end(end_date))
+    if after:
+        conditions.append(AuditLog.created_at > _day_end(after))
+    if before:
+        conditions.append(AuditLog.created_at < _day_start(before))
+
+    # Combine with AND
+    from sqlalchemy import and_
+    where_clause = and_(*conditions)
+    result = await db.execute(delete(AuditLog).where(where_clause))
+    await db.commit()
+    deleted = result.rowcount or 0
+    # Audit the bulk delete itself (visible only with includeSelf=true)
+    from app.services.audit_service import audit_detached
+    await audit_detached(
+        action="audit_logs_bulk_deleted",
+        actor_user_id=admin.id,
+        entity_type="audit_log",
+        entity_id=None,
+        details={"deleted": deleted, "startDate": str(start_date) if start_date else None, "endDate": str(end_date) if end_date else None, "before": str(before) if before else None, "after": str(after) if after else None},
+        ip_address=request.client.host if request.client else None,
+    )
+    return {"deleted": deleted}
+
+
 @router.get("/reports/summary", response_model=None)
 async def reports_summary(db: AsyncSession = Depends(get_db)) -> dict:
     status_rows = (await db.execute(
