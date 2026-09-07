@@ -24,6 +24,6 @@ COPY --chown=fikaai:fikaai alembic.ini pyproject.toml start.sh ./
 RUN chmod +x /app/start.sh && mkdir -p /app/models_data && chown -R fikaai:fikaai /app
 USER fikaai
 EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 \
-  CMD python -c "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"8000\")}/health', timeout=3)" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
+  CMD python -c "import os,urllib.request; h=(os.environ.get('TRUSTED_HOSTS','').split(',')[0].strip() or '127.0.0.1'); p=os.environ.get('PORT','8000'); req=urllib.request.Request(f'http://127.0.0.1:{p}/health', headers={'Host': h}); urllib.request.urlopen(req, timeout=3)" || exit 1
 CMD ["/app/start.sh"]

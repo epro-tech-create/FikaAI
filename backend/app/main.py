@@ -80,7 +80,11 @@ def create_app() -> FastAPI:
     # TrustedHost - prevents Host header poisoning; allow explicit hosts + health
     trusted_hosts = settings.trusted_hosts_list
     if trusted_hosts:
-        app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
+        # Docker HEALTHCHECK hits 127.0.0.1:8000/health with Host 127.0.0.1;
+        # internal docker DNS uses `backend`; tests use `testserver`.
+        health_hosts = {"127.0.0.1", "localhost", "backend", "testserver"}
+        allowed = list(set(trusted_hosts) | health_hosts)
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed)
 
     app.add_middleware(SecurityHeadersMiddleware)
 
