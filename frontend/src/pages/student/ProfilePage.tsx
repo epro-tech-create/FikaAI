@@ -4,6 +4,7 @@ import { api } from '../../services/api'
 import { clearAuthentication } from '../../lib/auth'
 import { displayMembershipId, displayRegistration } from '../../lib/studentId'
 import ThemeToggle from '../../components/ThemeToggle'
+import HelpFaq from '../../components/HelpFaq'
 
 export default function ProfilePage() {
   const [summary, setSummary] = useState<any>(null)
@@ -29,7 +30,17 @@ export default function ProfilePage() {
           </div>
           <div style={{display:'flex',gap:10,flexWrap:'wrap',marginTop:14}}>
             <Link to="/student/face-enrollment" className="dash-btn primary">Face enrolment</Link>
+            <Link to="/student/history" className="dash-btn ghost">History</Link>
+            <Link to="/student/messages" className="dash-btn ghost">Messages</Link>
             <button onClick={() => { clearAuthentication(); window.location.href = '/login' }} className="dash-btn ghost">Sign out</button>
+          </div>
+        </article>
+        <article className="content-card" style={{padding:20}}>
+          <h3>Quick actions</h3>
+          <div style={{ display:'grid', gap:8, marginTop:12 }}>
+            <Link to="/student/attendance" style={{ padding:'10px 12px', border:'1px solid var(--line)', borderRadius:10, background:'var(--panel)', textDecoration:'none', color:'var(--text)', display:'flex', justifyContent:'space-between' }}><span>Check in / out</span><span>→</span></Link>
+            <Link to="/student/history" style={{ padding:'10px 12px', border:'1px solid var(--line)', borderRadius:10, background:'var(--panel)', textDecoration:'none', color:'var(--text)', display:'flex', justifyContent:'space-between' }}><span>View history & streak</span><span>→</span></Link>
+            <Link to="/student/face-enrollment" style={{ padding:'10px 12px', border:'1px solid var(--line)', borderRadius:10, background:'var(--panel)', textDecoration:'none', color:'var(--text)', display:'flex', justifyContent:'space-between' }}><span>Manage Face ID</span><span>→</span></Link>
           </div>
         </article>
         <article className="content-card" style={{padding:20}}>
@@ -43,6 +54,9 @@ export default function ProfilePage() {
           </ul>
         </article>
       </section>
+      <div style={{ marginTop:16 }}>
+        <HelpFaq />
+      </div>
     </div>
   )
 }

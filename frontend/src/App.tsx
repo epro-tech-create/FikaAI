@@ -4,6 +4,10 @@ import { api, message } from './services/api'
 import AttendancePage from './pages/student/AttendancePage'
 import AutoCheckInPage from './pages/student/AutoCheckInPage'
 import FaceEnrollmentPage from './pages/student/FaceEnrollmentPage'
+import HistoryPage from './pages/student/HistoryPage'
+import HomePage from './pages/student/HomePage'
+import ProfilePage from './pages/student/ProfilePage'
+import MessagesPage from './pages/student/MessagesPage'
 import LandingPage from './pages/LandingPage'
 import PortalLayout from './components/PortalLayout'
 import DashboardPage from './pages/portal/DashboardPage'
@@ -194,10 +198,14 @@ export default function App({ application }: { application?: Application }) {
       <Route path="/signup" element={<Signup/>}/>
       <Route path="/checkin" element={<CheckInEntry/>}/>
       <Route path="/student" element={<Guard application={app}><StudentLayout/></Guard>}>
-        <Route index element={<Navigate to="attendance" replace/>}/>
+        <Route index element={<Navigate to="home" replace/>}/>
+        <Route path="home" element={<HomePage/>}/>
         <Route path="attendance" element={<AttendancePage/>}/>
+        <Route path="history" element={<HistoryPage/>}/>
         <Route path="checkin" element={<AutoCheckInPage/>}/>
         <Route path="face-enrollment" element={<FaceEnrollmentPage/>}/>
+        <Route path="messages" element={<MessagesPage/>}/>
+        <Route path="profile" element={<ProfilePage/>}/>
       </Route>
     </>}
     {app === 'admin' && (

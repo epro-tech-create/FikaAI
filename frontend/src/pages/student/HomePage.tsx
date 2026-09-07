@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useCampusClock } from '../../hooks/useCampusClock'
 import { campusGreeting, formatCampusDate, formatCampusTime } from '../../lib/campusTime'
+import HelpFaq from '../../components/HelpFaq'
 
 type Msg = { id: string; title: string; body: string; time: string; unread?: boolean }
 
@@ -13,6 +14,7 @@ export default function HomePage() {
   const [record, setRecord] = useState<any>(null)
   const [enrolled, setEnrolled] = useState(false)
   const [msgs, setMsgs] = useState<Msg[]>([])
+  const [streak, setStreak] = useState<any>(null)
 
   useEffect(() => {
     Promise.allSettled([
@@ -21,11 +23,13 @@ export default function HomePage() {
       api.get('/student/attendance/current'),
       api.get('/student/face-enrollment/status'),
       api.get('/student/messages'),
-    ]).then(([s, sess, rec, face, messages]) => {
+      api.get('/student/attendance/streak').catch(() => ({ data: null })),
+    ]).then(([s, sess, rec, face, messages, st]: any) => {
       if (s.status === 'fulfilled') setSummary(s.value.data)
       if (sess.status === 'fulfilled') setSession(sess.value.data)
       if (rec.status === 'fulfilled') setRecord(rec.value.data.record)
       if (face.status === 'fulfilled') setEnrolled(Boolean(face.value.data.enrolled))
+      if (st?.status === 'fulfilled' && st.value?.data) setStreak(st.value.data)
       if (messages.status === 'fulfilled' && Array.isArray(messages.value.data)) setMsgs(messages.value.data.slice(0, 3))
       else setMsgs([
         { id: '1', title: 'Welcome to CCD-Attendance', body: 'Scan the wall QR at RAFIC to check in.', time: 'Today' },
@@ -88,6 +92,13 @@ export default function HomePage() {
           <h1>{campusGreeting(clock)}, {firstName}</h1>
           <p>{checkedIn ? "You're checked in for today's session." : 'Scan the venue QR and verify GPS to mark attendance.'}</p>
           <p>{formatCampusDate(clock)} · {formatCampusTime(clock)}</p>
+          {streak && (
+            <div style={{ marginTop:10, display:'flex', gap:10, flexWrap:'wrap' }}>
+              <span style={{ padding:'6px 10px', borderRadius:999, background:'var(--panel-2)', border:'1px solid var(--line)', fontSize:11 }}><b>{streak.present||0} early</b> · {streak.late||0} late</span>
+              <span style={{ padding:'6px 10px', borderRadius:999, background:'linear-gradient(90deg,#0ea5e933,#0284c733)', border:'1px solid #0ea5e9', fontSize:11 }}>🔥 {streak.streak||0} day streak</span>
+              <span style={{ padding:'6px 10px', borderRadius:999, background:'var(--panel-2)', border:'1px solid var(--line)', fontSize:11 }}>{streak.checkedOut||0} check-outs</span>
+            </div>
+          )}
         </div>
         <Link to="/student/attendance" className="edu-hero-btn">{checkedIn ? 'Check out' : 'Check in'} →</Link>
       </section>
@@ -172,6 +183,9 @@ export default function HomePage() {
             <b>{checkedIn ? 'Check out →' : 'Check in →'}</b>
           </Link>
         </section>
+      </div>
+      <div style={{ marginTop:16 }}>
+        <HelpFaq />
       </div>
     </div>
   )

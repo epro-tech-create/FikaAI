@@ -12,6 +12,7 @@ import { checkoutWindow } from '../../lib/checkout'
 import { campusGreeting, formatCampusDate, formatCampusTime } from '../../lib/campusTime'
 import { displayMembershipId, displayRegistration } from '../../lib/studentId'
 import { readStoredVenueCode, studentCheckinPath } from '../../lib/venueCheckin'
+import HelpFaq from '../../components/HelpFaq'
 
 type Session = {
   sessionId:string
@@ -203,5 +204,8 @@ export default function AttendancePage() {
       onStart={scanFace}
       onReset={reset}
     />
+    <div style={{ marginTop:16 }}>
+      <HelpFaq />
+    </div>
   </div>
 }

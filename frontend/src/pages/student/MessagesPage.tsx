@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../services/api'
+import { getReminders, markSeen } from '../../lib/reminders'
 
 type Msg = { id: string; title: string; body: string; time: string; unread?: boolean }
 
@@ -9,10 +10,28 @@ export default function MessagesPage() {
     { id: '2', title: 'Attendance hours', body: 'Check-in 08:00–15:00. Arrive 08:00–09:30 and you are early. From 09:30 you are late. Check-out 15:00–17:00.', time: 'Today 08:05' },
     { id: '3', title: 'GPS tip', body: 'Allow precise location when prompted — we verify inside 100 m of RAFIC.', time: 'Yesterday' },
   ])
-  useEffect(() => { api.get('/student/messages').then(r => { if (Array.isArray(r.data)) setMsgs(r.data) }).catch(() => {}) }, [])
+  const [reminders, setReminders] = useState(() => getReminders())
+  useEffect(() => {
+    api.get('/student/messages').then(r => { if (Array.isArray(r.data)) setMsgs(r.data) }).catch(() => {})
+    const upd = () => setReminders(getReminders())
+    window.addEventListener('ccd-reminders', upd)
+    return () => window.removeEventListener('ccd-reminders', upd)
+  }, [])
+  useEffect(() => { markSeen() }, [reminders.length])
   return (
     <div>
-      <div className="portal-heading"><div><p>MESSAGES</p><h1>Inbox</h1><span>Updates and receipts.</span></div></div>
+      <div className="portal-heading"><div><p>MESSAGES</p><h1>Inbox</h1><span>Updates and receipts.</span></div><button className="ghost" onClick={() => { localStorage.removeItem('ccd.reminders.v1'); setReminders([]) }}>Clear reminders</button></div>
+      {reminders.length > 0 && (
+        <div className="msg-list" style={{ marginBottom: 16 }}>
+          <h3 style={{ fontSize:12, letterSpacing:1, color:'var(--blue)', margin:'0 0 8px' }}>REMINDERS · IN-APP</h3>
+          {reminders.map(r => (
+            <article key={r.id} className="msg-item unread" style={{ borderLeft:'3px solid var(--blue)' }}>
+              <div className="msg-head"><b>{r.title}</b><span>{new Date(r.time).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</span></div>
+              <p>{r.body}</p>
+            </article>
+          ))}
+        </div>
+      )}
       <div className="msg-list">
         {msgs.map(m => (
           <article key={m.id} className={`msg-item ${m.unread ? 'unread' : ''}`}>
