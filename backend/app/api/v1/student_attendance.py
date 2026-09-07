@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_current_student, get_db, limiter
-from app.models.entities import AttendanceRecord, Student
+from app.core.errors import ApiError, ErrorCode
+from app.models.entities import AttendanceRecord, AttendanceSession, Student
 from app.schemas import (
     ActiveSessionResponse,
     AttendanceRecordResponse,
@@ -242,3 +243,48 @@ async def get_current_attendance(
         time_spent_minutes=record.time_spent_minutes,
     )
     return {"hasRecord": True, "record": dto.model_dump(by_alias=True, mode="json")}
+
+
+@router.get("/history", response_model=None)
+async def student_history(
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+    period: str = Query(default="weekly"),
+    anchor: date | None = Query(default=None),
+):
+    from app.services.report_service import build_attendance_report, parse_period
+    try:
+        selected_period = parse_period(period)
+    except ValueError as exc:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(exc), 422) from exc
+    selected_date = anchor or datetime.now(settings.campus_tz).date()
+    report = await build_attendance_report(db, selected_period, selected_date)
+    # Personal filtered view
+    personal = next((s for s in report.get("students", []) if s.get("registrationNumber") == student.registration_number), None)
+    report["personal"] = personal or {"days": {k:"—" for k in ["Mon","Tue","Wed","Thu","Fri"]}, "daysPresent":0, "lateDays":0}
+    report["rows"] = report.get("rows", [])[:30]
+    return report
+
+
+@router.get("/streak", response_model=None)
+async def student_streak(
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = (await db.execute(
+        select(AttendanceRecord, AttendanceSession)
+        .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
+        .where(AttendanceRecord.student_id == student.id)
+        .order_by(AttendanceSession.session_date.desc())
+    )).all()
+    streak = 0
+    for rec, _ in rows:
+        status = rec.status.value if hasattr(rec.status, "value") else str(rec.status)
+        if status == "PRESENT":
+            streak += 1
+        else:
+            break
+    present = sum(1 for r,_ in rows if (r.status.value if hasattr(r.status, "value") else str(r.status))=="PRESENT")
+    late = sum(1 for r,_ in rows if (r.status.value if hasattr(r.status, "value") else str(r.status))=="LATE")
+    checked_out = sum(1 for r,_ in rows if r.check_out_at is not None)
+    return {"streak": streak, "present": present, "late": late, "checkedOut": checked_out, "total": len(rows)}
