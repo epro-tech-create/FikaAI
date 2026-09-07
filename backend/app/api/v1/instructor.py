@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,15 @@ from app.models.entities import (
     User,
 )
 from app.schemas import SessionResponse, VenueQrResponse
+from app.services.audit_service import audit_detached
 from app.services.report_service import build_attendance_report, parse_period, render_attendance_pdf, weekly_attendance_series
+
+
+def _instructor_ip(request: Request) -> str | None:
+    real = request.headers.get("x-real-ip")
+    if real:
+        return real.strip()
+    return request.client.host if request.client else None
 
 router = APIRouter(prefix="/instructor", tags=["instructor"])
 
@@ -38,6 +46,7 @@ async def _instructor_count(db: AsyncSession, model, instructor_id) -> int:
 
 @router.get("/dashboard", response_model=None)
 async def dashboard(
+    request: Request,
     instructor: Instructor = Depends(get_current_instructor),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -48,6 +57,14 @@ async def dashboard(
         .where(AttendanceSession.session_date == today)
         .order_by(AttendanceRecord.check_in_at)
     )).scalars().all()
+    await audit_detached(
+        action="instructor_dashboard_viewed",
+        actor_user_id=instructor.user_id,
+        entity_type="instructor",
+        entity_id=instructor.id,
+        details={"date": today.isoformat()},
+        ip_address=_instructor_ip(request),
+    )
     return {
         "instructorId": instructor.id,
         "fullName": instructor.user.full_name,
@@ -63,7 +80,8 @@ async def dashboard(
 
 @router.get("/locations", response_model=None)
 async def active_locations(
-    _: Instructor = Depends(get_current_instructor),
+    request: Request,
+    instructor: Instructor = Depends(get_current_instructor),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
     locations = (await db.execute(
@@ -71,6 +89,13 @@ async def active_locations(
         .where(PracticalLocation.is_active.is_(True))
         .order_by(PracticalLocation.name)
     )).scalars().all()
+    await audit_detached(
+        action="instructor_locations_viewed",
+        actor_user_id=instructor.user_id,
+        entity_type="instructor",
+        entity_id=instructor.id,
+        ip_address=_instructor_ip(request),
+    )
     return [
         {
             "id": item.id,
@@ -84,6 +109,7 @@ async def active_locations(
 
 @router.get("/sessions", response_model=list[SessionResponse])
 async def list_sessions(
+    request: Request,
     instructor: Instructor = Depends(get_current_instructor),
     db: AsyncSession = Depends(get_db),
 ) -> list[SessionResponse]:
@@ -92,11 +118,19 @@ async def list_sessions(
         .where(AttendanceSession.instructor_id == instructor.id)
         .order_by(AttendanceSession.session_date.desc(), AttendanceSession.check_in_open)
     )).scalars().all()
+    await audit_detached(
+        action="instructor_sessions_viewed",
+        actor_user_id=instructor.user_id,
+        entity_type="instructor",
+        entity_id=instructor.id,
+        ip_address=_instructor_ip(request),
+    )
     return [session_response(item) for item in sessions]
 
 
 @router.get("/attendance", response_model=None)
 async def attendance_list(
+    request: Request,
     instructor: Instructor = Depends(get_current_instructor),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
@@ -107,6 +141,14 @@ async def attendance_list(
         .join(User, User.id == Student.user_id)
         .order_by(AttendanceRecord.check_in_at.desc())
     )).all()
+    await audit_detached(
+        action="instructor_attendance_viewed",
+        actor_user_id=instructor.user_id,
+        entity_type="instructor",
+        entity_id=instructor.id,
+        details={"records": len(rows)},
+        ip_address=_instructor_ip(request),
+    )
     return [
         {
             "id": record.id,
@@ -129,15 +171,21 @@ async def attendance_list(
 
 @router.get("/venue-qr", response_model=VenueQrResponse)
 async def venue_qr(
+    request: Request,
     instructor: Instructor = Depends(get_current_instructor),
     db: AsyncSession = Depends(get_db),
 ) -> VenueQrResponse:
     if not settings.venue_static_code_hash or len(settings.venue_static_code_hash) != 64:
         from app.core.errors import ApiError, ErrorCode
         raise ApiError(ErrorCode.VENUE_NOT_CONFIGURED, "Venue code not configured. Set VENUE_STATIC_CODE_HASH.", 503)
-    # Hash stored; plaintext only on physical poster/projector. We return hint-only to avoid leaking via API.
-    # For instructor convenience, if ?reveal=1 we still return placeholder — actual code is on wall.
     code_hint = f"{settings.venue_static_code_hash[:2].upper()}****"
+    await audit_detached(
+        action="instructor_venue_qr_viewed",
+        actor_user_id=instructor.user_id,
+        entity_type="instructor",
+        entity_id=instructor.id,
+        ip_address=_instructor_ip(request),
+    )
     return VenueQrResponse(
         qr_data="VENUE_CODE_IN_ROOM",
         code_hint=code_hint,
@@ -149,7 +197,8 @@ async def venue_qr(
 @router.get("/attendance/reports", response_model=None)
 @router.get("/reports/attendance", response_model=None)
 async def attendance_report(
-    _: Instructor = Depends(get_current_instructor),
+    request: Request,
+    instructor: Instructor = Depends(get_current_instructor),
     report_date: date | None = Query(default=None, alias="date"),
     period: str = Query(default="daily"),
     db: AsyncSession = Depends(get_db),
@@ -159,12 +208,22 @@ async def attendance_report(
     except ValueError as error:
         raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
     selected_date = report_date or datetime.now(settings.campus_tz).date()
-    return await build_attendance_report(db, selected_period, selected_date)
+    report = await build_attendance_report(db, selected_period, selected_date)
+    await audit_detached(
+        action="instructor_report_viewed",
+        actor_user_id=instructor.user_id,
+        entity_type="instructor",
+        entity_id=instructor.id,
+        details={"period": selected_period, "date": selected_date.isoformat()},
+        ip_address=_instructor_ip(request),
+    )
+    return report
 
 
 @router.get("/reports/attendance.pdf", response_model=None)
 async def attendance_report_pdf(
-    _: Instructor = Depends(get_current_instructor),
+    request: Request,
+    instructor: Instructor = Depends(get_current_instructor),
     report_date: date | None = Query(default=None, alias="date"),
     period: str = Query(default="daily"),
     db: AsyncSession = Depends(get_db),
@@ -175,6 +234,14 @@ async def attendance_report_pdf(
         raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
     selected_date = report_date or datetime.now(settings.campus_tz).date()
     report = await build_attendance_report(db, selected_period, selected_date)
+    await audit_detached(
+        action="instructor_report_pdf_downloaded",
+        actor_user_id=instructor.user_id,
+        entity_type="instructor",
+        entity_id=instructor.id,
+        details={"period": selected_period, "date": selected_date.isoformat()},
+        ip_address=_instructor_ip(request),
+    )
     filename = f"ccd-attendance-{period}-{report['startDate']}.pdf"
     return Response(
         content=render_attendance_pdf(report),

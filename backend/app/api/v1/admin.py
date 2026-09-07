@@ -474,8 +474,20 @@ async def list_users(db: AsyncSession = Depends(get_db)) -> list[dict]:
 
 
 @router.get("/audit-logs", response_model=None)
-async def list_audit_logs(db: AsyncSession = Depends(get_db)) -> list[dict]:
-    logs = (await db.execute(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(500))).scalars().all()
+async def list_audit_logs(
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    # Hide admin's own actions by default; use ?includeSelf=true to see them
+    include_self = request.query_params.get("includeSelf", "").lower() in ("1", "true", "yes")
+    # Exclude logs where actor is any admin (keeps view focused on instructor/student activity)
+    # If you only want to hide *current* admin, replace subquery with AuditLog.actor_user_id != admin.id
+    admin_ids = select(User.id).where(User.role == UserRole.ADMIN)
+    stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(500)
+    if not include_self:
+        stmt = stmt.where(AuditLog.actor_user_id.not_in(admin_ids))
+    logs = (await db.execute(stmt)).scalars().all()
     return [
         {"id": item.id, "actorUserId": item.actor_user_id, "action": item.action,
          "entityType": item.entity_type, "entityId": item.entity_id, "details": item.details,
