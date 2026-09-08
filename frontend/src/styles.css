@@ -380,3 +380,19 @@ nav{display:flex;align-items:center;gap:22px}nav a,.ghost{border:0;background:no
 [data-theme="light"] .msg-item{background:#fff;border-color:#e2e8f0}
 [data-theme="light"] .msg-item.unread{background:#f0f9ff;border-color:#7dd3fc}
 [data-theme="light"] .profile-meta div{background:#f8fafc;border-color:#e2e8f0}
+
+/* ── Reduce boxes on PC / tablet (habit grid) ── */
+@media (min-width: 1024px) {
+  .student-shell{max-width:960px}
+  .edu-hero-card{padding:20px;gap:16px}
+  .edu-card{padding:14px}
+  .habit-grid{grid-template-columns:repeat(8,1fr) !important;gap:4px !important;max-width:520px;margin:0 auto}
+  .habit-grid .habit-col:nth-child(n+9){display:none}
+  .habit-grid .habit-col div{border-radius:3px !important}
+  .profile-grid{gap:12px}
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .habit-grid{grid-template-columns:repeat(10,1fr) !important;gap:4px !important}
+  .habit-grid .habit-col:nth-child(n+11){display:none}
+  .edu-card{padding:15px}
+}

@@ -93,11 +93,11 @@ export default function HomePage() {
           <span style={{ marginLeft:'auto', color:'var(--muted)', fontSize:11 }}>{calendar.filter(c=>c.dot==='blue').length} full · {calendar.filter(c=>c.dot==='faded').length} partial</span>
         </div>
 
-        {/* Dot grid - 12 weeks (84 days) like Habits */}
+        {/* Dot grid - Habits: responsive, fewer boxes on PC/tablet */}
         {calendar.length ? (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(12, 1fr)', gap:6 }}>
+          <div className="habit-grid" style={{ display:'grid', gridTemplateColumns:'repeat(12, 1fr)', gap:6 }}>
             {Array.from({ length: 12 }).map((_, col) => (
-              <div key={col} style={{ display:'grid', gap:6 }}>
+              <div key={col} className="habit-col" style={{ display:'grid', gap:6 }}>
                 {calendar.slice(col*7, col*7+7).map((d:any) => {
                   const s = dotColor(d.dot)
                   return (

@@ -60,11 +60,11 @@ export default function HistoryPage() {
                 )
               })}
             </div>
-            {/* Dot grid for last 84 days */}
+            {/* Dot grid - responsive */}
             {calendar.length > 0 && (
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(12, 1fr)', gap:4 }}>
+              <div className="habit-grid" style={{ display:'grid', gridTemplateColumns:'repeat(12, 1fr)', gap:4 }}>
                 {Array.from({ length:12 }).map((_, col) => (
-                  <div key={col} style={{ display:'grid', gap:4 }}>
+                  <div key={col} className="habit-col" style={{ display:'grid', gap:4 }}>
                     {calendar.slice(col*7, col*7+7).map((d:any) => {
                       const style = d.dot==='blue' ? { background:'var(--blue)', borderColor:'var(--blue)' } : d.dot==='faded' ? { background:'color-mix(in srgb, var(--blue) 42%, transparent)', borderColor:'var(--blue)' } : { background:'transparent', borderColor:'var(--line)' }
                       return <div key={d.date} title={`${d.date} ${d.status||'—'}`} style={{ width:'100%', aspectRatio:'1', borderRadius:3, border:'1px solid', ...style }} />
