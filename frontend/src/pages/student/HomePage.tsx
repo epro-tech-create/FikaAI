@@ -41,50 +41,17 @@ export default function HomePage() {
   const name = summary?.fullName || localStorage.getItem('ccd.name') || 'Student'
   const firstName = name.split(' ')[0]
   const checkedIn = record?.status === 'PRESENT' || record?.status === 'LATE'
-  const dateLabel = clock.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', timeZone: 'Africa/Dar_es_Salaam' }).replace(/\//g, '.')
+  const [calendar, setCalendar] = useState<any[]>([])
 
-  const events = [
-    {
-      date: dateLabel,
-      time: checkedIn && record?.checkInAt ? formatCampusTime(record.checkInAt) : 'All day',
-      title: session?.title || 'Daily RAFIC Attendance',
-      meta: session?.locationName ? `${session.locationName} · DIT RAFIC Building` : 'DIT RAFIC Building',
-    },
-    {
-      date: dateLabel,
-      time: checkedIn
-        ? `${session?.expectedEnd || '14:00'} – ${session?.checkOutClose || '16:00'}`
-        : `${session?.checkInOpen || '08:00'} – ${session?.checkInClose || '15:00'}`,
-      title: checkedIn ? 'Check-out window' : 'Check-in window',
-      meta: 'Venue QR + GPS',
-    },
-    ...(msgs[0] ? [{ date: dateLabel, time: msgs[0].time || 'Today', title: msgs[0].title, meta: 'Message' }] : []),
-  ].slice(0, 3)
+  useEffect(() => {
+    api.get('/student/attendance/calendar?days=84').then(r => setCalendar(r.data?.calendar || [])).catch(() => {})
+  }, [record])
 
-  const progress = [
-    { label: 'Check-in', value: checkedIn ? 100 : 20 },
-    { label: 'Face ID', value: enrolled ? 100 : 35 },
-    { label: 'Messages', value: msgs.length ? Math.min(100, msgs.length * 30) : 15 },
-  ]
-
-  const week = [
-    { d: 'Mon', v: 42 },
-    { d: 'Tue', v: 58 },
-    { d: 'Wed', v: 35 },
-    { d: 'Thu', v: 72 },
-    { d: 'Fri', v: checkedIn ? 88 : 50 },
-    { d: 'Sat', v: 28 },
-    { d: 'Sun', v: 18 },
-  ]
-  const peak = week.reduce((a, b) => (b.v > a.v ? b : a), week[0])
-  const peakIndex = week.findIndex(p => p.d === peak.d)
-
-  const actions = [
-    { to: '/student/attendance', title: 'Check in', sub: checkedIn ? 'Checked in ✓' : 'Scan QR', icon: '◉' },
-    { to: '/student/face-enrollment', title: 'Face ID', sub: enrolled ? 'Enrolled' : 'Enrol now', icon: '◎' },
-    { to: '/student/messages', title: 'Messages', sub: msgs.length ? `${msgs.length} new` : 'Inbox', icon: '✉' },
-    { to: '/student/profile', title: 'Settings', sub: 'Profile & theme', icon: '⚙' },
-  ]
+  const dotColor = (dot: string) => {
+    if (dot === 'blue') return { background: 'var(--blue)', borderColor: 'var(--blue)', opacity: 1 }
+    if (dot === 'faded') return { background: 'color-mix(in srgb, var(--blue) 42%, transparent)', borderColor: 'color-mix(in srgb, var(--blue) 35%, var(--line))', opacity: 1 }
+    return { background: 'transparent', borderColor: 'var(--line)', opacity: 1 }
+  }
 
   return (
     <div className="edu-home">
@@ -96,9 +63,9 @@ export default function HomePage() {
           <p className="edu-hero-date">{formatCampusDate(clock)} · {formatCampusTime(clock)}</p>
 
           <div className="edu-pills">
-            <span className="edu-pill"><b>{streak?.present ?? 2} early</b> · {streak?.late ?? 0} late</span>
+            <span className="edu-pill"><b>{streak?.present ?? 0} early</b> · {streak?.late ?? 0} late</span>
             <span className="edu-pill edu-pill-accent">🔥 {streak?.streak ?? 0} day streak</span>
-            <span className="edu-pill">{streak?.checkedOut ?? 2} check-outs</span>
+            <span className="edu-pill">{streak?.checkedOut ?? 0} check-outs</span>
           </div>
           <Link to="/student/attendance" className="edu-inline-link">Check in →</Link>
         </div>
@@ -111,94 +78,47 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Events + Timing grid */}
-      <div className="edu-grid">
-        <section className="edu-card">
-          <header className="edu-card-head">
-            <h2>Events</h2>
-            <Link to="/student/attendance" className="edu-card-link">More →</Link>
-          </header>
-          <div className="edu-events">
-            {events.map((e, i) => (
-              <article key={i} className="edu-event">
-                <div className="edu-event-date">
-                  <b>{e.date}</b>
-                  <span>{e.time}</span>
-                </div>
-                <div className="edu-event-body">
-                  <b>{e.title}</b>
-                  <span>{e.meta}</span>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="edu-card edu-quick-card">
-          <header className="edu-card-head">
-            <h2>Quick actions</h2>
-          </header>
-          <ul className="edu-actions">
-            {actions.map(a => (
-              <li key={a.to}>
-                <Link to={a.to}>
-                  <span className="edu-action-icon">{a.icon}</span>
-                  <div className="edu-action-text">
-                    <b>{a.title}</b>
-                    <small>{a.sub}</small>
-                  </div>
-                  <span className="edu-action-arrow">›</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <Link to="/student/attendance" className="edu-cta">
-            <span>{checkedIn ? 'Ready to check out?' : 'Start check-in'}</span>
-            <b>{checkedIn ? 'Check out →' : 'Check in →'}</b>
-          </Link>
-        </section>
-      </div>
-
-      {/* Timing & progress */}
-      <section className="edu-card edu-timing">
-        <header className="edu-card-head">
+      {/* Timing & progress - Habits dot grid (one dot = one day) */}
+      <section className="edu-card" style={{ padding: 18 }}>
+        <header className="edu-card-head" style={{ marginBottom: 12 }}>
           <h2>Timing & progress</h2>
-          <span className="edu-timing-badge">Week overview</span>
+          <span style={{ fontSize:10, color:'var(--muted)', letterSpacing:1, textTransform:'uppercase' }}>Last 12 weeks · one dot = one day</span>
         </header>
-        <div className="edu-timing-body">
-          <div className="edu-chart-wrap">
-            <svg viewBox="0 0 340 140" className="edu-chart" role="img" aria-label="Weekly activity">
-              {/* grid lines */}
-              <line x1="20" y1="20" x2="20" y2="110" stroke="var(--line)" strokeWidth="1" opacity="0.5" />
-              <line x1="20" y1="110" x2="320" y2="110" stroke="var(--line)" strokeWidth="1" opacity="0.5" />
-              {/* peak label */}
-              <text x={30 + peakIndex * 44} y={112 - peak.v} textAnchor="middle" className="edu-peak">{peak.v}%</text>
-              {/* line */}
-              <polyline
-                fill="none"
-                stroke="#3b9cff"
-                strokeWidth="4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                points={week.map((p, i) => `${30 + i * 44},${108 - p.v}`).join(' ')}
-              />
-              {/* dots */}
-              {week.map((p, i) => (
-                <circle key={p.d} cx={30 + i * 44} cy={108 - p.v} r={p.d === peak.d ? 7 : 4} fill="#3b9cff" stroke="var(--card)" strokeWidth="2" />
-              ))}
-            </svg>
-            <div className="edu-chart-labels">
-              {week.map(p => <span key={p.d} className={p.d === peak.d ? 'is-peak' : ''}>{p.d}</span>)}
-            </div>
-          </div>
-          <div className="edu-bars">
-            {progress.map(p => (
-              <div key={p.label} className="edu-bar-row">
-                <div className="edu-bar-meta"><span>{p.label}</span><b>{p.value}%</b></div>
-                <div className="edu-bar-track"><i style={{ width: `${p.value}%` }} /></div>
+
+        {/* Legend */}
+        <div style={{ display:'flex', gap:12, alignItems:'center', marginBottom:12, fontSize:10, color:'var(--muted)' }}>
+          <span style={{ display:'flex', alignItems:'center', gap:6 }}><i style={{ width:10, height:10, borderRadius:3, background:'var(--blue)', border:'1px solid var(--blue)', display:'inline-block' }} /> checked in & out</span>
+          <span style={{ display:'flex', alignItems:'center', gap:6 }}><i style={{ width:10, height:10, borderRadius:3, background:'color-mix(in srgb, var(--blue) 42%, transparent)', border:'1px solid color-mix(in srgb, var(--blue) 35%, var(--line))', display:'inline-block' }} /> only check-in</span>
+          <span style={{ display:'flex', alignItems:'center', gap:6 }}><i style={{ width:10, height:10, borderRadius:3, background:'transparent', border:'1px solid var(--line)', display:'inline-block' }} /> absent</span>
+          <span style={{ marginLeft:'auto', color:'var(--muted)', fontSize:11 }}>{calendar.filter(c=>c.dot==='blue').length} full · {calendar.filter(c=>c.dot==='faded').length} partial</span>
+        </div>
+
+        {/* Dot grid - 12 weeks (84 days) like Habits */}
+        {calendar.length ? (
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(12, 1fr)', gap:6 }}>
+            {Array.from({ length: 12 }).map((_, col) => (
+              <div key={col} style={{ display:'grid', gap:6 }}>
+                {calendar.slice(col*7, col*7+7).map((d:any) => {
+                  const s = dotColor(d.dot)
+                  return (
+                    <div
+                      key={d.date}
+                      title={`${d.date}: ${d.status || 'Absent'}${d.checkInAt ? ' '+d.checkInAt.slice(11,16) : ''}`}
+                      style={{
+                        width:'100%', aspectRatio:'1', borderRadius:4,
+                        background: s.background, border:`1px solid ${s.borderColor}`, opacity: s.opacity,
+                      }}
+                    />
+                  )
+                })}
               </div>
             ))}
           </div>
+        ) : (
+          <div style={{ padding:20, textAlign:'center', color:'var(--muted)', fontSize:13 }}>Loading progress...</div>
+        )}
+        <div style={{ display:'flex', justifyContent:'space-between', marginTop:10, fontSize:10, color:'var(--muted)' }}>
+          <span>{calendar[0]?.date || ''}</span><span>Today</span>
         </div>
       </section>
 

@@ -52,6 +52,36 @@ async def student_summary(
     )
 
 
+@profile_router.post("/change-password", response_model=None)
+async def student_change_password(
+    payload: dict,
+    request: Request,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.core.security import hash_password, verify_password
+    from app.schemas import InstructorCreateRequest  # reuse password validator
+    import re
+    current = payload.get("currentPassword") or payload.get("current_password") or ""
+    new = payload.get("newPassword") or payload.get("new_password") or ""
+    confirm = payload.get("confirmPassword") or payload.get("confirm_password") or new
+    if not current or not new:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "Current and new password required.", 422)
+    if new != confirm:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "New passwords do not match.", 422)
+    if len(new) < 8 or not re.search(r"[A-Z]", new) or not re.search(r"[a-z]", new) or not re.search(r"\d", new):
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "Use at least 8 characters with uppercase, lowercase and a number.", 422)
+    user = await db.get(type(student.user), student.user_id)
+    if not verify_password(current, user.password_hash):
+        raise ApiError(ErrorCode.INVALID_CREDENTIALS, "Current password is incorrect.", 401)
+    user.password_hash = hash_password(new)
+    await db.flush()
+    await db.commit()
+    from app.services.audit_service import audit_detached
+    await audit_detached(action="student_password_changed", actor_user_id=user.id, entity_type="student", entity_id=student.id, ip_address=request.client.host if request.client else None)
+    return {"ok": True}
+
+
 def _session_dto(session) -> ActiveSessionResponse:
     def boundary(value):
         return datetime.combine(session.session_date, value, tzinfo=settings.campus_tz)
@@ -259,11 +289,66 @@ async def student_history(
         raise ApiError(ErrorCode.VALIDATION_ERROR, str(exc), 422) from exc
     selected_date = anchor or datetime.now(settings.campus_tz).date()
     report = await build_attendance_report(db, selected_period, selected_date)
-    # Personal filtered view
+    # Personal filtered view - without altering global report, build personal subset
+    student_rows = [r for r in report.get("rows", []) if r.get("registrationNumber") == student.registration_number]
     personal = next((s for s in report.get("students", []) if s.get("registrationNumber") == student.registration_number), None)
-    report["personal"] = personal or {"days": {k:"—" for k in ["Mon","Tue","Wed","Thu","Fri"]}, "daysPresent":0, "lateDays":0}
-    report["rows"] = report.get("rows", [])[:30]
+    if personal is None and student_rows:
+        # Build minimal personal from rows if report had no student entry (edge)
+        present = sum(1 for r in student_rows if r.get("status") != "LATE")
+        late = sum(1 for r in student_rows if r.get("status") == "LATE")
+        personal = {"days": {k:"—" for k in ["Mon","Tue","Wed","Thu","Fri"]}, "daysPresent": present, "lateDays": late}
+    if personal is None:
+        personal = {"days": {k:"—" for k in ["Mon","Tue","Wed","Thu","Fri"]}, "daysPresent":0, "lateDays":0}
+    # Attach filtered rows for this student (frontend expects rows)
+    report["personal"] = personal
+    report["rows"] = student_rows[:30]
+    report["studentRows"] = student_rows[:30]
     return report
+
+
+@router.get("/calendar", response_model=None)
+async def student_calendar(
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+    days: int = Query(default=90, ge=7, le=365),
+):
+    """Habits-style calendar: one dot per day, last N days."""
+    from datetime import timedelta
+    from app.core.config import settings as _s
+    anchor = datetime.now(_s.campus_tz).date()
+    start = anchor - timedelta(days=days-1)
+    rows = (await db.execute(
+        select(AttendanceRecord, AttendanceSession)
+        .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
+        .where(AttendanceRecord.student_id == student.id, AttendanceSession.session_date >= start, AttendanceSession.session_date <= anchor)
+    )).all()
+    by_date: dict[str, dict] = {}
+    for rec, sess in rows:
+        key = sess.session_date.isoformat()
+        status = rec.status.value if hasattr(rec.status, "value") else str(rec.status)
+        by_date[key] = {
+            "date": key,
+            "status": status,
+            "checkInAt": rec.check_in_at.isoformat() if rec.check_in_at else None,
+            "checkOutAt": rec.check_out_at.isoformat() if rec.check_out_at else None,
+            "hasCheckOut": rec.check_out_at is not None,
+        }
+    calendar = []
+    for i in range(days):
+        d = start + timedelta(days=i)
+        iso = d.isoformat()
+        entry = by_date.get(iso)
+        if entry:
+            # blue if has checkout, faded if only check-in
+            if entry["hasCheckOut"]:
+                entry["dot"] = "blue"
+            else:
+                entry["dot"] = "faded"
+            calendar.append(entry)
+        else:
+            # skip weekends? keep all but mark none
+            calendar.append({"date": iso, "status": None, "dot": "none", "checkInAt": None, "checkOutAt": None})
+    return {"days": days, "startDate": start.isoformat(), "endDate": anchor.isoformat(), "calendar": calendar}
 
 
 @router.get("/streak", response_model=None)
