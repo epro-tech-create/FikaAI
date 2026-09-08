@@ -1,21 +1,21 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, message } from './services/api'
-import AttendancePage from './pages/student/AttendancePage'
-import AutoCheckInPage from './pages/student/AutoCheckInPage'
-import FaceEnrollmentPage from './pages/student/FaceEnrollmentPage'
-import HistoryPage from './pages/student/HistoryPage'
-import HomePage from './pages/student/HomePage'
-import ProfilePage from './pages/student/ProfilePage'
-import MessagesPage from './pages/student/MessagesPage'
 import LandingPage from './pages/LandingPage'
 import PortalLayout from './components/PortalLayout'
-import DashboardPage from './pages/portal/DashboardPage'
-import DataPage from './pages/portal/DataPage'
-import InfoPage from './pages/portal/InfoPage'
-import InstructorPage from './pages/portal/InstructorPage'
-import StudentPage from './pages/portal/StudentPage'
-import ReportsPage from './pages/portal/ReportsPage'
+const AttendancePage = lazy(() => import('./pages/student/AttendancePage'))
+const AutoCheckInPage = lazy(() => import('./pages/student/AutoCheckInPage'))
+const FaceEnrollmentPage = lazy(() => import('./pages/student/FaceEnrollmentPage'))
+const HistoryPage = lazy(() => import('./pages/student/HistoryPage'))
+const HomePage = lazy(() => import('./pages/student/HomePage'))
+const ProfilePage = lazy(() => import('./pages/student/ProfilePage'))
+const MessagesPage = lazy(() => import('./pages/student/MessagesPage'))
+const DashboardPage = lazy(() => import('./pages/portal/DashboardPage'))
+const DataPage = lazy(() => import('./pages/portal/DataPage'))
+const InfoPage = lazy(() => import('./pages/portal/InfoPage'))
+const InstructorPage = lazy(() => import('./pages/portal/InstructorPage'))
+const StudentPage = lazy(() => import('./pages/portal/StudentPage'))
+const ReportsPage = lazy(() => import('./pages/portal/ReportsPage'))
 import StudentLayout from './pages/student/StudentLayout'
 import { adminPages, instructorPages } from './pages/portal/config'
 import { clearAuthentication, getStoredRole, parseRole, storeAuthentication } from './lib/auth'
@@ -191,45 +191,49 @@ export default function App({ application }: { application?: Application }) {
       window.location.replace(loginPathPreservingVenue())
     })
   }, [location.pathname])
-  return <Routes>
-    <Route path="/login" element={<Login application={app}/>}/>
-    {app === 'student' && <>
-      <Route path="/" element={<LandingPage instructorLoginUrl={instructorLoginUrl()}/>}/>
-      <Route path="/signup" element={<Signup/>}/>
-      <Route path="/checkin" element={<CheckInEntry/>}/>
-      <Route path="/student" element={<Guard application={app}><StudentLayout/></Guard>}>
-        <Route index element={<Navigate to="home" replace/>}/>
-        <Route path="home" element={<HomePage/>}/>
-        <Route path="attendance" element={<AttendancePage/>}/>
-        <Route path="history" element={<HistoryPage/>}/>
-        <Route path="checkin" element={<AutoCheckInPage/>}/>
-        <Route path="face-enrollment" element={<FaceEnrollmentPage/>}/>
-        <Route path="messages" element={<MessagesPage/>}/>
-        <Route path="profile" element={<ProfilePage/>}/>
-      </Route>
-    </>}
-    {app === 'admin' && (
-      <Route path="/admin" element={<Guard application={app}><PortalLayout role="admin"/></Guard>}>
-        <Route index element={<Navigate to="dashboard" replace/>}/>
-        <Route path="dashboard" element={<DashboardPage role="admin"/>}/>
-        <Route path="students" element={<StudentPage/>}/>
-        <Route path="instructors" element={<InstructorPage/>}/>
-        <Route path="reports" element={<ReportsPage role="admin"/>}/>
-        {Object.entries(adminPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
-        <Route path="system-settings" element={<InfoPage title="System Settings"/>}/>
-        <Route path="profile" element={<InfoPage title="Profile"/>}/>
-      </Route>
-    )}
-    {app === 'instructor' && (
-      <Route path="/instructor" element={<Guard application={app}><PortalLayout role="instructor"/></Guard>}>
-        <Route index element={<Navigate to="dashboard" replace/>}/>
-        <Route path="dashboard" element={<DashboardPage role="instructor"/>}/>
-        <Route path="reports" element={<ReportsPage role="instructor"/>}/>
-        {Object.entries(instructorPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
-        <Route path="notifications" element={<InfoPage title="Notifications"/>}/>
-        <Route path="profile" element={<InfoPage title="Profile"/>}/>
-      </Route>
-    )}
-    <Route path="*" element={<HomeRedirect application={app}/>}/>
-  </Routes>
+  return (
+    <Suspense fallback={<div className="state-panel loading"><i/><b>Loading</b></div>}>
+      <Routes>
+        <Route path="/login" element={<Login application={app}/>}/>
+        {app === 'student' && <>
+          <Route path="/" element={<LandingPage instructorLoginUrl={instructorLoginUrl()}/>}/>
+          <Route path="/signup" element={<Signup/>}/>
+          <Route path="/checkin" element={<CheckInEntry/>}/>
+          <Route path="/student" element={<Guard application={app}><StudentLayout/></Guard>}>
+            <Route index element={<Navigate to="home" replace/>}/>
+            <Route path="home" element={<HomePage/>}/>
+            <Route path="attendance" element={<AttendancePage/>}/>
+            <Route path="history" element={<HistoryPage/>}/>
+            <Route path="checkin" element={<AutoCheckInPage/>}/>
+            <Route path="face-enrollment" element={<FaceEnrollmentPage/>}/>
+            <Route path="messages" element={<MessagesPage/>}/>
+            <Route path="profile" element={<ProfilePage/>}/>
+          </Route>
+        </>}
+        {app === 'admin' && (
+          <Route path="/admin" element={<Guard application={app}><PortalLayout role="admin"/></Guard>}>
+            <Route index element={<Navigate to="dashboard" replace/>}/>
+            <Route path="dashboard" element={<DashboardPage role="admin"/>}/>
+            <Route path="students" element={<StudentPage/>}/>
+            <Route path="instructors" element={<InstructorPage/>}/>
+            <Route path="reports" element={<ReportsPage role="admin"/>}/>
+            {Object.entries(adminPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
+            <Route path="system-settings" element={<InfoPage title="System Settings"/>}/>
+            <Route path="profile" element={<InfoPage title="Profile"/>}/>
+          </Route>
+        )}
+        {app === 'instructor' && (
+          <Route path="/instructor" element={<Guard application={app}><PortalLayout role="instructor"/></Guard>}>
+            <Route index element={<Navigate to="dashboard" replace/>}/>
+            <Route path="dashboard" element={<DashboardPage role="instructor"/>}/>
+            <Route path="reports" element={<ReportsPage role="instructor"/>}/>
+            {Object.entries(instructorPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
+            <Route path="notifications" element={<InfoPage title="Notifications"/>}/>
+            <Route path="profile" element={<InfoPage title="Profile"/>}/>
+          </Route>
+        )}
+        <Route path="*" element={<HomeRedirect application={app}/>}/>
+      </Routes>
+    </Suspense>
+  )
 }

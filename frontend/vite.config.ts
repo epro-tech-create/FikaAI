@@ -30,6 +30,18 @@ export default defineConfig(({ mode }) => {
       },
     ],
     define: { 'import.meta.env.VITE_APP_ROLE': JSON.stringify(application) },
+    build: {
+      cssCodeSplit: true,
+      chunkSizeWarningLimit: 500,
+      rollupOptions: {
+        output: {
+          manualChunks: (id: string) => {
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('react-router') || id.includes('node_modules/axios')) return 'vendor'
+            if (id.includes('@mediapipe')) return 'mediapipe'
+          },
+        },
+      },
+    },
     server: {
       host: '0.0.0.0',
       port: PORTS[application],
