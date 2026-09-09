@@ -86,11 +86,11 @@ class Settings(BaseSettings):
         "http://localhost:5175,http://127.0.0.1:5175"
     )
 
-    # Rate limits — 60 students × 3 calls (verify-location + verify-venue + check-in/out) behind single campus NAT
-    rate_limit_login: str = "5/minute"
-    rate_limit_face: str = "100/minute"
-    rate_limit_attendance: str = "120/minute"
-    rate_limit_chat: str = "30/minute"
+    # Rate limits — 60-100 students share one campus NAT IP, each does 3-4 calls (verify-location + verify-venue + check-in/out)
+    rate_limit_login: str = "20/minute"
+    rate_limit_face: str = "600/minute"
+    rate_limit_attendance: str = "600/minute"
+    rate_limit_chat: str = "120/minute"
 
     @property
     def cors_origin_list(self) -> list[str]:
