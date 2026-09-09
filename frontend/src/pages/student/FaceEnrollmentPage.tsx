@@ -9,7 +9,7 @@ import { storeFaceEnrollment } from '../../lib/auth'
 
 const sleep = (milliseconds:number) => new Promise(resolve => window.setTimeout(resolve,milliseconds))
 
-export default function FaceEnrollmentPage() {
+export default function FaceEnrollmentPage({ embedded=false, onEnrolled, onClose }: { embedded?:boolean; onEnrolled?:()=>void; onClose?:()=>void }) {
   const navigate = useNavigate()
   const [status,setStatus] = useState<any>()
   const [consent,setConsent] = useState(false)
@@ -109,8 +109,11 @@ export default function FaceEnrollmentPage() {
       processingTimer = window.setInterval(() => setProgress(value => Math.min(94,value + 1)),130)
       const response = await api.post('/student/face-enrollment',{samples,consentGranted:consent})
       window.clearInterval(processingTimer); processingTimer = undefined
-      setStatus(response.data); storeFaceEnrollment(true); setProgress(100)
-      window.setTimeout(() => setStage('success'),350)
+      setStatus(response.data);       storeFaceEnrollment(true); setProgress(100)
+      window.setTimeout(() => {
+        setStage('success')
+        if(onEnrolled) setTimeout(()=>onEnrolled(), 700)
+      },350)
     } catch (requestError) {
       if (processingTimer) window.clearInterval(processingTimer)
       monitor.stop(); cam.stop(); setError(message(requestError)); setStage('error')
@@ -120,7 +123,7 @@ export default function FaceEnrollmentPage() {
   function reset() { runId.current += 1; monitor.stop(); cam.stop(); setProgress(0); setInstruction(''); setError(''); setStage('intro') }
 
   return <>
-    <section className="hero compact-hero"><p className="eyebrow">BIOMETRIC IDENTITY SETUP</p><h1>Create your secure Face ID</h1><p className="date">Five verified captures across front, left, right and downward angles generate one encrypted facial profile.</p></section>
+    {!embedded && <section className="hero compact-hero"><p className="eyebrow">BIOMETRIC IDENTITY SETUP</p><h1>Create your secure Face ID</h1><p className="date">Five verified captures across front, left, right and downward angles generate one encrypted facial profile.</p></section>}
     {stage === 'intro' && <label className="consent consent-dark"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)}/><span><b>Biometric consent</b>I consent to encrypted face-embedding storage for attendance verification.</span></label>}
     <FaceScanFlow
       stage={stage}
@@ -147,7 +150,7 @@ export default function FaceEnrollmentPage() {
       disabled={!consent}
       onStart={enroll}
       onReset={reset}
-      onSuccess={() => navigate('/student/attendance')}
+      onSuccess={() => onEnrolled ? onEnrolled() : navigate('/student/attendance')}
     />
   </>
 }

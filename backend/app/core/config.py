@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     rate_limit_login: str = "5/minute"
     rate_limit_face: str = "10/minute"
     rate_limit_attendance: str = "20/minute"
+    rate_limit_chat: str = "30/minute"
 
     @property
     def cors_origin_list(self) -> list[str]:

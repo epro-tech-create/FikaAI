@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import FaceScanFlow, { type ScanStage } from '../../components/FaceScanFlow'
 import { api, message } from '../../services/api'
 import { useCameraFrames } from '../../hooks/useCameraFrames'
@@ -12,7 +12,7 @@ import { checkoutWindow } from '../../lib/checkout'
 import { campusGreeting, formatCampusDate, formatCampusTime } from '../../lib/campusTime'
 import { displayMembershipId, displayRegistration } from '../../lib/studentId'
 import { readStoredVenueCode, studentCheckinPath } from '../../lib/venueCheckin'
-import HelpFaq from '../../components/HelpFaq'
+import FaceEnrollmentPage from './FaceEnrollmentPage'
 
 type Session = {
   sessionId:string
@@ -38,6 +38,7 @@ export default function AttendancePage() {
   const [scanStatus,setScanStatus] = useState('Starting scanner…')
   const [snapshot,setSnapshot] = useState('')
   const [error,setError] = useState('')
+  const [showEnroll,setShowEnroll]=useState(false)
   const clock = useCampusClock()
   const cam = useCameraFrames()
   const monitor = useFaceMonitor(cam.video)
@@ -151,32 +152,13 @@ export default function AttendancePage() {
   if (pendingVenue) return <Navigate to={studentCheckinPath(pendingVenue)} replace />
 
   return <div>
-    <section className="hero compact-hero">
-      <p className="eyebrow">CYBERSECURITY INDUSTRIAL PRACTICAL TRAINING</p>
-      <h1>{campusGreeting(clock)}, {summary?.fullName || localStorage.getItem('ccd.name') || 'Student'}</h1>
-      <p className="date">{formatCampusDate(clock)} · {formatCampusTime(clock)}</p>
-    </section>
-    {summary && session && (
-      <section className="training-strip">
-        <div>
-          <span>DAILY PRESENCE</span>
-          <b>Daily practical attendance</b>
-          <small>{session.title} · {displayMembershipId(summary)} · {displayRegistration(summary)}</small>
-        </div>
-        <div>
-          <span>TRAINING AREA</span>
-          <b>{session.locationName}</b>
-          <small>{session.permittedRadiusMeters} m attendance perimeter</small>
-        </div>
-      </section>
-    )}
     <div className="student-checkin-head">
       <h2>Room QR attendance</h2>
       <p>Scan the QR in the RAFIC room with your phone camera. After login, the system checks GPS and confirms check-in or check-out automatically.</p>
     </div>
     {error && stage==='intro' && <div className="error">{error}</div>}
 
-    {!enrolled && stage==='intro' && <div className="error" style={{marginBottom:12}}>Face ID not enrolled — <Link to="/student/face-enrollment">enrol now</Link> to use Face ID here, or scan the room QR with your phone.</div>}
+    {!enrolled && stage==='intro' && <div className="error" style={{marginBottom:12}}>Face ID not enrolled — <button onClick={()=>setShowEnroll(true)} style={{background:'none',border:0,padding:0,color:'var(--blue)',fontWeight:700,textDecoration:'underline',cursor:'pointer'}}>enrol now</button> to use Face ID here, or scan the room QR with your phone.</div>}
     <FaceScanFlow
       stage={stage}
       videoRef={cam.video}
@@ -204,8 +186,11 @@ export default function AttendancePage() {
       onStart={scanFace}
       onReset={reset}
     />
-    <div style={{ marginTop:16 }}>
-      <HelpFaq />
-    </div>
+    {showEnroll && <div className="portal-dialog-backdrop" onClick={()=>setShowEnroll(false)}><div className="portal-dialog" onClick={e=>e.stopPropagation()}>
+      <div style={{display:'flex',justifyContent:'flex-end',padding:'10px 14px 0'}}><button onClick={()=>setShowEnroll(false)} style={{border:'1px solid var(--line)',background:'var(--panel)',borderRadius:8,padding:'6px 10px',cursor:'pointer'}}>Close</button></div>
+      <div style={{padding:14}}>
+        <FaceEnrollmentPage embedded onEnrolled={()=>{setEnrolled(true); storeFaceEnrollment(true); setShowEnroll(false)}} />
+      </div>
+    </div></div>}
   </div>
 }

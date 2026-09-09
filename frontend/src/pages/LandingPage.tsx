@@ -88,27 +88,6 @@ export default function LandingPage({ instructorLoginUrl }: { instructorLoginUrl
           <Link to="/login">Student</Link> · <a href={instructorLoginUrl}>Instructor</a> · <Link to="/signup">Sign up</Link>
         </span>
       </footer>
-
-      {/* Hidden SEO JSON-LD kept for crawlers */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'FAQPage',
-            mainEntity: [
-              {
-                '@type': 'Question',
-                name: 'What is CCD-Attendance?',
-                acceptedAnswer: {
-                  '@type': 'Answer',
-                  text: 'CCD-Attendance is a secure student attendance system that uses GPS geofencing and live face recognition at DIT.',
-                },
-              },
-            ],
-          }),
-        }}
-      />
     </main>
   )
 }

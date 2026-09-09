@@ -5,8 +5,7 @@ import LandingPage from './pages/LandingPage'
 import PortalLayout from './components/PortalLayout'
 const AttendancePage = lazy(() => import('./pages/student/AttendancePage'))
 const AutoCheckInPage = lazy(() => import('./pages/student/AutoCheckInPage'))
-const FaceEnrollmentPage = lazy(() => import('./pages/student/FaceEnrollmentPage'))
-const HistoryPage = lazy(() => import('./pages/student/HistoryPage'))
+const CoursesPage = lazy(() => import('./pages/student/CoursesPage'))
 const HomePage = lazy(() => import('./pages/student/HomePage'))
 const ProfilePage = lazy(() => import('./pages/student/ProfilePage'))
 const MessagesPage = lazy(() => import('./pages/student/MessagesPage'))
@@ -16,6 +15,7 @@ const InfoPage = lazy(() => import('./pages/portal/InfoPage'))
 const InstructorPage = lazy(() => import('./pages/portal/InstructorPage'))
 const StudentPage = lazy(() => import('./pages/portal/StudentPage'))
 const ReportsPage = lazy(() => import('./pages/portal/ReportsPage'))
+const ChatPage = lazy(() => import('./pages/portal/ChatPage'))
 import StudentLayout from './pages/student/StudentLayout'
 import { adminPages, instructorPages } from './pages/portal/config'
 import { clearAuthentication, getStoredRole, parseRole, storeAuthentication } from './lib/auth'
@@ -203,11 +203,11 @@ export default function App({ application }: { application?: Application }) {
             <Route index element={<Navigate to="home" replace/>}/>
             <Route path="home" element={<HomePage/>}/>
             <Route path="attendance" element={<AttendancePage/>}/>
-            <Route path="history" element={<HistoryPage/>}/>
             <Route path="checkin" element={<AutoCheckInPage/>}/>
-            <Route path="face-enrollment" element={<FaceEnrollmentPage/>}/>
+            <Route path="courses" element={<CoursesPage/>}/>
             <Route path="messages" element={<MessagesPage/>}/>
             <Route path="profile" element={<ProfilePage/>}/>
+            <Route path="face-enrollment" element={<Navigate to="/student/courses" replace/>}/>
           </Route>
         </>}
         {app === 'admin' && (
@@ -217,6 +217,7 @@ export default function App({ application }: { application?: Application }) {
             <Route path="students" element={<StudentPage/>}/>
             <Route path="instructors" element={<InstructorPage/>}/>
             <Route path="reports" element={<ReportsPage role="admin"/>}/>
+            <Route path="chat" element={<ChatPage/>}/>
             {Object.entries(adminPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
             <Route path="system-settings" element={<InfoPage title="System Settings"/>}/>
             <Route path="profile" element={<InfoPage title="Profile"/>}/>
@@ -227,6 +228,7 @@ export default function App({ application }: { application?: Application }) {
             <Route index element={<Navigate to="dashboard" replace/>}/>
             <Route path="dashboard" element={<DashboardPage role="instructor"/>}/>
             <Route path="reports" element={<ReportsPage role="instructor"/>}/>
+            <Route path="chat" element={<ChatPage/>}/>
             {Object.entries(instructorPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
             <Route path="notifications" element={<InfoPage title="Notifications"/>}/>
             <Route path="profile" element={<InfoPage title="Profile"/>}/>

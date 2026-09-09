@@ -361,6 +361,55 @@ class AttendanceRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     idempotency_key: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), unique=True, nullable=False)
 
 
+class ConversationType(str, enum.Enum):
+    DIRECT = "direct"
+    GROUP = "group"
+
+
+class Conversation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "conversations"
+
+    type: Mapped[ConversationType] = mapped_column(_enum(ConversationType, "conversation_type"), nullable=False, default=ConversationType.DIRECT)
+    title: Mapped[str | None] = mapped_column(String(120))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    participants: Mapped[list["ConversationParticipant"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
+    messages: Mapped[list["ChatMessage"]] = relationship(cascade="all, delete-orphan", lazy="selectin", order_by="ChatMessage.created_at")
+
+
+class ConversationParticipant(Base):
+    __tablename__ = "conversation_participants"
+
+    conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_muted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    __table_args__ = (
+        Index("ix_conv_part_user", "user_id"),
+    )
+
+
+class ChatMessage(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "chat_messages"
+
+    conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    sender_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    body: Mapped[str] = mapped_column(String(2000), nullable=False)
+    reply_to_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("chat_messages.id", ondelete="SET NULL"))
+    idempotency_key: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    sender: Mapped[User] = relationship(lazy="joined")
+
+    __table_args__ = (
+        Index("ix_chat_msg_conv_created", "conversation_id", "created_at"),
+    )
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
