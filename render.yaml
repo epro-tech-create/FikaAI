@@ -31,13 +31,13 @@ services:
       - key: MODELS_DIR
         value: /app/models_data
       - key: WEB_CONCURRENCY
-        value: 1
+        value: 3
       - key: TRAINING_LATITUDE
         value: -6.8137482
       - key: TRAINING_LONGITUDE
         value: 39.2801352
       - key: TRAINING_RADIUS_METERS
-        value: 100
+        value: 300
       - key: TRAINING_LOCATION_NAME
         value: DIT RAFIC Building
       - key: TRAINING_LOCATION_ADDRESS

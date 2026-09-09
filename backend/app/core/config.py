@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     campus_timezone: str = "Africa/Dar_es_Salaam"
     training_latitude: float = -6.8137482
     training_longitude: float = 39.2801352
-    training_radius_meters: int = 100
+    training_radius_meters: int = 300
     training_location_name: str = "DIT RAFIC Building"
     training_location_address: str = "Dar es Salaam Institute of Technology, RAFIC Building"
 
@@ -86,10 +86,10 @@ class Settings(BaseSettings):
         "http://localhost:5175,http://127.0.0.1:5175"
     )
 
-    # Rate limits
+    # Rate limits — 60 students × 3 calls (verify-location + verify-venue + check-in/out) behind single campus NAT
     rate_limit_login: str = "5/minute"
-    rate_limit_face: str = "10/minute"
-    rate_limit_attendance: str = "20/minute"
+    rate_limit_face: str = "100/minute"
+    rate_limit_attendance: str = "120/minute"
     rate_limit_chat: str = "30/minute"
 
     @property

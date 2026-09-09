@@ -7,8 +7,8 @@ course and instructor directly, and student accounts require no subdivision or
 session assignment.
 
 The production geofence is centered on DIT's RAFIC Building
-(`-6.8137482`, `39.2801352`) with a 100 m radius. Verify and calibrate the radius on
-real devices before relying on it for attendance enforcement.
+(`-6.8137482`, `39.2801352`) with a 300 m radius (increased from 100 m to handle indoor GPS drift 80-250 m + class bursts of 60+ students). Verify and calibrate the radius on
+real devices before relying on it for attendance enforcement. Rate limits are 60/min attendance, 30/min face to avoid 429 under campus NAT.
 
 ## Quick start
 

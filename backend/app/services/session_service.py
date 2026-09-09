@@ -109,7 +109,7 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
                 existing.check_in_open = time(8, 0)
                 existing.official_start = time(9, 30)
                 existing.check_in_close = time(15, 0)
-                existing.expected_end = time(15, 0)
+                existing.expected_end = time(11, 0)
                 existing.check_out_close = time(17, 0)
                 existing.late_threshold_minutes = 0
                 existing.permitted_radius_meters = settings.training_radius_meters
@@ -132,7 +132,7 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
                 check_in_open=time(8, 0),
                 official_start=time(9, 30),
                 check_in_close=time(15, 0),
-                expected_end=time(15, 0),
+                expected_end=time(11, 0),
                 check_out_close=time(17, 0),
                 late_threshold_minutes=0,
                 permitted_radius_meters=settings.training_radius_meters,
