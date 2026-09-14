@@ -59,6 +59,8 @@ def month_span(day: date) -> tuple[date, date]:
 
 
 def status_label(status: str) -> str:
+    if status == "ABSENT":
+        return "—"
     if status == "PRESENT":
         return "Arrived early"
     if status == "LATE":
@@ -224,7 +226,7 @@ async def build_attendance_report(db: AsyncSession, period: Period, anchor: date
         if was_late:
             card["lateDays"] += 1
         if session.session_date.weekday() < 5:
-            card["days"][WEEKDAY_LABELS[session.session_date.weekday()]] = "Late" if was_late else "Present"
+            card["days"][WEEKDAY_LABELS[session.session_date.weekday()]] = "—" if status == "ABSENT" else ("Late" if was_late else "Present")
 
     return {
         "period": period,
