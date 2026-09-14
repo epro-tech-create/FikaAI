@@ -71,6 +71,17 @@ class Settings(BaseSettings):
     gps_max_accuracy_meters: float = 400.0
     gps_max_age_seconds: int = 120
 
+    # Device / MAC binding — prevents checking in for absent students
+    # Browser cannot expose real MAC, so we bind to registration DeviceId (UUID stored
+    # in localStorage, hashed server-side). Optional strict MAC binding is available
+    # for native / captive-portal deployments that can supply X-Device-MAC.
+    device_binding_enabled: bool = True
+    # If True, a student with a bound device must supply matching deviceId on every
+    # attendance verification / check-in. Legacy students without a bound device are
+    # auto-bound on first successful verification when True (set False to reject them).
+    device_auto_bind_on_first_use: bool = False
+    mac_binding_enabled: bool = False
+
     # Attendance
     default_late_threshold_minutes: int = 15
 

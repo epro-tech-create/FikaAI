@@ -16,6 +16,7 @@ class CamelModel(BaseModel):
 
 
 MEMBERSHIP_ID_PATTERN = re.compile(r"^CCD-\d{4}-\d{3}$")
+MAC_PATTERN = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
 
 
 def normalize_membership_id(value: str | None) -> str | None:
@@ -27,6 +28,17 @@ def normalize_membership_id(value: str | None) -> str | None:
     if not MEMBERSHIP_ID_PATTERN.fullmatch(normalized):
         raise ValueError("Student ID must look like CCD-2026-015.")
     return normalized
+
+
+def normalize_mac_address(value: str | None) -> str | None:
+    if value is None:
+        return None
+    raw = value.strip().upper().replace("-", ":")
+    if not raw:
+        return None
+    if not MAC_PATTERN.fullmatch(raw):
+        raise ValueError("MAC address must look like 01:23:45:67:89:AB.")
+    return raw
 
 
 # ------------------------------------------------------------------ auth
@@ -46,7 +58,13 @@ class StudentRegisterRequest(CamelModel):
     registration_number: str = Field(min_length=3, max_length=50)
     membership_id: str | None = Field(default=None, max_length=30)
     device_id: uuid.UUID | None = None
+    mac_address: str | None = Field(default=None, max_length=17)
     password: str = Field(min_length=8, max_length=200)
+
+    @field_validator("mac_address", mode="before")
+    @classmethod
+    def normalize_mac(cls, value: str | None) -> str | None:
+        return normalize_mac_address(value)
 
     @field_validator("full_name")
     @classmethod
@@ -226,6 +244,13 @@ class VerifyLocationRequest(CamelModel):
     longitude: float = Field(ge=-180, le=180)
     accuracy_meters: float = Field(ge=0, le=100_000)
     captured_at: str  # ISO-8601 with offset
+    device_id: uuid.UUID | None = None
+    mac_address: str | None = Field(default=None, max_length=17)
+
+    @field_validator("mac_address", mode="before")
+    @classmethod
+    def normalize_mac(cls, value: str | None) -> str | None:
+        return normalize_mac_address(value)
 
 
 class LocationVerificationResponse(CamelModel):
@@ -295,6 +320,13 @@ class VerifyVenueRequest(CamelModel):
     session_id: uuid.UUID
     code: str | None = None
     qr_token: str | None = None
+    device_id: uuid.UUID | None = None
+    mac_address: str | None = Field(default=None, max_length=17)
+
+    @field_validator("mac_address", mode="before")
+    @classmethod
+    def normalize_mac(cls, value: str | None) -> str | None:
+        return normalize_mac_address(value)
 
     @model_validator(mode="after")
     def require_one(self):
@@ -330,6 +362,13 @@ class AttendanceSubmitRequest(CamelModel):
     face_verification_token: str | None = None
     venue_verification_token: str | None = None
     idempotency_key: str
+    device_id: uuid.UUID | None = None
+    mac_address: str | None = Field(default=None, max_length=17)
+
+    @field_validator("mac_address", mode="before")
+    @classmethod
+    def normalize_mac(cls, value: str | None) -> str | None:
+        return normalize_mac_address(value)
 
     @model_validator(mode="after")
     def require_proof(self):

@@ -20,6 +20,7 @@ from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
 from app.models.entities import AttendanceSession, LocationVerification, Student
 from app.services.audit_service import audit_detached
+from app.services.device_service import verify_device_binding
 from app.services.session_service import (
     campus_now,
     get_active_session_or_error,
@@ -68,8 +69,24 @@ async def verify_location(
     accuracy_meters: float,
     captured_at_raw: str,
     ip_address: str | None = None,
+    device_id: uuid.UUID | None = None,
+    mac_address: str | None = None,
 ) -> LocationVerification:
     """Validate the session, GPS freshness, and radius; persist a one-time token."""
+    # Device binding acts as MAC filter — reject before minting a location token
+    try:
+        verify_device_binding(student, device_id=device_id, mac_address=mac_address)
+    except ApiError as exc:
+        await audit_detached(
+            action="location_verification_failed",
+            actor_user_id=actor_user_id,
+            entity_type="attendance_session",
+            entity_id=session_id,
+            details={"reason": exc.code.value, "device_mismatch": True},
+            ip_address=ip_address,
+        )
+        raise
+
     session = await get_active_session_or_error(db, session_id)
     assert isinstance(session, AttendanceSession)
 

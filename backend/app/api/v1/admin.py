@@ -160,8 +160,85 @@ def _student_response(student: Student) -> dict:
         "yearOfStudy": student.year_of_study,
         "status": student.status.value,
         "isActive": student.user.is_active,
+        "hasDeviceBinding": bool(student.registration_device_hash),
+        "hasMacBinding": bool(student.registration_mac_hash),
         "createdAt": student.created_at,
     }
+
+
+@router.post("/students/{student_id}/device-bind", response_model=None)
+async def bind_student_device(
+    student_id: uuid.UUID,
+    payload: dict,
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Admin binds or re-binds a student's device/MAC. Clears previous binding."""
+    import hashlib as _hashlib
+    import re as _re
+    student = await db.get(Student, student_id)
+    if student is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
+    device_id_raw = payload.get("deviceId") or payload.get("device_id")
+    mac_raw = payload.get("macAddress") or payload.get("mac_address")
+    clear = payload.get("clear") is True
+    if clear:
+        student.registration_device_hash = None
+        student.registration_mac_hash = None
+    else:
+        if device_id_raw:
+            try:
+                did = _re.sub(r"\s", "", str(device_id_raw))
+                # validate UUID
+                uuid.UUID(did)
+                student.registration_device_hash = _hashlib.sha256(did.encode()).hexdigest()
+            except ValueError as exc:
+                raise ApiError(ErrorCode.VALIDATION_ERROR, "Invalid deviceId UUID.", 422) from exc
+        if mac_raw:
+            normalized = str(mac_raw).strip().upper().replace("-", ":")
+            if not _re.fullmatch(r"([0-9A-F]{2}:){5}[0-9A-F]{2}", normalized):
+                raise ApiError(ErrorCode.VALIDATION_ERROR, "MAC must look like 01:23:45:67:89:AB.", 422)
+            student.registration_mac_hash = _hashlib.sha256(normalized.encode()).hexdigest()
+        if not device_id_raw and not mac_raw and not clear:
+            raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide deviceId, macAddress, or clear=true.", 422)
+    await db.flush()
+    db.add(AuditLog(
+        actor_user_id=admin.id,
+        action="student_device_bound",
+        entity_type="student",
+        entity_id=student.id,
+        details={"deviceBound": bool(student.registration_device_hash), "macBound": bool(student.registration_mac_hash), "cleared": clear},
+        ip_address=request.client.host if request.client else None,
+    ))
+    await db.commit()
+    await db.refresh(student)
+    return _student_response(student)
+
+
+@router.post("/students/{student_id}/device-unbind", response_model=None)
+async def unbind_student_device(
+    student_id: uuid.UUID,
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    student = await db.get(Student, student_id)
+    if student is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
+    student.registration_device_hash = None
+    student.registration_mac_hash = None
+    await db.flush()
+    db.add(AuditLog(
+        actor_user_id=admin.id,
+        action="student_device_unbound",
+        entity_type="student",
+        entity_id=student.id,
+        details={},
+        ip_address=request.client.host if request.client else None,
+    ))
+    await db.commit()
+    return _student_response(student)
 
 
 @router.post("/students", response_model=None, status_code=201)

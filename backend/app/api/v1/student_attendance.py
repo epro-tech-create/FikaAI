@@ -29,6 +29,30 @@ from app.services.location_service import verify_location
 from app.services.session_service import find_active_session
 from app.services.venue_service import verify_venue
 
+import uuid as _uuid
+
+
+def _resolve_device(payload_device_id, request: Request) -> _uuid.UUID | None:
+    """Prefer body deviceId, fall back to X-Device-Id header."""
+    if payload_device_id is not None:
+        return payload_device_id
+    header = request.headers.get("x-device-id") or request.headers.get("x-registration-device")
+    if header:
+        try:
+            return _uuid.UUID(header.strip())
+        except (ValueError, AttributeError):
+            return None
+    return None
+
+
+def _resolve_mac(payload_mac: str | None, request: Request) -> str | None:
+    if payload_mac:
+        return payload_mac
+    header = request.headers.get("x-device-mac") or request.headers.get("x-mac-address")
+    if header:
+        return header.strip()
+    return None
+
 router = APIRouter(prefix="/student/attendance", tags=["student-attendance"])
 profile_router = APIRouter(prefix="/student/profile", tags=["student-profile"])
 
@@ -140,6 +164,8 @@ async def verify_location_endpoint(
         accuracy_meters=payload.accuracy_meters,
         captured_at_raw=payload.captured_at,
         ip_address=request.client.host if request.client else None,
+        device_id=_resolve_device(payload.device_id, request),
+        mac_address=_resolve_mac(payload.mac_address, request),
     )
     return LocationVerificationResponse(
         verified=True,
@@ -169,6 +195,8 @@ async def verify_venue_endpoint(
         code=payload.code,
         qr_token=payload.qr_token,
         ip_address=request.client.host if request.client else None,
+        device_id=_resolve_device(payload.device_id, request),
+        mac_address=_resolve_mac(payload.mac_address, request),
     )
     return VenueVerificationResponse(
         verified=True,
@@ -215,6 +243,8 @@ async def _submit(
         venue_verification_token=payload.venue_verification_token,
         idempotency_key=payload.idempotency_key,
         ip_address=request.client.host if request.client else None,
+        device_id=_resolve_device(payload.device_id, request),
+        mac_address=_resolve_mac(payload.mac_address, request),
     )
     data = (
         await check_in_service(db, **common)

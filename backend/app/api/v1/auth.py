@@ -31,6 +31,22 @@ def _registration_device_hash(device_id: uuid.UUID) -> str:
     return hashlib.sha256(str(device_id).encode()).hexdigest()
 
 
+def _normalize_mac_value(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    normalized = raw.strip().upper().replace("-", ":")
+    import re
+    if not re.fullmatch(r"([0-9A-F]{2}:){5}[0-9A-F]{2}", normalized):
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "MAC address must look like 01:23:45:67:89:AB.", 422)
+    return normalized
+
+
+def _registration_mac_hash(mac: str | None) -> str | None:
+    if not mac:
+        return None
+    return hashlib.sha256(mac.encode()).hexdigest()
+
+
 def _client_ip(request: Request) -> str | None:
     # Trust only X-Real-IP from our nginx; ignore client-supplied X-Forwarded-For
     real_ip = request.headers.get("x-real-ip")
@@ -56,6 +72,8 @@ async def register_student(
     db: AsyncSession = Depends(get_db),
 ) -> TokenPairResponse:
     device_hash = _registration_device_hash(payload.device_id) if payload.device_id else None
+    normalized_mac = _normalize_mac_value(payload.mac_address) if payload.mac_address else None
+    mac_hash = _registration_mac_hash(normalized_mac)
     registration_ip = _client_ip(request)
     if (await db.execute(select(User.id).where(User.email == payload.email))).scalar_one_or_none():
         raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account already uses this email address.", 409)
@@ -79,6 +97,14 @@ async def register_student(
             "A student account has already been registered from this device.",
             409,
         )
+    if mac_hash and (await db.execute(
+        select(Student.id).where(Student.registration_mac_hash == mac_hash)
+    )).scalar_one_or_none():
+        raise ApiError(
+            ErrorCode.DEVICE_ALREADY_REGISTERED,
+            "A student account has already been registered with this MAC address.",
+            409,
+        )
 
     user = User(
         email=payload.email,
@@ -95,6 +121,7 @@ async def register_student(
             registration_number=payload.registration_number,
             membership_id=payload.membership_id,
             registration_device_hash=device_hash,
+            registration_mac_hash=mac_hash,
             registration_ip=registration_ip,
             status=StudentStatus.ACTIVE,
         )

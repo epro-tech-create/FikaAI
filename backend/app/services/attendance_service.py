@@ -38,6 +38,7 @@ from app.models.entities import (
     VerificationMethod,
 )
 from app.services.audit_service import audit_detached
+from app.services.device_service import verify_device_binding
 from app.services.session_service import campus_now, classify_check_in, validate_window
 
 logger = logging.getLogger("ccd.attendance")
@@ -158,12 +159,29 @@ async def check_in(
     venue_verification_token: str | None = None,
     idempotency_key: str,
     ip_address: str | None,
+    device_id: uuid.UUID | None = None,
+    mac_address: str | None = None,
 ) -> dict[str, Any]:
     try:
         idem_uuid = uuid.UUID(idempotency_key)
     except (ValueError, TypeError) as exc:
         raise ApiError(ErrorCode.IDEMPOTENCY_KEY_REQUIRED,
                        "A valid UUID idempotency key is required.", 400) from exc
+
+    # Enforce device / MAC binding before touching session locks — prevents
+    # proxy check-ins where one device signs for an absent student.
+    try:
+        verify_device_binding(student, device_id=device_id, mac_address=mac_address)
+    except ApiError as exc:
+        await audit_detached(
+            action="attendance_rejected",
+            actor_user_id=actor_user_id,
+            entity_type="attendance_session",
+            entity_id=session_id,
+            details={"reason": exc.code.value, "device_mismatch": True},
+            ip_address=ip_address,
+        )
+        raise
 
     # get_current_student may have started an implicit read transaction on this
     # request's shared session. Close it before opening the atomic write tx.
@@ -278,12 +296,27 @@ async def check_out(
     venue_verification_token: str | None = None,
     idempotency_key: str,
     ip_address: str | None,
+    device_id: uuid.UUID | None = None,
+    mac_address: str | None = None,
 ) -> dict[str, Any]:
     try:
         idem_uuid = uuid.UUID(idempotency_key)
     except (ValueError, TypeError) as exc:
         raise ApiError(ErrorCode.IDEMPOTENCY_KEY_REQUIRED,
                        "A valid UUID idempotency key is required.", 400) from exc
+
+    try:
+        verify_device_binding(student, device_id=device_id, mac_address=mac_address)
+    except ApiError as exc:
+        await audit_detached(
+            action="attendance_rejected",
+            actor_user_id=actor_user_id,
+            entity_type="attendance_session",
+            entity_id=session_id,
+            details={"reason": exc.code.value, "device_mismatch": True},
+            ip_address=ip_address,
+        )
+        raise
 
     if db.in_transaction():
         await db.commit()

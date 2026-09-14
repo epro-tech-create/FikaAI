@@ -23,6 +23,7 @@ from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
 from app.models.entities import AttendanceRecord, Student, VenueVerification
 from app.services.audit_service import audit_detached
+from app.services.device_service import verify_device_binding
 from app.services.session_service import get_active_session_or_error, validate_window
 
 CODE_PATTERN = re.compile(r"^[A-Z0-9]{8}$")
@@ -54,8 +55,22 @@ async def verify_venue(
     code: str | None = None,
     qr_token: str | None = None,
     ip_address: str | None = None,
+    device_id: uuid.UUID | None = None,
+    mac_address: str | None = None,
 ) -> VenueVerification:
     """Validate code/QR against static hash, check session window, mint venue token."""
+    try:
+        verify_device_binding(student, device_id=device_id, mac_address=mac_address)
+    except ApiError as exc:
+        await audit_detached(
+            action="venue_verification_failed",
+            actor_user_id=actor_user_id,
+            entity_type="attendance_session",
+            entity_id=session_id,
+            details={"reason": exc.code.value, "device_mismatch": True},
+            ip_address=ip_address,
+        )
+        raise
     _ensure_configured()
 
     session = await get_active_session_or_error(db, session_id)

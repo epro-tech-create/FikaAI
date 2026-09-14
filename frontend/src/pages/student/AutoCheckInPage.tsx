@@ -6,6 +6,7 @@ import { formatCampusTime } from '../../lib/campusTime'
 import { displayMembershipId, displayRegistration } from '../../lib/studentId'
 
 import { extractVenueCode, readStoredVenueCode, storeVenueCode, clearStoredVenueCode } from '../../lib/venueCheckin'
+import { getRegistrationDeviceId } from '../../lib/device'
 
 type Phase = 'loading' | 'ready' | 'locating' | 'verifying' | 'done' | 'error'
 type Action = 'check-in' | 'check-out'
@@ -103,14 +104,17 @@ export default function AutoCheckInPage() {
 
       setPhase('verifying')
       setStatus('Verifying you are inside RAFIC…')
+      const deviceId = getRegistrationDeviceId()
       const locRes = await api.post('/student/attendance/verify-location', {
         sessionId: session.sessionId,
+        deviceId,
         ...loc,
       })
 
       setStatus('Confirming venue QR…')
       const venueRes = await api.post('/student/attendance/verify-venue', {
         sessionId: session.sessionId,
+        deviceId,
         code,
       })
 
@@ -121,6 +125,7 @@ export default function AutoCheckInPage() {
           sessionId: session.sessionId,
           locationVerificationToken: locRes.data.locationVerificationToken,
           venueVerificationToken: venueRes.data.venueVerificationToken,
+          deviceId,
           idempotencyKey: crypto.randomUUID(),
         },
       )

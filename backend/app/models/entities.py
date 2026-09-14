@@ -122,6 +122,9 @@ class Student(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     registration_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     membership_id: Mapped[str | None] = mapped_column(String(30))
     registration_device_hash: Mapped[str | None] = mapped_column(String(64))
+    # Optional strict MAC binding (for native app / captive portal where MAC is available).
+    # Stored as sha256(normalized MAC) — never plaintext.
+    registration_mac_hash: Mapped[str | None] = mapped_column(String(64))
     registration_ip: Mapped[str | None] = mapped_column(String(45))
     year_of_study: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[StudentStatus] = mapped_column(
@@ -137,6 +140,12 @@ class Student(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "registration_device_hash",
             unique=True,
             postgresql_where=text("registration_device_hash IS NOT NULL"),
+        ),
+        Index(
+            "uq_students_registration_mac_hash",
+            "registration_mac_hash",
+            unique=True,
+            postgresql_where=text("registration_mac_hash IS NOT NULL"),
         ),
         Index(
             "uq_students_membership_id",

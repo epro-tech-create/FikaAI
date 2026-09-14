@@ -12,6 +12,7 @@ import { checkoutWindow } from '../../lib/checkout'
 import { campusGreeting, formatCampusDate, formatCampusTime } from '../../lib/campusTime'
 import { displayMembershipId, displayRegistration } from '../../lib/studentId'
 import { readStoredVenueCode, studentCheckinPath } from '../../lib/venueCheckin'
+import { getRegistrationDeviceId } from '../../lib/device'
 import FaceEnrollmentPage from './FaceEnrollmentPage'
 
 type Session = {
@@ -122,7 +123,8 @@ export default function AttendancePage() {
       if(runId.current!==activeRun) return
       setScanStatus('Checking training area')
       const loc=await locPromise
-      const location=await api.post('/student/attendance/verify-location',{ sessionId:session.sessionId, ...loc })
+      const deviceId = getRegistrationDeviceId()
+      const location=await api.post('/student/attendance/verify-location',{ sessionId:session.sessionId, deviceId, ...loc })
       setProgress(18); setScanStatus('Face locked')
       const ch=await api.post('/student/liveness/challenge',{sessionId:session.sessionId})
       const ct=parseChallengeType(ch.data?.challengeType); const ci=typeof ch.data?.instruction==='string'&&ch.data.instruction.trim()?ch.data.instruction:'Complete the requested face action'
@@ -131,7 +133,7 @@ export default function AttendancePage() {
       timer=window.setInterval(()=>setProgress(v=>Math.min(93,v+1)),130)
       const verified=await api.post('/student/attendance/verify-face',{ sessionId:session.sessionId, challengeToken:ch.data.challengeToken, frames })
       window.clearInterval(timer); timer=undefined; setProgress(95)
-      const result=await api.post(checkingOut?'/student/attendance/check-out':'/student/attendance/check-in',{ sessionId:session.sessionId, locationVerificationToken:location.data.locationVerificationToken, faceVerificationToken:verified.data.faceVerificationToken, idempotencyKey:crypto.randomUUID() })
+      const result=await api.post(checkingOut?'/student/attendance/check-out':'/student/attendance/check-in',{ sessionId:session.sessionId, deviceId, locationVerificationToken:location.data.locationVerificationToken, faceVerificationToken:verified.data.faceVerificationToken, idempotencyKey:crypto.randomUUID() })
       setRecord(result.data); setProgress(100); window.setTimeout(()=>setStage('success'),350)
     } catch(e:any){ if(timer) window.clearInterval(timer); monitor.stop(); cam.stop(); setError(message(e)); setStage('error') }
   }
