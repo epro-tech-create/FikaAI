@@ -71,7 +71,6 @@ export default function DataPage({ config }: { config: DataPageConfig }) {
   }
 
   const visibleItems = items.filter(item => matchesSearch(item, searchQuery, config.columns.map(column => column.key)))
-  const tableColumns = isAuditLogs ? [...config.columns, { key: '_actions', label: 'Actions' } as any] : config.columns
 
   return <main className="portal-content"><PageHeading eyebrow={config.eyebrow || 'OPERATIONS'} title={config.title} description={config.description}/>
     {isAuditLogs && <section className="content-card" style={{marginBottom:16}}>
@@ -91,8 +90,8 @@ export default function DataPage({ config }: { config: DataPageConfig }) {
         onRefresh={() => void load()}
       />
       {loading ? <StatePanel kind="loading"/> : error ? <StatePanel kind="error">{error}</StatePanel> : visibleItems.length ? <>
-        <DataTable columns={tableColumns} items={visibleItems.map(it=> ({...it, _actions: isAuditLogs ? <button disabled={deleting===String(it.id)} onClick={()=>deleteOne(String(it.id))} className="secondary-button" style={{padding:'4px 8px',fontSize:12}}>{deleting===String(it.id)?'Deleting…':'Delete'}</button> : undefined }))} />
-        {isAuditLogs && <p style={{marginTop:8,fontSize:12,color:'#64748b'}}>Tip: search then delete one by one, or bulk delete by date above.</p>}
+        <DataTable columns={config.columns} items={visibleItems} renderActions={isAuditLogs ? (item) => <button disabled={deleting===String(item.id)} onClick={()=>deleteOne(String(item.id))} className="secondary-button" style={{padding:'4px 10px',fontSize:12,borderRadius:6}}>{deleting===String(item.id)?'Deleting…':'Delete'}</button> : undefined} />
+        {isAuditLogs && <p style={{marginTop:8,fontSize:12,color:'#94a3b8'}}>Tip: search then delete one by one, or bulk delete by date above.</p>}
       </> : <StatePanel kind="empty">{items.length ? 'No records match this search.' : undefined}</StatePanel>}
     </section>
   </main>
