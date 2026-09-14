@@ -14,10 +14,28 @@ export default function ProfilePage() {
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [editMsg, setEditMsg] = useState('')
+  const [editErr, setEditErr] = useState('')
   useEffect(() => {
-    api.get('/student/profile/summary').then(r => setSummary(r.data)).catch(() => {})
+    api.get('/student/profile/summary').then(r => { setSummary(r.data); setEditName(r.data?.fullName || ''); setEditEmail(r.data?.email || '') }).catch(() => {})
     api.get('/student/face-enrollment/status').then(r => setEnrolled(Boolean(r.data.enrolled))).catch(() => {})
   }, [])
+  async function saveProfile(e: React.FormEvent) {
+    e.preventDefault()
+    setEditErr(''); setEditMsg('')
+    if (!editName.trim() && !editEmail.trim()) { setEditErr('Enter name or email.'); return }
+    setBusy(true)
+    try {
+      const res = await api.patch('/student/profile', { fullName: editName.trim(), email: editEmail.trim() })
+      setEditMsg('Profile updated.')
+      setSummary((s:any)=> ({...s, fullName: res.data?.fullName || editName, email: res.data?.email || editEmail}))
+      if (res.data?.fullName) localStorage.setItem('ccd.name', res.data.fullName)
+      setEditing(false)
+    } catch (e:any) { setEditErr(e?.response?.data?.error?.message || 'Failed to update profile.') } finally { setBusy(false) }
+  }
   async function changePw(e: React.FormEvent) {
     e.preventDefault()
     setErr(''); setMsg('')
@@ -50,9 +68,23 @@ export default function ProfilePage() {
             <div><span>Registration</span><b>{displayRegistration(summary || {})}</b></div>
             <div><span>Theme</span><span className="theme-row"><ThemeToggle /> <small>Light / Dark</small></span></div>
           </div>
-          <div className="profile-actions">
+          <div className="profile-actions" style={{display:'grid',gap:8}}>
+            <button onClick={() => setEditing(v=>!v)} className="dash-btn ghost full">{editing ? 'Cancel edit' : 'Edit details'}</button>
             <button onClick={() => { clearAuthentication(); window.location.href = '/login' }} className="dash-btn ghost full">Sign out</button>
           </div>
+          {editing && <form onSubmit={saveProfile} className="profile-form" style={{marginTop:12,borderTop:'1px solid #1e293b',paddingTop:12}}>
+            <label>Full name
+              <input value={editName} onChange={e=>setEditName(e.target.value)} placeholder="Your full name" minLength={3} maxLength={200} required />
+            </label>
+            <label>Email
+              <input type="email" value={editEmail} onChange={e=>setEditEmail(e.target.value)} placeholder="your@email.com" required />
+            </label>
+            {editErr && <div className="error">{editErr}</div>}
+            {editMsg && <div className="success">{editMsg}</div>}
+            <button disabled={busy} className="dash-btn primary full" type="submit">{busy ? 'Saving…' : 'Save details'}</button>
+          </form>}
+          {!editing && editMsg && <div className="success" style={{marginTop:8}}>{editMsg}</div>}
+          {editErr && !editing && <div className="error" style={{marginTop:8}}>{editErr}</div>}
         </article>
 
         <article className="content-card profile-form-card">

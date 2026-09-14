@@ -76,6 +76,44 @@ async def student_summary(
     )
 
 
+@profile_router.patch("", response_model=None)
+async def student_update_profile(
+    payload: dict,
+    request: Request,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import select
+    from sqlalchemy.exc import IntegrityError
+    from app.schemas import StudentProfileUpdateRequest
+    data = StudentProfileUpdateRequest.model_validate(payload)
+    values = data.model_dump(exclude_unset=True, exclude_none=True)
+    if not values:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide fullName or email to update.", 422)
+    user = await db.get(type(student.user), student.user_id)
+    if "full_name" in values:
+        user.full_name = values["full_name"]
+        student.user.full_name = values["full_name"]
+    if "email" in values:
+        # check uniqueness
+        existing = (await db.execute(select(type(user).id).where(type(user).email == values["email"], type(user).id != user.id))).scalar_one_or_none()
+        if existing is not None:
+            raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account already uses this email address.", 409)
+        user.email = values["email"]
+        student.user.email = values["email"]
+    try:
+        await db.flush()
+        from app.services.audit_service import audit_detached
+        await audit_detached(action="student_profile_updated", actor_user_id=user.id, entity_type="student", entity_id=student.id, details={"fields": sorted(values.keys())}, ip_address=request.client.host if request.client else None)
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "Email already in use.", 409) from exc
+    await db.refresh(student)
+    await db.refresh(user)
+    return {"ok": True, "fullName": user.full_name, "email": user.email, "registrationNumber": student.registration_number, "membershipId": student.membership_id}
+
+
 @profile_router.post("/change-password", response_model=None)
 async def student_change_password(
     payload: dict,

@@ -394,6 +394,28 @@ class CurrentAttendanceResponse(CamelModel):
     record: AttendanceRecordResponse | None = None
 
 
+class StudentProfileUpdateRequest(CamelModel):
+    full_name: str | None = Field(default=None, min_length=3, max_length=200)
+    email: str | None = Field(default=None, min_length=5, max_length=255)
+
+    @field_validator("full_name")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return " ".join(value.strip().split())
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if "@" not in normalized or "." not in normalized.rsplit("@", 1)[-1]:
+            raise ValueError("Enter a valid email address.")
+        return normalized
+
+
 class MessageResponse(CamelModel):
     message: str
 
