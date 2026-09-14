@@ -16,6 +16,8 @@ const InstructorPage = lazy(() => import('./pages/portal/InstructorPage'))
 const StudentPage = lazy(() => import('./pages/portal/StudentPage'))
 const ReportsPage = lazy(() => import('./pages/portal/ReportsPage'))
 const ChatPage = lazy(() => import('./pages/portal/ChatPage'))
+const ManualAttendancePage = lazy(() => import('./pages/portal/ManualAttendancePage'))
+const LocationSettingsPage = lazy(() => import('./pages/portal/LocationSettingsPage'))
 import StudentLayout from './pages/student/StudentLayout'
 import { adminPages, instructorPages } from './pages/portal/config'
 import { clearAuthentication, getStoredRole, parseRole, storeAuthentication } from './lib/auth'
@@ -218,6 +220,8 @@ export default function App({ application }: { application?: Application }) {
             <Route path="instructors" element={<InstructorPage/>}/>
             <Route path="reports" element={<ReportsPage role="admin"/>}/>
             <Route path="chat" element={<ChatPage/>}/>
+            <Route path="manual-attendance" element={<ManualAttendancePage role="admin"/>}/>
+            <Route path="location-settings" element={<LocationSettingsPage role="admin"/>}/>
             {Object.entries(adminPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
             <Route path="system-settings" element={<InfoPage title="System Settings"/>}/>
             <Route path="profile" element={<InfoPage title="Profile"/>}/>
@@ -228,6 +232,8 @@ export default function App({ application }: { application?: Application }) {
             <Route index element={<Navigate to="dashboard" replace/>}/>
             <Route path="dashboard" element={<DashboardPage role="instructor"/>}/>
             <Route path="reports" element={<ReportsPage role="instructor"/>}/>
+            <Route path="manual-attendance" element={<ManualAttendancePage role="instructor"/>}/>
+            <Route path="location-settings" element={<LocationSettingsPage role="instructor"/>}/>
             <Route path="chat" element={<ChatPage/>}/>
             {Object.entries(instructorPages).map(([path, config]) => <Route key={path} path={path} element={<DataPage config={config}/>}/>)}
             <Route path="notifications" element={<InfoPage title="Notifications"/>}/>

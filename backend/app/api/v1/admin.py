@@ -639,6 +639,95 @@ async def delete_audit_logs_range(
     return {"deleted": deleted}
 
 
+# --- Manual attendance (admin can check-in/out any student) ---
+@router.post("/attendance/manual-check-in", response_model=None)
+async def admin_manual_check_in(
+    payload: dict,
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from app.schemas import ManualAttendanceRequest
+    from app.services.attendance_service import manual_check_in
+    data = ManualAttendanceRequest.model_validate(payload)
+    student = await db.get(Student, data.student_id)
+    if student is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
+    return await manual_check_in(db, student=student, actor_user_id=admin.id, session_id=data.session_id, ip_address=request.client.host if request.client else None, check_in_at=data.check_in_at, status=data.status, reason=data.reason)
+
+
+@router.post("/attendance/manual-check-out", response_model=None)
+async def admin_manual_check_out(
+    payload: dict,
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from app.schemas import ManualAttendanceRequest
+    from app.services.attendance_service import manual_check_out
+    data = ManualAttendanceRequest.model_validate(payload)
+    student = await db.get(Student, data.student_id)
+    if student is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
+    return await manual_check_out(db, student=student, actor_user_id=admin.id, session_id=data.session_id, ip_address=request.client.host if request.client else None, check_out_at=data.check_out_at)
+
+
+@router.post("/attendance/{record_id}/excuse", response_model=None)
+async def admin_excuse_attendance(
+    record_id: uuid.UUID,
+    payload: dict,
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from app.services.attendance_service import excuse_attendance
+    reason = payload.get("reason") or payload.get("excuseReason")
+    status = payload.get("status") or "EXCUSED"
+    if not reason or len(str(reason).strip()) < 3:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide reason (e.g. sickness, funeral).", 422)
+    rec = await excuse_attendance(db, record_id=record_id, actor_user_id=admin.id, reason=str(reason).strip(), status=str(status), ip_address=request.client.host if request.client else None)
+    return {"id": str(rec.id), "status": rec.status.value, "excuseReason": rec.excuse_reason, "excusedAt": rec.excused_at}
+
+
+@router.delete("/attendance/{record_id}/excuse", response_model=None)
+async def admin_clear_excuse(
+    record_id: uuid.UUID,
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from app.services.attendance_service import clear_excuse
+    rec = await clear_excuse(db, record_id=record_id, actor_user_id=admin.id, ip_address=request.client.host if request.client else None)
+    return {"id": str(rec.id), "status": rec.status.value}
+
+
+@router.get("/settings/location-mode", response_model=None)
+async def get_location_mode(db: AsyncSession = Depends(get_db)) -> dict:
+    return {"gpsVerificationEnabled": settings.gps_verification_enabled, "mode": "strict" if settings.gps_verification_enabled else "any", "default": "strict"}
+
+
+@router.post("/settings/location-mode", response_model=None)
+async def set_location_mode(
+    payload: dict,
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    mode = str(payload.get("mode") or payload.get("status") or "").lower()
+    enabled = payload.get("enabled")
+    if enabled is not None:
+        settings.gps_verification_enabled = bool(enabled)
+    elif mode in ("strict", "configured"):
+        settings.gps_verification_enabled = True
+    elif mode in ("any", "allow_any", "disabled"):
+        settings.gps_verification_enabled = False
+    else:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "mode must be strict or any", 422)
+    db.add(AuditLog(actor_user_id=admin.id, action="location_mode_changed", entity_type="settings", entity_id=None, details={"mode": "strict" if settings.gps_verification_enabled else "any"}, ip_address=request.client.host if request.client else None))
+    await db.commit()
+    return {"gpsVerificationEnabled": settings.gps_verification_enabled, "mode": "strict" if settings.gps_verification_enabled else "any"}
+
+
 @router.get("/reports/summary", response_model=None)
 async def reports_summary(db: AsyncSession = Depends(get_db)) -> dict:
     status_rows = (await db.execute(

@@ -68,6 +68,7 @@ class AttendanceStatus(str, enum.Enum):
     INCOMPLETE = "INCOMPLETE"
     MANUALLY_APPROVED = "MANUALLY_APPROVED"
     REJECTED = "REJECTED"
+    EXCUSED = "EXCUSED"
 
 
 class VerificationMethod(str, enum.Enum):
@@ -368,6 +369,10 @@ class AttendanceRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         _enum(RecordSource, "record_source"), nullable=False, default=RecordSource.ONLINE
     )
     idempotency_key: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), unique=True, nullable=False)
+    # Excused absence - admin/instructor marks student absent with acceptable reason
+    excuse_reason: Mapped[str | None] = mapped_column(String(500))
+    excused_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    excused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ConversationType(str, enum.Enum):

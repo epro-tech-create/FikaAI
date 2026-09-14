@@ -69,6 +69,8 @@ export function attendanceTime(value: string | null) {
 }
 
 export function attendanceStatusLabel(status: string) {
+  if (status === 'ABSENT') return '—'
+  if (status === 'EXCUSED') return 'Excused'
   if (status === 'PRESENT') return 'Arrived early'
   if (status === 'LATE') return 'Late'
   if (status === 'CHECKED_OUT') return 'Checked out'

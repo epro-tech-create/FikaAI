@@ -78,6 +78,28 @@ async def dashboard(
     }
 
 
+@router.get("/students", response_model=None)
+async def list_students_instructor(
+    instructor: Instructor = Depends(get_current_instructor),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    rows = (await db.execute(select(Student).order_by(Student.membership_id.asc().nulls_last(), Student.registration_number))).scalars().all()
+    # reuse admin student response shape
+    return [
+        {
+            "id": s.id,
+            "userId": s.user_id,
+            "fullName": s.user.full_name,
+            "email": s.user.email,
+            "membershipId": s.membership_id,
+            "registrationNumber": s.registration_number,
+            "status": s.status.value,
+            "isActive": s.user.is_active,
+        }
+        for s in rows
+    ]
+
+
 @router.get("/locations", response_model=None)
 async def active_locations(
     request: Request,
@@ -192,6 +214,74 @@ async def venue_qr(
         expires_at=None,
         message="Static 8-char venue code for entire IPT — scan the QR displayed in the RAFIC room. Check-in 08:00-15:00, check-out 15:00-17:00.",
     )
+
+
+@router.post("/attendance/manual-check-in", response_model=None)
+async def instructor_manual_check_in(
+    payload: dict,
+    request: Request,
+    instructor: Instructor = Depends(get_current_instructor),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from app.schemas import ManualAttendanceRequest
+    from app.services.attendance_service import manual_check_in
+    data = ManualAttendanceRequest.model_validate(payload)
+    student = await db.get(Student, data.student_id)
+    if student is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
+    return await manual_check_in(db, student=student, actor_user_id=instructor.user_id, session_id=data.session_id, ip_address=_instructor_ip(request), check_in_at=data.check_in_at, status=data.status, reason=data.reason)
+
+
+@router.post("/attendance/manual-check-out", response_model=None)
+async def instructor_manual_check_out(
+    payload: dict,
+    request: Request,
+    instructor: Instructor = Depends(get_current_instructor),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    from app.schemas import ManualAttendanceRequest
+    from app.services.attendance_service import manual_check_out
+    data = ManualAttendanceRequest.model_validate(payload)
+    student = await db.get(Student, data.student_id)
+    if student is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
+    return await manual_check_out(db, student=student, actor_user_id=instructor.user_id, session_id=data.session_id, ip_address=_instructor_ip(request), check_out_at=data.check_out_at)
+
+
+@router.post("/attendance/{record_id}/excuse", response_model=None)
+async def instructor_excuse_attendance(
+    record_id: str,
+    payload: dict,
+    request: Request,
+    instructor: Instructor = Depends(get_current_instructor),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    import uuid
+    from app.services.attendance_service import excuse_attendance
+    reason = payload.get("reason") or payload.get("excuseReason")
+    status = payload.get("status") or "EXCUSED"
+    if not reason or len(str(reason).strip()) < 3:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide reason.", 422)
+    rec = await excuse_attendance(db, record_id=uuid.UUID(record_id), actor_user_id=instructor.user_id, reason=str(reason).strip(), status=str(status), ip_address=_instructor_ip(request))
+    return {"id": str(rec.id), "status": rec.status.value, "excuseReason": rec.excuse_reason}
+
+
+@router.delete("/attendance/{record_id}/excuse", response_model=None)
+async def instructor_clear_excuse(
+    record_id: str,
+    request: Request,
+    instructor: Instructor = Depends(get_current_instructor),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    import uuid
+    from app.services.attendance_service import clear_excuse
+    rec = await clear_excuse(db, record_id=uuid.UUID(record_id), actor_user_id=instructor.user_id, ip_address=_instructor_ip(request))
+    return {"id": str(rec.id), "status": rec.status.value}
+
+
+@router.get("/settings/location-mode", response_model=None)
+async def instructor_location_mode(db: AsyncSession = Depends(get_db)) -> dict:
+    return {"gpsVerificationEnabled": settings.gps_verification_enabled, "mode": "strict" if settings.gps_verification_enabled else "any"}
 
 
 @router.get("/attendance/reports", response_model=None)

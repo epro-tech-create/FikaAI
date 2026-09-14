@@ -2,14 +2,14 @@ import type { Role } from './auth'
 
 export type NavItem = { label: string; path: string; mark: string }
 
-const adminLabels = ['Dashboard', 'Students', 'Instructors', 'Face Enrolments', 'Reports', 'Chat', 'Users and Roles', 'Audit Logs', 'System Settings', 'Profile'] as const
-const instructorLabels = ['Dashboard', 'Live Attendance', 'Student Attendance', 'Reports', 'Chat', 'Notifications', 'Profile'] as const
+const adminLabels = ['Dashboard', 'Students', 'Instructors', 'Face Enrolments', 'Reports', 'Chat', 'Manual Attendance', 'Location Settings', 'Users and Roles', 'Audit Logs', 'System Settings', 'Profile'] as const
+const instructorLabels = ['Dashboard', 'Live Attendance', 'Student Attendance', 'Reports', 'Manual Attendance', 'Location Settings', 'Chat', 'Notifications', 'Profile'] as const
 
 const slug = (label: string) => label.toLowerCase().replace(/ and /g, '-and-').replace(/ /g, '-')
 
 export function portalNavigation(role: Extract<Role, 'admin' | 'instructor'>): NavItem[] {
   const labels = role === 'admin' ? adminLabels : instructorLabels
-  const marks = role === 'admin' ? ['DB', 'ST', 'IN', 'FE', 'RE', 'CH', 'UR', 'AL', 'SS', 'PR'] : ['DB', 'LA', 'SA', 'RE', 'CH', 'NO', 'PR']
+  const marks = role === 'admin' ? ['DB', 'ST', 'IN', 'FE', 'RE', 'CH', 'MA', 'LO', 'UR', 'AL', 'SS', 'PR'] : ['DB', 'LA', 'SA', 'RE', 'MA', 'LO', 'CH', 'NO', 'PR']
   return labels.map((label, index) => ({
     label,
     mark: marks[index],

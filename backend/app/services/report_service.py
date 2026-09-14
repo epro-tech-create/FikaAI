@@ -61,6 +61,8 @@ def month_span(day: date) -> tuple[date, date]:
 def status_label(status: str) -> str:
     if status == "ABSENT":
         return "—"
+    if status == "EXCUSED":
+        return "Excused"
     if status == "PRESENT":
         return "Arrived early"
     if status == "LATE":
@@ -182,24 +184,30 @@ async def build_attendance_report(db: AsyncSession, period: Period, anchor: date
     start, end, title = _period_window(period, anchor)
     packed = await _records_between(db, start, end)
     rows = []
-    arrived_early = late = checked_out = 0
+    arrived_early = late = checked_out = excused = 0
     students: dict[str, dict[str, Any]] = {}
     by_day: dict[str, int] = {}
     for record, session, student, user in packed:
         status = record.status.value if hasattr(record.status, "value") else str(record.status)
-        was_late = record_was_late(
-            status,
-            record.check_in_at,
-            session.official_start,
-            session.session_date,
-            session.late_threshold_minutes,
-        )
-        if was_late:
-            late += 1
+        if status == "EXCUSED":
+            excused += 1
+        elif status == "ABSENT":
+            # absent with — : do not count as present
+            pass
         else:
-            arrived_early += 1
-        if record.check_out_at is not None or status == "CHECKED_OUT":
-            checked_out += 1
+            was_late = record_was_late(
+                status,
+                record.check_in_at,
+                session.official_start,
+                session.session_date,
+                session.late_threshold_minutes,
+            )
+            if was_late:
+                late += 1
+            else:
+                arrived_early += 1
+            if record.check_out_at is not None or status == "CHECKED_OUT":
+                checked_out += 1
         day_key = session.session_date.isoformat()
         by_day[day_key] = by_day.get(day_key, 0) + 1
         weekday = WEEKDAY_LABELS[session.session_date.weekday()] if session.session_date.weekday() < 5 else session.session_date.strftime("%a")
@@ -220,13 +228,25 @@ async def build_attendance_report(db: AsyncSession, period: Period, anchor: date
             "registrationNumber": student.registration_number,
             "daysPresent": 0,
             "lateDays": 0,
+            "excusedDays": 0,
             "days": {label: "—" for label in WEEKDAY_LABELS},
         })
-        card["daysPresent"] += 1
-        if was_late:
-            card["lateDays"] += 1
+        if status in ("ABSENT", "EXCUSED"):
+            if status == "EXCUSED":
+                card["excusedDays"] = card.get("excusedDays", 0) + 1
+            # absent/excused not counted as present
+            pass
+        else:
+            card["daysPresent"] += 1
+            if was_late:
+                card["lateDays"] += 1
         if session.session_date.weekday() < 5:
-            card["days"][WEEKDAY_LABELS[session.session_date.weekday()]] = "—" if status == "ABSENT" else ("Late" if was_late else "Present")
+            if status == "ABSENT":
+                card["days"][WEEKDAY_LABELS[session.session_date.weekday()]] = "—"
+            elif status == "EXCUSED":
+                card["days"][WEEKDAY_LABELS[session.session_date.weekday()]] = "Excused"
+            else:
+                card["days"][WEEKDAY_LABELS[session.session_date.weekday()]] = "Late" if was_late else "Present"
 
     return {
         "period": period,
@@ -242,6 +262,8 @@ async def build_attendance_report(db: AsyncSession, period: Period, anchor: date
             "arrivedEarly": arrived_early,
             "late": late,
             "checkedOut": checked_out,
+            "excused": excused,
+            "absent": sum(1 for r,_,_,_ in packed if (r.status.value if hasattr(r.status, "value") else str(r.status)) == "ABSENT"),
         },
         "dayCounts": [{"date": day, "arrivals": count} for day, count in sorted(by_day.items())],
         "rows": rows,

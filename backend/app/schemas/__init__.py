@@ -398,6 +398,33 @@ class MessageResponse(CamelModel):
     message: str
 
 
+class ManualAttendanceRequest(CamelModel):
+    student_id: uuid.UUID
+    session_id: uuid.UUID
+    check_in_at: datetime | None = None
+    check_out_at: datetime | None = None
+    minutes_late: int | None = None
+    status: str | None = Field(default=None, description="PRESENT|LATE|ABSENT|EXCUSED")
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class ExcuseRequest(CamelModel):
+    reason: str = Field(min_length=3, max_length=500, description="sickness, funeral, etc")
+    status: str = Field(default="EXCUSED", description="EXCUSED or ABSENT")
+
+
+class LocationModeRequest(CamelModel):
+    mode: str = Field(description="strict = configured location, any = allow any location")
+    enabled: bool | None = None  # alternative boolean
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        if v not in ("strict", "any", "configured", "allow_any"):
+            raise ValueError("mode must be strict/any")
+        return v
+
+
 # ----------------------------------------------------- management portals
 class SessionCreateRequest(CamelModel):
     instructor_id: uuid.UUID | None = None
