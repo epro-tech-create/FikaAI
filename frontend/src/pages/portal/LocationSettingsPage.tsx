@@ -42,12 +42,12 @@ export default function LocationSettingsPage({ role }: { role: Extract<Role,'adm
     <PageHeading eyebrow="SETTINGS" title="Location mode" description="Choose whether attendance requires the configured RAFIC location or allows any location. Default is configured location (strict)." />
     {error ? <StatePanel kind="error">{error}</StatePanel> : null}
     {ok.trim() ? <div style={{background:'#ecfdf5',border:'1px solid #a7f3d0',padding:12,borderRadius:8,marginBottom:12,color:'#065f46'}}>{ok}</div> : null}
-    <section className="content-card" style={{overflow:'hidden'}}>
-      <h4 style={{margin:'0 0 8px',color:'#f1f5f9'}}>Current: {mode==='strict' ? 'Configured location (strict)' : 'Any location (bypass geofence)'}</h4>
-      <p style={{color:'#cbd5e1',fontSize:13,marginBottom:12,lineHeight:1.5,wordBreak:'break-word'}}>
-        Strict = student must be inside RAFIC geofence (default). Any = skip GPS distance check, only venue/face needed. Toggle is live, resets on backend restart; set <code style={{background:'rgba(255,255,255,0.08)',padding:'2px 4px',borderRadius:4}}>GPS_VERIFICATION_ENABLED</code> in <code style={{background:'rgba(255,255,255,0.08)',padding:'2px 4px',borderRadius:4}}>.env.production</code> for persistent default.
+    <section className="content-card" style={{padding:20, overflow:'visible'}}>
+      <h4 style={{margin:'0 0 10px',color:'#f1f5f9', lineHeight:1.4}}>Current: {mode==='strict' ? 'Configured location (strict)' : 'Any location (bypass geofence)'}</h4>
+      <p style={{color:'#cbd5e1',fontSize:13,marginBottom:16,lineHeight:1.7,wordBreak:'break-word', overflowWrap:'anywhere'}}>
+        Strict = student must be inside RAFIC geofence (default). Any = skip GPS distance check, only venue/face needed. Toggle is live, resets on backend restart; set <code style={{background:'rgba(255,255,255,0.08)',padding:'3px 6px',borderRadius:4, wordBreak:'break-all'}}>GPS_VERIFICATION_ENABLED</code> in <code style={{background:'rgba(255,255,255,0.08)',padding:'3px 6px',borderRadius:4, wordBreak:'break-all'}}>.env.production</code> for persistent default.
       </p>
-      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+      <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
         <button disabled={saving} onClick={()=>toggle('strict')} className={mode==='strict'?'portal-primary':'secondary-button'}>Use configured location</button>
         <button disabled={saving} onClick={()=>toggle('any')} className={mode==='any'?'portal-primary':'secondary-button'}>Allow any location</button>
         <button disabled={saving} onClick={()=>load()} className="secondary-button">Refresh</button>

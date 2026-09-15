@@ -88,49 +88,49 @@ export default function ManualAttendancePage({ role }: { role: Extract<Role,'adm
     <PageHeading eyebrow="MANUAL OVERRIDE" title="Manual Attendance" description="Instructor/Admin can check-in or check-out any student without face/venue, and set excused reasons (sickness, funeral etc)." />
     {error ? <StatePanel kind="error">{error}</StatePanel> : null}
     {ok.trim() ? <div style={{background:'#ecfdf5',border:'1px solid #a7f3d0',padding:12,borderRadius:8,marginBottom:12,color:'#065f46'}}>{ok}</div> : null}
-    <section className="content-card" style={{marginBottom:16,overflow:'hidden'}}>
-      <h4 style={{margin:'0 0 12px',color:'#f1f5f9'}}>Pick student & session</h4>
-      <div style={{display:'grid',gap:12,gridTemplateColumns:'1fr 1fr'}}>
-        <label style={{color:'#cbd5e1',fontSize:13}}>Student ({students.length})
-          <select value={studentId} onChange={e=>setStudentId(e.target.value)} style={{width:'100%',padding:'10px 8px',marginTop:4,borderRadius:6,background:'#0f172a',color:'#f1f5f9',border:'1px solid #334155'}}>
+    <section className="content-card" style={{marginBottom:16, padding:20, overflow:'visible'}}>
+      <h4 style={{margin:'0 0 14px',color:'#f1f5f9', lineHeight:1.4}}>Pick student & session</h4>
+      <div style={{display:'grid',gap:14,gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))'}}>
+        <label style={{color:'#cbd5e1',fontSize:13, display:'grid', gap:6}}>Student ({students.length})
+          <select value={studentId} onChange={e=>setStudentId(e.target.value)} style={{width:'100%',padding:'11px 10px',borderRadius:8,background:'#0f172a',color:'#f1f5f9',border:'1px solid #334155', minWidth:0}}>
             <option value="">-- pick --</option>
             {students.map(s=><option key={s.id} value={s.id}>{s.fullName} — {s.registrationNumber} {s.membershipId?`(${s.membershipId})`:''}</option>)}
           </select>
         </label>
-        <label style={{color:'#cbd5e1',fontSize:13}}>Session ({sessions.length})
-          <select value={sessionId} onChange={e=>setSessionId(e.target.value)} style={{width:'100%',padding:'10px 8px',marginTop:4,borderRadius:6,background:'#0f172a',color:'#f1f5f9',border:'1px solid #334155'}}>
+        <label style={{color:'#cbd5e1',fontSize:13, display:'grid', gap:6}}>Session ({sessions.length})
+          <select value={sessionId} onChange={e=>setSessionId(e.target.value)} style={{width:'100%',padding:'11px 10px',borderRadius:8,background:'#0f172a',color:'#f1f5f9',border:'1px solid #334155', minWidth:0}}>
             <option value="">-- pick --</option>
             {sessions.map(s=><option key={s.id} value={s.id}>{s.session_date||'—'} — {s.title} ({s.status})</option>)}
           </select>
         </label>
       </div>
-      <div style={{marginTop:12,display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
-        <label style={{color:'#cbd5e1',fontSize:13}}>Status
-          <select value={status} onChange={e=>setStatus(e.target.value)} style={{padding:'10px 8px',marginTop:4,minWidth:220,borderRadius:6,background:'#0f172a',color:'#f1f5f9',border:'1px solid #334155'}}>
+      <div style={{marginTop:16,display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
+        <label style={{color:'#cbd5e1',fontSize:13, display:'grid', gap:6}}>Status
+          <select value={status} onChange={e=>setStatus(e.target.value)} style={{padding:'11px 10px',minWidth:220,borderRadius:8,background:'#0f172a',color:'#f1f5f9',border:'1px solid #334155'}}>
             <option value="PRESENT">PRESENT (arrived early)</option>
             <option value="LATE">LATE</option>
             <option value="ABSENT">ABSENT (never came, shows —)</option>
             <option value="EXCUSED">EXCUSED (sickness/funeral)</option>
           </select>
         </label>
-        {status==='EXCUSED' && <label style={{flex:1,color:'#cbd5e1',fontSize:13}}>Reason (sickness, funeral of dad/mom...)<input value={reason} onChange={e=>setReason(e.target.value)} placeholder="e.g. sickness, funeral" style={{width:'100%',padding:'10px 8px',marginTop:4,borderRadius:6,background:'#0f172a',color:'#f1f5f9',border:'1px solid #334155'}}/></label>}
+        {status==='EXCUSED' && <label style={{flex:1,color:'#cbd5e1',fontSize:13, display:'grid', gap:6}}>Reason (sickness, funeral of dad/mom...)<input value={reason} onChange={e=>setReason(e.target.value)} placeholder="e.g. sickness, funeral" style={{width:'100%',padding:'11px 10px',borderRadius:8,background:'#0f172a',color:'#f1f5f9',border:'1px solid #334155'}}/></label>}
       </div>
-      <div style={{marginTop:12,display:'flex',gap:8}}>
+      <div style={{marginTop:16,display:'flex',gap:10, flexWrap:'wrap'}}>
         <button disabled={busy} onClick={doCheckIn} className="portal-primary">Manual Check-in</button>
         <button disabled={busy} onClick={doCheckOut} className="secondary-button">Manual Check-out</button>
       </div>
-      <small style={{color:'#94a3b8',marginTop:8,display:'block'}}>Uses POST /{role}/attendance/manual-check-in and manual-check-out with MANUAL verification.</small>
+      <small style={{color:'#94a3b8',marginTop:10,display:'block', lineHeight:1.5}}>Uses POST /{role}/attendance/manual-check-in and manual-check-out with MANUAL verification.</small>
     </section>
-    <section className="content-card" style={{overflow:'hidden'}}>
-      <h4 style={{margin:'0 0 8px',color:'#f1f5f9'}}>Excuse / acceptable reason</h4>
-      <p style={{color:'#cbd5e1',fontSize:13,lineHeight:1.5}}>Mark an existing record as EXCUSED with reason (sickness, funeral etc). Or clear excuse to revert to PRESENT.</p>
-      <label style={{color:'#cbd5e1',fontSize:13}}>Record ID (or leave blank to auto-find via student+session above)
-        <input value={excuseRecordId} onChange={e=>setExcuseRecordId(e.target.value)} placeholder="uuid of attendance record" style={{width:'100%',padding:'10px 8px',marginTop:4,borderRadius:6,background:'#0f172a',color:'#f1f5f9',border:'1px solid #334155'}}/>
+    <section className="content-card" style={{padding:20, overflow:'visible'}}>
+      <h4 style={{margin:'0 0 8px',color:'#f1f5f9', lineHeight:1.4}}>Excuse / acceptable reason</h4>
+      <p style={{color:'#cbd5e1',fontSize:13,lineHeight:1.7, marginBottom:14}}>Mark an existing record as EXCUSED with reason (sickness, funeral etc). Or clear excuse to revert to PRESENT.</p>
+      <label style={{color:'#cbd5e1',fontSize:13, display:'grid', gap:6}}>Record ID (or leave blank to auto-find via student+session above)
+        <input value={excuseRecordId} onChange={e=>setExcuseRecordId(e.target.value)} placeholder="uuid of attendance record" style={{width:'100%',padding:'11px 10px',borderRadius:8,background:'#0f172a',color:'#f1f5f9',border:'1px solid #334155'}}/>
       </label>
-      <label style={{display:'block',marginTop:8,color:'#cbd5e1',fontSize:13}}>Reason
-        <input value={excuseReason} onChange={e=>setExcuseReason(e.target.value)} placeholder="e.g. sickness, mother funeral" style={{width:'100%',padding:'10px 8px',marginTop:4,borderRadius:6,background:'#0f172a',color:'#f1f5f9',border:'1px solid #334155'}}/>
+      <label style={{display:'grid',gap:6,marginTop:12,color:'#cbd5e1',fontSize:13}}>Reason
+        <input value={excuseReason} onChange={e=>setExcuseReason(e.target.value)} placeholder="e.g. sickness, mother funeral" style={{width:'100%',padding:'11px 10px',borderRadius:8,background:'#0f172a',color:'#f1f5f9',border:'1px solid #334155'}}/>
       </label>
-      <div style={{marginTop:12,display:'flex',gap:8}}>
+      <div style={{marginTop:16,display:'flex',gap:10, flexWrap:'wrap'}}>
         <button disabled={busy} onClick={doExcuse} className="portal-primary">Set EXCUSED</button>
         <button disabled={busy} onClick={clearExcuse} className="secondary-button">Clear excuse</button>
       </div>

@@ -397,13 +397,18 @@ class CurrentAttendanceResponse(CamelModel):
 class StudentProfileUpdateRequest(CamelModel):
     full_name: str | None = Field(default=None, min_length=3, max_length=200)
     email: str | None = Field(default=None, min_length=5, max_length=255)
+    membership_id: str | None = Field(default=None, max_length=30)
+    registration_number: str | None = Field(default=None, min_length=3, max_length=50)
 
     @field_validator("full_name")
     @classmethod
     def normalize_name(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        return " ".join(value.strip().split())
+        cleaned = " ".join(value.strip().split())
+        if not cleaned:
+            return None
+        return cleaned
 
     @field_validator("email")
     @classmethod
@@ -411,8 +416,32 @@ class StudentProfileUpdateRequest(CamelModel):
         if value is None:
             return None
         normalized = value.strip().lower()
+        if not normalized:
+            return None
         if "@" not in normalized or "." not in normalized.rsplit("@", 1)[-1]:
             raise ValueError("Enter a valid email address.")
+        return normalized
+
+    @field_validator("membership_id", mode="before")
+    @classmethod
+    def normalize_membership(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        # allow clearing with empty string
+        if isinstance(value, str) and not value.strip():
+            return None
+        return normalize_membership_id(value)
+
+    @field_validator("registration_number")
+    @classmethod
+    def normalize_registration_number(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if not normalized.isdigit():
+            raise ValueError("Registration number must contain numbers only.")
         return normalized
 
 

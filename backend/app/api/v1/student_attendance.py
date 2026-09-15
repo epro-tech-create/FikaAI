@@ -87,9 +87,12 @@ async def student_update_profile(
     from sqlalchemy.exc import IntegrityError
     from app.schemas import StudentProfileUpdateRequest
     data = StudentProfileUpdateRequest.model_validate(payload)
-    values = data.model_dump(exclude_unset=True, exclude_none=True)
+    values = data.model_dump(exclude_unset=True)
+    # drop None unless it is explicit membership_id clear (empty -> None is allowed)
+    # keep membership_id=None if provided, drop other Nones
+    values = {k: v for k, v in values.items() if v is not None or k == "membership_id"}
     if not values:
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide fullName or email to update.", 422)
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide fullName, email, membershipId or registrationNumber to update.", 422)
     user = await db.get(type(student.user), student.user_id)
     if "full_name" in values:
         user.full_name = values["full_name"]
@@ -101,6 +104,21 @@ async def student_update_profile(
             raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account already uses this email address.", 409)
         user.email = values["email"]
         student.user.email = values["email"]
+    if "membership_id" in values:
+        new_mid = values["membership_id"]
+        if new_mid is None:
+            student.membership_id = None
+        else:
+            existing_mid = (await db.execute(select(Student.id).where(Student.membership_id == new_mid, Student.id != student.id))).scalar_one_or_none()
+            if existing_mid is not None:
+                raise ApiError(ErrorCode.MEMBERSHIP_ID_EXISTS, "This student ID is already assigned.", 409)
+            student.membership_id = new_mid
+    if "registration_number" in values:
+        new_reg = values["registration_number"]
+        existing_reg = (await db.execute(select(Student.id).where(Student.registration_number == new_reg, Student.id != student.id))).scalar_one_or_none()
+        if existing_reg is not None:
+            raise ApiError(ErrorCode.REGISTRATION_NUMBER_EXISTS, "This registration number is already registered.", 409)
+        student.registration_number = new_reg
     try:
         await db.flush()
         from app.services.audit_service import audit_detached
@@ -108,6 +126,11 @@ async def student_update_profile(
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
+        detail = str(getattr(exc, "orig", exc)).lower()
+        if "membership_id" in detail:
+            raise ApiError(ErrorCode.MEMBERSHIP_ID_EXISTS, "This student ID is already assigned.", 409) from exc
+        if "registration_number" in detail:
+            raise ApiError(ErrorCode.REGISTRATION_NUMBER_EXISTS, "This registration number is already registered.", 409) from exc
         raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "Email already in use.", 409) from exc
     await db.refresh(student)
     await db.refresh(user)
