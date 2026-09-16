@@ -83,14 +83,18 @@ async def student_update_profile(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
+    import logging
+    logger = logging.getLogger("ccd.profile")
     from sqlalchemy import select
     from sqlalchemy.exc import IntegrityError
     from app.schemas import StudentProfileUpdateRequest
+    logger.info("profile patch payload=%s student=%s user=%s", payload, student.id, student.user_id)
     data = StudentProfileUpdateRequest.model_validate(payload)
     values = data.model_dump(exclude_unset=True)
     # drop None unless it is explicit membership_id clear (empty -> None is allowed)
     # keep membership_id=None if provided, drop other Nones
     values = {k: v for k, v in values.items() if v is not None or k == "membership_id"}
+    logger.info("profile patch values=%s", values)
     if not values:
         raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide fullName, email, membershipId or registrationNumber to update.", 422)
     # Use explicit User model to avoid identity-map confusion with joined relationship
@@ -127,9 +131,11 @@ async def student_update_profile(
         student.registration_number = new_reg
     try:
         await db.flush()
+        logger.info("profile patch flushed user=%s full_name=%s email=%s student_mid=%s reg=%s", user.id, getattr(user, "full_name", None), getattr(user, "email", None), getattr(student, "membership_id", None), getattr(student, "registration_number", None))
         from app.services.audit_service import audit_detached
         await audit_detached(action="student_profile_updated", actor_user_id=user.id, entity_type="student", entity_id=student.id, details={"fields": sorted(values.keys())}, ip_address=request.client.host if request.client else None)
         await db.commit()
+        logger.info("profile patch committed student=%s", student.id)
     except IntegrityError as exc:
         await db.rollback()
         detail = str(getattr(exc, "orig", exc)).lower()
