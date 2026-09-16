@@ -90,7 +90,7 @@ async def student_update_profile(
     from app.schemas import StudentProfileUpdateRequest
     logger.info("profile patch payload=%s student=%s user=%s", payload, student.id, student.user_id)
     data = StudentProfileUpdateRequest.model_validate(payload)
-    values = data.model_dump(exclude_unset=True)
+    values = data.model_dump(exclude_unset=True, by_alias=False)
     # drop None unless it is explicit membership_id clear (empty -> None is allowed)
     # keep membership_id=None if provided, drop other Nones
     values = {k: v for k, v in values.items() if v is not None or k == "membership_id"}
