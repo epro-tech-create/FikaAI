@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.deps import get_current_student, get_db, limiter
 from app.core.errors import ApiError, ErrorCode
-from app.models.entities import AttendanceRecord, AttendanceSession, Student
+from app.models.entities import AttendanceRecord, AttendanceSession, Student, User
 from app.schemas import (
     ActiveSessionResponse,
     AttendanceRecordResponse,
@@ -93,17 +93,23 @@ async def student_update_profile(
     values = {k: v for k, v in values.items() if v is not None or k == "membership_id"}
     if not values:
         raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide fullName, email, membershipId or registrationNumber to update.", 422)
-    user = await db.get(type(student.user), student.user_id)
+    # Use explicit User model to avoid identity-map confusion with joined relationship
+    user = await db.get(User, student.user_id)
+    if user is None:
+        user = student.user
     if "full_name" in values:
         user.full_name = values["full_name"]
-        student.user.full_name = values["full_name"]
+        # keep relationship in sync if it's a different instance
+        if student.user is not user:
+            student.user.full_name = values["full_name"]
     if "email" in values:
         # check uniqueness
-        existing = (await db.execute(select(type(user).id).where(type(user).email == values["email"], type(user).id != user.id))).scalar_one_or_none()
+        existing = (await db.execute(select(User.id).where(User.email == values["email"], User.id != user.id))).scalar_one_or_none()
         if existing is not None:
             raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account already uses this email address.", 409)
         user.email = values["email"]
-        student.user.email = values["email"]
+        if student.user is not user:
+            student.user.email = values["email"]
     if "membership_id" in values:
         new_mid = values["membership_id"]
         if new_mid is None:
