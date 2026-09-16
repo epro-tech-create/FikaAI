@@ -39,21 +39,37 @@ export default function ProfilePage() {
     if (midErr) { setEditErr(midErr); return }
     if (!editName.trim() && !editEmail.trim() && !editMembershipId.trim() && !editRegistration.trim()) { setEditErr('Enter at least one field to update.'); return }
     if (editRegistration.trim() && !/^\d{3,50}$/.test(editRegistration.trim())) { setEditErr('Registration number must contain only digits (3-50).'); return }
+    if (editName.trim() && editName.trim().length < 3) { setEditErr('Full name must be at least 3 characters.'); return }
+    if (editEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editEmail.trim())) { setEditErr('Enter a valid email address.'); return }
+    const payload: any = {}
+    if (editName.trim() && editName.trim() !== (summary?.fullName || '')) payload.fullName = editName.trim()
+    if (editEmail.trim() && editEmail.trim().toLowerCase() !== (summary?.email || '').toLowerCase()) payload.email = editEmail.trim()
+    if (editMembershipId.trim() !== (summary?.membershipId || '')) payload.membershipId = editMembershipId.trim() || null
+    if (editRegistration.trim() !== (summary?.registrationNumber || '')) payload.registrationNumber = editRegistration.trim()
+    if (Object.keys(payload).length === 0) { setEditErr('No changes detected. Change a field first.'); return }
     setBusy(true)
     try {
-      const payload: any = {}
-      if (editName.trim()) payload.fullName = editName.trim()
-      if (editEmail.trim()) payload.email = editEmail.trim()
-      // membershipId: allow clearing by sending empty? backend treats empty as None
-      if (editMembershipId.trim() !== (summary?.membershipId || '')) payload.membershipId = editMembershipId.trim() || null
-      if (editRegistration.trim() !== (summary?.registrationNumber || '')) payload.registrationNumber = editRegistration.trim()
-      if (Object.keys(payload).length === 0) { setEditErr('No changes to save.'); return }
       const res = await api.patch('/student/profile', payload)
+      // refetch from server to guarantee displayed data matches DB (fixes stale optimistic update)
+      try {
+        const fresh = await api.get('/student/profile/summary')
+        setSummary(fresh.data)
+        setEditName(fresh.data?.fullName || '')
+        setEditEmail(fresh.data?.email || '')
+        setEditMembershipId(fresh.data?.membershipId || '')
+        setEditRegistration(fresh.data?.registrationNumber || '')
+        if (fresh.data?.fullName) localStorage.setItem('ccd.name', fresh.data.fullName)
+      } catch {
+        // fallback to optimistic
+        setSummary((s:any)=> ({...s, fullName: res.data?.fullName || editName.trim(), email: res.data?.email || editEmail.trim(), membershipId: (res.data?.membershipId ?? (editMembershipId.trim() || null)), registrationNumber: res.data?.registrationNumber || editRegistration.trim() }))
+        if (res.data?.fullName) localStorage.setItem('ccd.name', res.data.fullName)
+      }
       setEditMsg('Profile updated successfully.')
-      setSummary((s:any)=> ({...s, fullName: res.data?.fullName || editName, email: res.data?.email || editEmail, membershipId: (res.data?.membershipId ?? (editMembershipId.trim() || null)), registrationNumber: res.data?.registrationNumber || editRegistration.trim() }))
-      if (res.data?.fullName) localStorage.setItem('ccd.name', res.data.fullName)
       setEditing(false)
-    } catch (e:any) { setEditErr(e?.response?.data?.error?.message || 'Failed to update profile.') } finally { setBusy(false) }
+    } catch (e:any) {
+      const msg = e?.response?.data?.error?.message || e?.response?.data?.error?.details?.[0]?.message || e?.message || 'Failed to update profile.'
+      setEditErr(msg)
+    } finally { setBusy(false) }
   }
   async function changePw(e: React.FormEvent) {
     e.preventDefault()
