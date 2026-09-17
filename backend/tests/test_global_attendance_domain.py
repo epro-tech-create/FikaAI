@@ -132,6 +132,119 @@ async def test_active_session_lookup_creates_fixed_daily_session(monkeypatch):
     assert float(session.location.longitude) == 39.2801352
 
 
+@pytest.mark.asyncio
+async def test_existing_automatic_session_keeps_custom_hours(monkeypatch):
+    from datetime import time
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from app.models.entities import SessionStatus
+
+    location = SimpleNamespace(
+        id=uuid4(),
+        name="DIT RAFIC Building",
+        address="old",
+        latitude=0,
+        longitude=0,
+        radius_meters=50,
+        location_type=None,
+        is_active=False,
+    )
+    existing = AttendanceSession(
+        instructor_id=None,
+        location_id=location.id,
+        title="Daily RAFIC Attendance",
+        session_date=date(2026, 8, 25),
+        check_in_open=time(7, 0),
+        official_start=time(8, 30),
+        check_in_close=time(16, 0),
+        expected_end=time(16, 0),
+        check_out_close=time(18, 0),
+        late_threshold_minutes=0,
+        permitted_radius_meters=80,
+        status=SessionStatus.ACTIVE,
+        is_automatic=True,
+    )
+
+    class Result:
+        def __init__(self, value=None):
+            self.value = value
+
+        def scalar_one_or_none(self):
+            return self.value
+
+    class Transaction:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+    class WriteDb:
+        def __init__(self):
+            self.added = []
+            self.select_count = 0
+
+        def begin(self):
+            return Transaction()
+
+        async def execute(self, statement, _params=None):
+            sql = str(statement).lower()
+            if "pg_advisory" in sql:
+                return Result()
+            if "attendance_sessions" in sql:
+                return Result(existing)
+            if "practical_locations" in sql:
+                return Result(location)
+            return Result()
+
+        def add(self, value):
+            self.added.append(value)
+
+        async def flush(self):
+            return None
+
+        async def refresh(self, *_args, **_kwargs):
+            return None
+
+    class SessionContext:
+        def __init__(self, db):
+            self.db = db
+
+        async def __aenter__(self):
+            return self.db
+
+        async def __aexit__(self, *_args):
+            return None
+
+    write_db = WriteDb()
+    monkeypatch.setattr(session_service, "session_factory", lambda: SessionContext(write_db))
+    monkeypatch.setattr(session_service.settings, "training_latitude", -6.8137482)
+    monkeypatch.setattr(session_service.settings, "training_longitude", 39.2801352)
+    monkeypatch.setattr(session_service.settings, "training_radius_meters", 100)
+    monkeypatch.setattr(session_service.settings, "training_location_name", "DIT RAFIC Building")
+    monkeypatch.setattr(
+        session_service.settings,
+        "training_location_address",
+        "Dar es Salaam Institute of Technology, RAFIC Building",
+    )
+    monkeypatch.setattr(
+        session_service,
+        "campus_now",
+        lambda: CampusClock(datetime.fromisoformat("2026-08-25T16:00:00+03:00")),
+    )
+
+    session = await find_active_session(object())
+
+    assert session is existing
+    assert write_db.added == []
+    assert session.check_in_open.strftime("%H:%M") == "07:00"
+    assert session.official_start.strftime("%H:%M") == "08:30"
+    assert session.check_in_close.strftime("%H:%M") == "16:00"
+    assert session.expected_end.strftime("%H:%M") == "16:00"
+    assert session.check_out_close.strftime("%H:%M") == "18:00"
+
+
 def automatic_session_window():
     return type(
         "Session",

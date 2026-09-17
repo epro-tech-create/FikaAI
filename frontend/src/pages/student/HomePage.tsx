@@ -347,7 +347,7 @@ export default function HomePage() {
             <span>{checkedIn ? 'Check out' : 'Check in'}</span>
             <i>→</i>
           </Link>
-          <p className="edu-hero-hint">{checkedIn ? 'You can check out from 15:00' : 'Tap to open scanner'}</p>
+          <p className="edu-hero-hint">{checkedIn ? `You can check out from ${session?.expectedEnd || '15:00'}` : 'Tap to open scanner'}</p>
         </div>
       </section>
 

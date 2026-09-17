@@ -29,6 +29,7 @@ from app.models.entities import (
 from app.schemas import (
     InstructorCreateRequest,
     InstructorUpdateRequest,
+    SessionHoursUpdate,
     SessionResponse,
     StudentAdminCreateRequest,
     StudentAdminUpdateRequest,
@@ -513,6 +514,43 @@ async def list_sessions(db: AsyncSession = Depends(get_db)) -> list[SessionRespo
     return [session_response(item) for item in sessions]
 
 
+@router.patch("/sessions/{session_id}", response_model=SessionResponse)
+async def admin_update_session_hours(
+    session_id: uuid.UUID,
+    payload: SessionHoursUpdate,
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> SessionResponse:
+    from app.services.session_service import update_session_hours
+    session = await update_session_hours(
+        db,
+        session_id,
+        check_in_open=payload.check_in_open,
+        official_start=payload.official_start,
+        check_in_close=payload.check_in_close,
+        expected_end=payload.expected_end,
+        check_out_close=payload.check_out_close,
+    )
+    from app.services.audit_service import audit_detached
+    response = session_response(session)
+    await db.commit()
+    await audit_detached(
+        action="session_hours_updated",
+        actor_user_id=admin.id,
+        entity_type="attendance_session",
+        entity_id=session.id,
+        details={
+            "checkInOpen": str(payload.check_in_open),
+            "checkInClose": str(payload.check_in_close),
+            "expectedEnd": str(payload.expected_end),
+            "checkOutClose": str(payload.check_out_close),
+        },
+        ip_address=request.client.host if request.client else None,
+    )
+    return response
+
+
 @router.get("/face-enrollments", response_model=None)
 async def list_face_enrollments(db: AsyncSession = Depends(get_db)) -> list[dict]:
     rows = (await db.execute(
@@ -653,7 +691,7 @@ async def admin_manual_check_in(
     student = await db.get(Student, data.student_id)
     if student is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
-    return await manual_check_in(db, student=student, actor_user_id=admin.id, session_id=data.session_id, ip_address=request.client.host if request.client else None, check_in_at=data.check_in_at, status=data.status, reason=data.reason)
+    return await manual_check_in(db, student=student, actor_user_id=admin.id, session_id=data.session_id, ip_address=request.client.host if request.client else None, check_in_at=data.check_in_at, check_out_at=data.check_out_at, status=data.status, reason=data.reason)
 
 
 @router.post("/attendance/manual-check-out", response_model=None)

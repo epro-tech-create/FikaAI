@@ -39,9 +39,18 @@ from app.models.entities import (
 )
 from app.services.audit_service import audit_detached
 from app.services.device_service import verify_device_binding
-from app.services.session_service import campus_now, classify_check_in, validate_window
+from app.services.session_service import CampusClock, campus_now, classify_check_in, validate_window
 
 logger = logging.getLogger("ccd.attendance")
+
+
+def _campus_datetime(value: datetime | None) -> datetime:
+    """Interpret a manual timestamp as campus-local time when no tz is sent."""
+    if value is None:
+        return campus_now().now_local
+    if value.tzinfo is None:
+        return value.replace(tzinfo=settings.campus_tz)
+    return value.astimezone(settings.campus_tz)
 
 
 def _advisory_key(session_id: uuid.UUID, student_id: uuid.UUID) -> int:
@@ -387,6 +396,15 @@ async def check_out(
     return _record_dto(record)
 
 
+def _apply_manual_checkout(record: AttendanceRecord, check_out_at: datetime, check_in_at: datetime) -> None:
+    if check_out_at < check_in_at:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "Check-out time must be after check-in time.", 422)
+    record.check_out_at = check_out_at
+    record.time_spent_minutes = max(0, int((check_out_at - check_in_at).total_seconds() // 60))
+    if record.status in (AttendanceStatus.PRESENT, AttendanceStatus.LATE):
+        record.status = AttendanceStatus.CHECKED_OUT
+
+
 async def manual_check_in(
     db: AsyncSession,
     *,
@@ -395,23 +413,22 @@ async def manual_check_in(
     session_id: uuid.UUID,
     ip_address: str | None,
     check_in_at: datetime | None = None,
+    check_out_at: datetime | None = None,
     status: str | None = None,
     reason: str | None = None,
 ) -> dict[str, Any]:
     """Admin/instructor manually checks in a student without face/venue tokens."""
-    from app.models.entities import Student as _Stu
-    # ensure student exists already passed in
     if db.in_transaction():
         await db.commit()
     async with db.begin():
         session = await _load_locked_session(db, session_id)
-        # allow manual on SCHEDULED/ACTIVE/CLOSED but not CANCELLED
         if session.status == SessionStatus.CANCELLED:
             raise ApiError(ErrorCode.SESSION_INACTIVE, "Session is cancelled.", 409)
         await _lock_attendance_row(db, session.id, student.id)
         existing = await _get_locked_record(db, session.id, student.id)
-        # decide status
-        target_status = AttendanceStatus.PRESENT
+        now_local = _campus_datetime(check_in_at)
+        classified, classified_late = classify_check_in(session, CampusClock(now_local))
+        target_status = classified
         if status:
             try:
                 target_status = AttendanceStatus(status.upper())
@@ -419,16 +436,11 @@ async def manual_check_in(
                 raise ApiError(ErrorCode.VALIDATION_ERROR, f"Invalid status {status}", 422)
             if target_status not in (AttendanceStatus.PRESENT, AttendanceStatus.LATE, AttendanceStatus.ABSENT, AttendanceStatus.EXCUSED, AttendanceStatus.MANUALLY_APPROVED):
                 raise ApiError(ErrorCode.VALIDATION_ERROR, "Manual status must be PRESENT/LATE/ABSENT/EXCUSED", 422)
-        now_local = check_in_at or campus_now().now_local
-        if now_local.tzinfo is None:
-            now_local = now_local.replace(tzinfo=settings.campus_tz)
         minutes_late = 0
         if target_status == AttendanceStatus.LATE:
-            _, minutes_late = classify_check_in(session, campus_now())
-            if minutes_late == 0:
-                minutes_late = 5
+            minutes_late = classified_late or 5
+        checkout_at = _campus_datetime(check_out_at) if check_out_at is not None else None
         if existing is not None:
-            # update existing to manual status (excused etc)
             existing.check_in_at = now_local
             existing.status = target_status
             existing.verification_method = VerificationMethod.MANUAL
@@ -437,6 +449,10 @@ async def manual_check_in(
                 existing.excuse_reason = reason
                 existing.excused_by = actor_user_id
                 existing.excused_at = datetime.now(timezone.utc)
+            if checkout_at is not None:
+                _apply_manual_checkout(existing, checkout_at, now_local)
+            elif existing.check_out_at is not None:
+                existing.time_spent_minutes = max(0, int((existing.check_out_at - now_local).total_seconds() // 60))
             record = existing
         else:
             record = AttendanceRecord(
@@ -455,12 +471,14 @@ async def manual_check_in(
             )
             db.add(record)
             await db.flush()
+            if checkout_at is not None:
+                _apply_manual_checkout(record, checkout_at, now_local)
     await audit_detached(
         action="attendance_manual_check_in",
         actor_user_id=actor_user_id,
         entity_type="attendance_record",
         entity_id=record.id,
-        details={"session_id": str(session.id), "student_id": str(student.id), "status": target_status.value, "reason": reason},
+        details={"session_id": str(session.id), "student_id": str(student.id), "status": record.status.value, "reason": reason, "check_in_at": now_local.isoformat(), "check_out_at": checkout_at.isoformat() if checkout_at else None},
         ip_address=ip_address,
     )
     return _record_dto(record)
@@ -485,25 +503,14 @@ async def manual_check_out(
         record = await _get_locked_record(db, session.id, student.id)
         if record is None or record.check_in_at is None:
             raise ApiError(ErrorCode.CHECKOUT_WITHOUT_CHECKIN, "Student has not checked in.", 409)
-        if record.check_out_at is not None:
-            raise ApiError(ErrorCode.ALREADY_CHECKED_OUT, "Already checked out.", 409)
-        now_local = check_out_at or campus_now().now_local
-        if now_local.tzinfo is None:
-            now_local = now_local.replace(tzinfo=settings.campus_tz)
-        record.check_out_at = now_local
-        record.time_spent_minutes = max(0, int((now_local - record.check_in_at).total_seconds() // 60))
-        # keep original status unless it was EXCUSED/ABSENT then mark CHECKED_OUT
-        if record.status not in (AttendanceStatus.PRESENT, AttendanceStatus.LATE):
-            record.status = AttendanceStatus.CHECKED_OUT
-        else:
-            # preserve PRESENT/LATE but still mark checkout time; optionally keep status or set CHECKED_OUT
-            record.status = AttendanceStatus.CHECKED_OUT
+        now_local = _campus_datetime(check_out_at)
+        _apply_manual_checkout(record, now_local, record.check_in_at)
     await audit_detached(
         action="attendance_manual_check_out",
         actor_user_id=actor_user_id,
         entity_type="attendance_record",
         entity_id=record.id,
-        details={"session_id": str(session.id), "student_id": str(student.id)},
+        details={"session_id": str(session.id), "student_id": str(student.id), "check_out_at": now_local.isoformat()},
         ip_address=ip_address,
     )
     return _record_dto(record)

@@ -452,11 +452,17 @@ class MessageResponse(CamelModel):
 class ManualAttendanceRequest(CamelModel):
     student_id: uuid.UUID
     session_id: uuid.UUID
-    check_in_at: datetime | None = None
-    check_out_at: datetime | None = None
+    check_in_at: datetime | None = Field(default=None, description="Campus-local check-in time. Naive values are treated as Africa/Dar_es_Salaam.")
+    check_out_at: datetime | None = Field(default=None, description="Campus-local check-out time. Naive values are treated as Africa/Dar_es_Salaam.")
     minutes_late: int | None = None
     status: str | None = Field(default=None, description="PRESENT|LATE|ABSENT|EXCUSED")
     reason: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def checkout_after_checkin(self) -> "ManualAttendanceRequest":
+        if self.check_in_at and self.check_out_at and self.check_out_at <= self.check_in_at:
+            raise ValueError("Check-out time must be after check-in time.")
+        return self
 
 
 class ExcuseRequest(CamelModel):
@@ -518,6 +524,22 @@ class SessionCreateRequest(CamelModel):
             raise ValueError(
                 "Session times must follow check-in open, official start, check-in close, expected end, and check-out close."
             )
+        return self
+
+
+class SessionHoursUpdate(CamelModel):
+    check_in_open: time
+    official_start: time
+    check_in_close: time
+    expected_end: time
+    check_out_close: time
+
+    @model_validator(mode="after")
+    def validate_windows(self) -> "SessionHoursUpdate":
+        if self.check_in_open >= self.check_in_close:
+            raise ValueError("Check-in open must be before check-in close.")
+        if self.expected_end >= self.check_out_close:
+            raise ValueError("Checkout open must be before checkout close.")
         return self
 
 

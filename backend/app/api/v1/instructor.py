@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.admin import _daily_timeline, session_response
@@ -20,7 +21,7 @@ from app.models.entities import (
     Student,
     User,
 )
-from app.schemas import SessionResponse, VenueQrResponse
+from app.schemas import SessionHoursUpdate, SessionResponse, VenueQrResponse
 from app.services.audit_service import audit_detached
 from app.services.report_service import build_attendance_report, parse_period, render_attendance_pdf, weekly_attendance_series
 
@@ -137,7 +138,10 @@ async def list_sessions(
 ) -> list[SessionResponse]:
     sessions = (await db.execute(
         select(AttendanceSession)
-        .where(AttendanceSession.instructor_id == instructor.id)
+        .where(or_(
+            AttendanceSession.instructor_id == instructor.id,
+            AttendanceSession.is_automatic.is_(True),
+        ))
         .order_by(AttendanceSession.session_date.desc(), AttendanceSession.check_in_open)
     )).scalars().all()
     await audit_detached(
@@ -148,6 +152,47 @@ async def list_sessions(
         ip_address=_instructor_ip(request),
     )
     return [session_response(item) for item in sessions]
+
+
+@router.patch("/sessions/{session_id}", response_model=SessionResponse)
+async def instructor_update_session_hours(
+    session_id: uuid.UUID,
+    payload: SessionHoursUpdate,
+    request: Request,
+    instructor: Instructor = Depends(get_current_instructor),
+    db: AsyncSession = Depends(get_db),
+) -> SessionResponse:
+    from app.services.session_service import update_session_hours
+    session = await db.get(AttendanceSession, session_id)
+    if session is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Session not found.", 404)
+    if session.instructor_id not in (None, instructor.id) and not session.is_automatic:
+        raise ApiError(ErrorCode.FORBIDDEN, "You cannot edit this session.", 403)
+    session = await update_session_hours(
+        db,
+        session_id,
+        check_in_open=payload.check_in_open,
+        official_start=payload.official_start,
+        check_in_close=payload.check_in_close,
+        expected_end=payload.expected_end,
+        check_out_close=payload.check_out_close,
+    )
+    response = session_response(session)
+    await db.commit()
+    await audit_detached(
+        action="session_hours_updated",
+        actor_user_id=instructor.user_id,
+        entity_type="attendance_session",
+        entity_id=session.id,
+        details={
+            "checkInOpen": str(payload.check_in_open),
+            "checkInClose": str(payload.check_in_close),
+            "expectedEnd": str(payload.expected_end),
+            "checkOutClose": str(payload.check_out_close),
+        },
+        ip_address=_instructor_ip(request),
+    )
+    return response
 
 
 @router.get("/attendance", response_model=None)
@@ -229,7 +274,7 @@ async def instructor_manual_check_in(
     student = await db.get(Student, data.student_id)
     if student is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
-    return await manual_check_in(db, student=student, actor_user_id=instructor.user_id, session_id=data.session_id, ip_address=_instructor_ip(request), check_in_at=data.check_in_at, status=data.status, reason=data.reason)
+    return await manual_check_in(db, student=student, actor_user_id=instructor.user_id, session_id=data.session_id, ip_address=_instructor_ip(request), check_in_at=data.check_in_at, check_out_at=data.check_out_at, status=data.status, reason=data.reason)
 
 
 @router.post("/attendance/manual-check-out", response_model=None)

@@ -105,17 +105,10 @@ async def _ensure_daily_session(clock: CampusClock) -> AttendanceSession:
                 existing.instructor = None
                 existing.location_id = location.id
                 existing.location = location
-                existing.title = "Daily RAFIC Attendance"
-                existing.check_in_open = time(8, 0)
-                existing.official_start = time(9, 30)
-                existing.check_in_close = time(15, 0)
-                existing.expected_end = time(15, 0)
-                existing.check_out_close = time(17, 0)
-                existing.late_threshold_minutes = 0
+                existing.title = existing.title or "Daily RAFIC Attendance"
                 existing.permitted_radius_meters = settings.training_radius_meters
                 existing.status = SessionStatus.ACTIVE
                 await write_db.flush()
-                # Ensure relationships are loaded before detach (best effort for real DB, no-op for mock)
                 if hasattr(write_db, "refresh"):
                     try:
                         await write_db.refresh(existing, attribute_names=["location"])
@@ -161,6 +154,32 @@ async def get_active_session_or_error(
                 raise ApiError(ErrorCode.NOT_FOUND, "Session not found.", 404)
             raise ApiError(ErrorCode.SESSION_INACTIVE, "This attendance session is no longer active today.", 409)
         raise ApiError(ErrorCode.NO_ACTIVE_SESSION, "There is currently no active attendance session.", 404)
+    return session
+
+
+async def update_session_hours(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    *,
+    check_in_open: time,
+    official_start: time,
+    check_in_close: time,
+    expected_end: time,
+    check_out_close: time,
+) -> AttendanceSession:
+    session = await db.get(AttendanceSession, session_id)
+    if session is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Session not found.", 404)
+    if check_in_open >= check_in_close:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "Check-in open must be before check-in close.", 422)
+    if expected_end >= check_out_close:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "Checkout open must be before checkout close.", 422)
+    session.check_in_open = check_in_open
+    session.official_start = official_start
+    session.check_in_close = check_in_close
+    session.expected_end = expected_end
+    session.check_out_close = check_out_close
+    await db.flush()
     return session
 
 
