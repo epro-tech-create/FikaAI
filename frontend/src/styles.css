@@ -258,7 +258,7 @@ nav{display:flex;align-items:center;gap:22px}nav a,.ghost{border:0;background:no
 
 /* ── Student Shell — polished header & layout ── */
 .student-shell{max-width:1120px;margin:0 auto;padding:0 20px 40px}
-.student-header{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0 14px;margin:0 -20px;padding-left:20px;padding-right:20px;background:color-mix(in srgb,var(--bg) 82%, transparent);backdrop-filter:blur(16px) saturate(1.2);border-bottom:1px solid color-mix(in srgb,var(--line) 70%, transparent);margin-bottom:14px}
+.student-header{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0 14px;margin:0 -20px;padding-left:20px;padding-right:20px;background:var(--glass-strong);backdrop-filter:blur(24px) saturate(1.8);-webkit-backdrop-filter:blur(24px) saturate(1.8);border-bottom:1px solid var(--glass-border);box-shadow:0 8px 24px rgba(0,0,0,0.08), inset 0 1px rgba(255,255,255,0.14);margin-bottom:14px}
 .student-brand-row{display:flex;align-items:center;gap:12px;min-width:0;flex-shrink:0}
 .student-header nav{display:flex;align-items:center;gap:4px;flex-wrap:nowrap}
 .student-header nav a,.student-header nav .ghost{padding:8px 14px;border-radius:999px;font-size:13px;font-weight:500;color:var(--muted);text-decoration:none;border:1px solid transparent;transition:.18s;white-space:nowrap}
@@ -272,8 +272,8 @@ nav{display:flex;align-items:center;gap:22px}nav a,.ghost{border:0;background:no
 .student-session-bar{margin-bottom:16px}
 .student-session-bar > div{border-radius:14px !important;box-shadow:0 4px 20px #0003}
 .student-content{position:relative;z-index:1}
-/* Bottom nav - mobile only, centered Attendance FAB */
-.student-bottom-nav{display:none;position:fixed;left:12px;right:12px;bottom:12px;z-index:40;align-items:center;justify-content:space-around;gap:4px;padding:8px 10px 8px;background:var(--panel);border:1px solid var(--line);border-radius:24px;box-shadow:0 12px 40px #0000002e, 0 4px 14px #00000014}
+/* Bottom nav - iPhone Liquid Glass, mobile only, centered Attendance FAB */
+.student-bottom-nav{display:none;position:fixed;left:12px;right:12px;bottom:max(12px, env(safe-area-inset-bottom));z-index:40;align-items:center;justify-content:space-around;gap:4px;padding:10px 12px 10px;background:var(--glass-strong);backdrop-filter:blur(28px) saturate(1.8);-webkit-backdrop-filter:blur(28px) saturate(1.8);border:1px solid var(--glass-border);border-radius:28px;box-shadow:0 12px 40px rgba(0,0,0,0.16), 0 4px 14px rgba(0,0,0,0.10), inset 0 1px rgba(255,255,255,0.16)}
 .student-bottom-nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;text-decoration:none;color:var(--muted);font-size:10px;font-weight:600;letter-spacing:.2px;position:relative;transition:.18s}
 .student-bottom-nav a small{font-size:9px;letter-spacing:.3px}
 .student-bottom-nav .bn-icon{position:relative;display:grid;place-items:center;width:28px;height:28px}
@@ -283,7 +283,7 @@ nav{display:flex;align-items:center;gap:22px}nav a,.ghost{border:0;background:no
 .student-bottom-nav .bn-center-fab{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#0f6be6 0%,#3b9cff 60%,#72b9ff 100%);color:white;box-shadow:0 8px 22px #0f6be655, 0 0 0 8px color-mix(in srgb, #3b9cff 16%, transparent);border:2px solid white;transition:transform .18s, box-shadow .18s}
 .student-bottom-nav .bn-center.active .bn-center-fab{box-shadow:0 10px 26px #0f6be666, 0 0 0 8px color-mix(in srgb, #3b9cff 22%, transparent);transform:translateY(-1px)}
 .student-bottom-nav .bn-dot{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#ff3b6a;color:white;font-size:9px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 2px 8px #ff3b6a66}
-[data-theme="light"] .student-bottom-nav{background:#ffffff;border-color:#e2e8f0;box-shadow:0 12px 40px #0f172a14, 0 4px 14px #0f172a0a}
+[data-theme="light"] .student-bottom-nav{background:var(--glass-strong);border-color:var(--glass-border);box-shadow:0 12px 40px rgba(15,23,42,0.08), 0 4px 14px rgba(15,23,42,0.04), inset 0 1px rgba(255,255,255,0.9)}
 [data-theme="light"] .student-bottom-nav a{color:#64748b}
 [data-theme="light"] .student-bottom-nav a.active{color:#0f6be6}
 @media(max-width:640px){
@@ -292,7 +292,7 @@ nav{display:flex;align-items:center;gap:22px}nav a,.ghost{border:0;background:no
   .student-shell{padding-bottom:88px}
   .student-header{margin-bottom:8px}
 }
-[data-theme="light"] .student-header{background:#ffffffcc;border-bottom-color:#e2e8f0}
+[data-theme="light"] .student-header{background:var(--glass-strong);border-bottom-color:var(--glass-border);box-shadow:0 8px 24px rgba(15,23,42,0.04), inset 0 1px rgba(255,255,255,0.9)}
 [data-theme="light"] .student-header nav a.active{background:#e0f2fe;border-color:#7dd3fc;color:#0c4a6e;box-shadow:0 0 0 3px #0ea5e914}
 [data-theme="light"] .student-menu-btn{background:#fff;border-color:#e2e8f0}
 .auto-checkin-nav{display:flex;justify-content:center;gap:18px;margin:22px 0 0;flex-wrap:wrap}
