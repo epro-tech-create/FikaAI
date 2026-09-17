@@ -79,7 +79,9 @@ class Settings(BaseSettings):
     # If True, a student with a bound device must supply matching deviceId on every
     # attendance verification / check-in. Legacy students without a bound device are
     # auto-bound on first successful verification when True (set False to reject them).
-    device_auto_bind_on_first_use: bool = False
+    # Kept True so a student who clears Site data (e.g. Halima) auto-rebinds on next check-in
+    # without admin intervention - prevents recurring DEVICE_MISMATCH.
+    device_auto_bind_on_first_use: bool = True
     mac_binding_enabled: bool = False
 
     # Attendance
