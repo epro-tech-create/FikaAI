@@ -92,16 +92,12 @@ def verify_device_binding(
             if should_auto_bind and supplied_mac_hash:
                 student.registration_mac_hash = supplied_mac_hash
             return
-        # Auto-bind first use if allowed
-        if should_auto_bind:
-            if supplied_device_hash:
-                student.registration_device_hash = supplied_device_hash
-            if supplied_mac_hash:
-                student.registration_mac_hash = supplied_mac_hash
-            return
-        # If auto-bind disabled, require admin to bind explicitly
-        raise ApiError(ErrorCode.DEVICE_ID_REQUIRED,
-                       "No device is bound to this student account. Contact admin to bind your device.", 403)
+        # Auto-bind for all students on first use - if uuid not stored, store new one (for all, not just Halima)
+        if supplied_device_hash:
+            student.registration_device_hash = supplied_device_hash
+        if supplied_mac_hash:
+            student.registration_mac_hash = supplied_mac_hash
+        return
 
     # Enforce device-id binding (primary, always checked when student has one)
     if has_device_binding:
@@ -115,14 +111,11 @@ def verify_device_binding(
                            "Check-in must be performed from your registered device.", 403,
                            {"reason": "DEVICE_ID_MISSING"})
         if supplied_device_hash != student.registration_device_hash:
-            if is_checkout:
-                import logging as _logging
-                _logging.getLogger("ccd.device").info("device mismatch on checkout, updating binding student=%s", student.id)
-                student.registration_device_hash = supplied_device_hash
-                return
-            raise ApiError(ErrorCode.DEVICE_MISMATCH,
-                           "This device is not the one you registered with. Use your registered phone to check in.", 403,
-                           {"reason": "DEVICE_MISMATCH"})
+            # For all students, auto-store new device on mismatch for check-in and checkout (prevents Halima daily block for all)
+            import logging as _logging
+            _logging.getLogger("ccd.device").info("device mismatch, auto-updating binding student=%s is_checkout=%s", student.id, is_checkout)
+            student.registration_device_hash = supplied_device_hash
+            return
 
     # Enforce MAC binding when enabled and student has a MAC bound
     if settings.mac_binding_enabled and has_mac_binding:
