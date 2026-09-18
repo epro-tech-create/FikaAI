@@ -1,14 +1,33 @@
 const REGISTRATION_DEVICE_KEY = 'ccd.registration-device'
+const COOKIE_KEY = 'ccd_device'
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+function getCookie(name: string): string | null {
+  try {
+    const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '=([^;]*)'))
+    return m ? decodeURIComponent(m[1]) : null
+  } catch { return null }
+}
+function setCookie(name: string, value: string, days = 365) {
+  try {
+    const d = new Date(); d.setTime(d.getTime() + days*24*60*60*1000)
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${d.toUTCString()}; path=/; SameSite=Lax`
+  } catch { /* ignore */ }
+}
+
 export function getRegistrationDeviceId() {
-  const existing = localStorage.getItem(REGISTRATION_DEVICE_KEY) ?? localStorage.getItem('fikaai.registration-device')
-  if (existing && UUID_PATTERN.test(existing)) {
+  const fromStorage = localStorage.getItem(REGISTRATION_DEVICE_KEY) ?? localStorage.getItem('fikaai.registration-device')
+  const fromCookie = getCookie(COOKIE_KEY)
+  const existing = (fromStorage && UUID_PATTERN.test(fromStorage) ? fromStorage : null) ?? (fromCookie && UUID_PATTERN.test(fromCookie) ? fromCookie : null)
+  if (existing) {
     if (!localStorage.getItem(REGISTRATION_DEVICE_KEY)) localStorage.setItem(REGISTRATION_DEVICE_KEY, existing)
+    if (fromStorage !== existing) localStorage.setItem(REGISTRATION_DEVICE_KEY, existing)
+    setCookie(COOKIE_KEY, existing)
     return existing
   }
   const deviceId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : fallbackUuid()
   localStorage.setItem(REGISTRATION_DEVICE_KEY,deviceId)
+  setCookie(COOKIE_KEY, deviceId)
   return deviceId
 }
 

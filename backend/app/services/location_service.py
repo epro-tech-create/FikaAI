@@ -73,20 +73,6 @@ async def verify_location(
     mac_address: str | None = None,
 ) -> LocationVerification:
     """Validate the session, GPS freshness, and radius; persist a one-time token."""
-    # Device binding acts as MAC filter — reject before minting a location token
-    try:
-        verify_device_binding(student, device_id=device_id, mac_address=mac_address)
-    except ApiError as exc:
-        await audit_detached(
-            action="location_verification_failed",
-            actor_user_id=actor_user_id,
-            entity_type="attendance_session",
-            entity_id=session_id,
-            details={"reason": exc.code.value, "device_mismatch": True},
-            ip_address=ip_address,
-        )
-        raise
-
     session = await get_active_session_or_error(db, session_id)
     assert isinstance(session, AttendanceSession)
 
@@ -103,6 +89,19 @@ async def verify_location(
         )
     ).scalar_one_or_none()
     purpose = "check_out" if (existing is not None and existing.check_in_at is not None) else "check_in"
+    # Device binding - for checkout allow mismatch and auto-update (Halima cleared data after check-in)
+    try:
+        verify_device_binding(student, device_id=device_id, mac_address=mac_address, is_checkout=(purpose == "check_out"))
+    except ApiError as exc:
+        await audit_detached(
+            action="location_verification_failed",
+            actor_user_id=actor_user_id,
+            entity_type="attendance_session",
+            entity_id=session_id,
+            details={"reason": exc.code.value, "device_mismatch": True},
+            ip_address=ip_address,
+        )
+        raise
     validate_window(session, purpose)  # type: ignore[arg-type]
 
     if not settings.gps_verification_enabled:

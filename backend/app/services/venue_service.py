@@ -59,18 +59,6 @@ async def verify_venue(
     mac_address: str | None = None,
 ) -> VenueVerification:
     """Validate code/QR against static hash, check session window, mint venue token."""
-    try:
-        verify_device_binding(student, device_id=device_id, mac_address=mac_address)
-    except ApiError as exc:
-        await audit_detached(
-            action="venue_verification_failed",
-            actor_user_id=actor_user_id,
-            entity_type="attendance_session",
-            entity_id=session_id,
-            details={"reason": exc.code.value, "device_mismatch": True},
-            ip_address=ip_address,
-        )
-        raise
     _ensure_configured()
 
     session = await get_active_session_or_error(db, session_id)
@@ -85,6 +73,18 @@ async def verify_venue(
         )
     ).scalar_one_or_none()
     purpose = "check_out" if (existing is not None and existing.check_in_at is not None) else "check_in"
+    try:
+        verify_device_binding(student, device_id=device_id, mac_address=mac_address, is_checkout=(purpose == "check_out"))
+    except ApiError as exc:
+        await audit_detached(
+            action="venue_verification_failed",
+            actor_user_id=actor_user_id,
+            entity_type="attendance_session",
+            entity_id=session_id,
+            details={"reason": exc.code.value, "device_mismatch": True},
+            ip_address=ip_address,
+        )
+        raise
     validate_window(session, purpose)  # type: ignore[arg-type]
 
     # Extract normalized 8-char code from either field

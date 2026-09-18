@@ -180,7 +180,7 @@ async def check_in(
     # Enforce device / MAC binding before touching session locks — prevents
     # proxy check-ins where one device signs for an absent student.
     try:
-        verify_device_binding(student, device_id=device_id, mac_address=mac_address)
+        verify_device_binding(student, device_id=device_id, mac_address=mac_address, is_checkout=False)
     except ApiError as exc:
         await audit_detached(
             action="attendance_rejected",
@@ -192,8 +192,8 @@ async def check_in(
         )
         raise
 
-    # get_current_student may have started an implicit read transaction on this
-    # request's shared session. Close it before opening the atomic write tx.
+     # get_current_student may have started an implicit read transaction on this
+     # request's shared session. Close it before opening the atomic write tx.
     if db.in_transaction():
         await db.commit()
     async with db.begin():
@@ -315,7 +315,7 @@ async def check_out(
                        "A valid UUID idempotency key is required.", 400) from exc
 
     try:
-        verify_device_binding(student, device_id=device_id, mac_address=mac_address)
+        verify_device_binding(student, device_id=device_id, mac_address=mac_address, is_checkout=True)
     except ApiError as exc:
         await audit_detached(
             action="attendance_rejected",

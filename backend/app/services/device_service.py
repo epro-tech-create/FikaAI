@@ -52,11 +52,14 @@ def verify_device_binding(
     device_id: uuid.UUID | None = None,
     mac_address: str | None = None,
     auto_bind: bool | None = None,
+    is_checkout: bool = False,
 ) -> None:
     """Enforce that the check-in device matches the registered device.
 
     Raises DEVICE_MISMATCH / DEVICE_ID_REQUIRED / MAC_MISMATCH on failure.
-    Mutates `student` in-place when auto-binding a legacy record.
+    Mutates `student` in-place when auto-binding a legacy record or when
+    a checked-in student clears browser data and needs to checkout (e.g. Halima).
+    For checkout we auto-update the binding instead of blocking.
     """
     if not settings.device_binding_enabled:
         return
@@ -103,10 +106,20 @@ def verify_device_binding(
     # Enforce device-id binding (primary, always checked when student has one)
     if has_device_binding:
         if not supplied_device_hash:
+            if is_checkout:
+                # Halima case: cleared Site data after check-in, checkout from new UUID should still succeed
+                import logging as _logging
+                _logging.getLogger("ccd.device").info("checkout without device_id, allowing student=%s", student.id)
+                return
             raise ApiError(ErrorCode.DEVICE_ID_REQUIRED,
                            "Check-in must be performed from your registered device.", 403,
                            {"reason": "DEVICE_ID_MISSING"})
         if supplied_device_hash != student.registration_device_hash:
+            if is_checkout:
+                import logging as _logging
+                _logging.getLogger("ccd.device").info("device mismatch on checkout, updating binding student=%s", student.id)
+                student.registration_device_hash = supplied_device_hash
+                return
             raise ApiError(ErrorCode.DEVICE_MISMATCH,
                            "This device is not the one you registered with. Use your registered phone to check in.", 403,
                            {"reason": "DEVICE_MISMATCH"})

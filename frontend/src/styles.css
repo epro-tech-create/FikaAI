@@ -285,17 +285,16 @@ nav{display:flex;align-items:center;gap:22px}nav a,.ghost{border:0;background:no
 .student-bottom-nav .bn-dot{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#ff3b6a;color:white;font-size:9px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 2px 8px #ff3b6a66}
 [data-theme="light"] .student-bottom-nav{background:var(--glass-strong);border-color:var(--glass-border);box-shadow:0 12px 40px rgba(15,23,42,0.08), 0 4px 14px rgba(15,23,42,0.04), inset 0 1px rgba(255,255,255,0.9)}
 [data-theme="light"] .student-bottom-nav a{color:#64748b}
-/* Liquid moving indicator - iPhone seamless circle - blue, floating with gap */
-.liquid-nav{overflow:visible !important;padding-top:12px !important}
-.liquid-nav::before{content:"";position:absolute;top:0;left:calc((100% / 5) * var(--active-index, 2) + (100% / 10) - 45px);width:90px;height:28px;background:var(--bg);border-radius:0 0 24px 24px;transition:left 0.45s cubic-bezier(0.34,1.56,0.64,1);z-index:1;pointer-events:none;box-shadow:0 1px 0 var(--glass-border) inset}
-.liquid-indicator{position:absolute;top:-30px;left:calc((100% / 5) * var(--active-index, 2) + (100% / 10) - 31px);width:62px;height:62px;border-radius:50%;background:white;display:grid;place-items:center;box-shadow:0 10px 28px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.10);border:2px solid white;transition:left 0.45s cubic-bezier(0.34,1.56,0.64,1);z-index:2}
-.liquid-indicator-icon{color:#0f172a;display:grid;place-items:center}
+/* Liquid moving indicator - iPhone seamless circle - blue in both modes, no gap */
+.liquid-nav{overflow:visible !important;padding-top:2px !important}
+.liquid-nav::before{display:none}
+.liquid-indicator{position:absolute;top:-14px;left:calc((100% / 5) * var(--active-index, 2) + (100% / 10) - 31px);width:62px;height:62px;border-radius:50%;background:linear-gradient(135deg,#0f6be6 0%,#3b9cff 60%,#72b9ff 100%);display:grid;place-items:center;box-shadow:0 10px 28px rgba(15,107,230,0.32), 0 4px 12px rgba(0,0,0,0.14);border:2px solid white;transition:left 0.45s cubic-bezier(0.34,1.56,0.64,1);z-index:2}
+.liquid-indicator-icon{color:white;display:grid;place-items:center}
 .liquid-nav a.active .bn-icon{opacity:0;transform:scale(0.6);transition:opacity 0.2s, transform 0.2s}
 .liquid-nav a.active small{color:var(--blue);font-weight:700}
 .liquid-nav a .bn-icon{transition:opacity 0.2s, transform 0.2s, color 0.2s}
 [data-theme="light"] .liquid-indicator{background:linear-gradient(135deg,#0f6be6 0%,#3b9cff 60%,#72b9ff 100%);box-shadow:0 10px 28px rgba(15,107,230,0.30), 0 4px 12px rgba(0,0,0,0.10);border-color:white}
 [data-theme="light"] .liquid-indicator-icon{color:white}
-[data-theme="light"] .liquid-nav::before{background:#f1f5f9}
 [data-theme="light"] .student-bottom-nav a.active{color:#0f6be6}
 @media(max-width:640px){
   .student-header nav, .student-menu-btn, .student-scrim{display:none !important}
