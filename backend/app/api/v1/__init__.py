@@ -1,8 +1,8 @@
 """API router aggregation."""
 
+from app.api.v1 import (admin, auth, chat, instructor, student_attendance,
+                        student_face)
 from fastapi import APIRouter
-
-from app.api.v1 import admin, auth, chat, instructor, student_attendance, student_face
 
 api_router = APIRouter()
 api_router.include_router(auth.router)

@@ -16,15 +16,15 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
 from app.models.entities import AttendanceRecord, Student, VenueVerification
 from app.services.audit_service import audit_detached
 from app.services.device_service import verify_device_binding
-from app.services.session_service import get_active_session_or_error, validate_window
+from app.services.session_service import (get_active_session_or_error,
+                                          validate_window)
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 CODE_PATTERN = re.compile(r"^[A-Z0-9]{8}$")
 
@@ -38,7 +38,10 @@ def _hash_code(normalized: str) -> str:
 
 
 def _ensure_configured() -> None:
-    if not settings.venue_static_code_hash or len(settings.venue_static_code_hash) != 64:
+    if (
+        not settings.venue_static_code_hash
+        or len(settings.venue_static_code_hash) != 64
+    ):
         raise ApiError(
             ErrorCode.VENUE_NOT_CONFIGURED,
             "Venue code is not configured. Ask admin to set VENUE_STATIC_CODE_HASH.",
@@ -72,9 +75,18 @@ async def verify_venue(
             )
         )
     ).scalar_one_or_none()
-    purpose = "check_out" if (existing is not None and existing.check_in_at is not None) else "check_in"
+    purpose = (
+        "check_out"
+        if (existing is not None and existing.check_in_at is not None)
+        else "check_in"
+    )
     try:
-        verify_device_binding(student, device_id=device_id, mac_address=mac_address, is_checkout=(purpose == "check_out"))
+        verify_device_binding(
+            student,
+            device_id=device_id,
+            mac_address=mac_address,
+            is_checkout=(purpose == "check_out"),
+        )
     except ApiError as exc:
         await audit_detached(
             action="venue_verification_failed",
@@ -102,7 +114,9 @@ async def verify_venue(
         else:
             normalized = candidate
     else:
-        raise ApiError(ErrorCode.INVALID_VENUE_CODE, "Provide venue code or QR token.", 400)
+        raise ApiError(
+            ErrorCode.INVALID_VENUE_CODE, "Provide venue code or QR token.", 400
+        )
 
     if not CODE_PATTERN.fullmatch(normalized):
         await audit_detached(
@@ -113,7 +127,11 @@ async def verify_venue(
             details={"reason": "BAD_FORMAT"},
             ip_address=ip_address,
         )
-        raise ApiError(ErrorCode.INVALID_VENUE_CODE, "Venue code must be exactly 8 alphanumeric characters.", 400)
+        raise ApiError(
+            ErrorCode.INVALID_VENUE_CODE,
+            "Venue code must be exactly 8 alphanumeric characters.",
+            400,
+        )
 
     expected_hash = settings.venue_static_code_hash.strip().lower()
     actual_hash = _hash_code(normalized)
@@ -127,7 +145,11 @@ async def verify_venue(
             details={"reason": "INVALID_CODE"},
             ip_address=ip_address,
         )
-        raise ApiError(ErrorCode.INVALID_VENUE_CODE, "Invalid venue code. Check the code displayed in the RAFIC room.", 400)
+        raise ApiError(
+            ErrorCode.INVALID_VENUE_CODE,
+            "Invalid venue code. Check the code displayed in the RAFIC room.",
+            400,
+        )
 
     # Success — mint one-time venue verification token (same TTL as location/face)
     now = datetime.now(timezone.utc)

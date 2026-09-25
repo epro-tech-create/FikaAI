@@ -1,14 +1,15 @@
+import uuid
+
 import numpy as np
 import pytest
-import uuid
-from pydantic import ValidationError
-from starlette.requests import Request
-
 from app.api.v1.auth import _client_ip, _registration_device_hash
 from app.face_ai.recognition_service import cosine_similarity
 from app.models.entities import Student
+from app.schemas import (InstructorCreateRequest, StudentRegisterRequest,
+                         VerifyLocationRequest)
 from app.services.location_service import haversine_meters
-from app.schemas import InstructorCreateRequest, StudentRegisterRequest, VerifyLocationRequest
+from pydantic import ValidationError
+from starlette.requests import Request
 
 
 def test_location_request_accepts_coarse_iphone_accuracy():
@@ -23,7 +24,9 @@ def test_location_request_accepts_coarse_iphone_accuracy():
 
 
 def test_haversine_same_point_is_zero():
-    assert haversine_meters(-6.7924, 39.2083, -6.7924, 39.2083) == pytest.approx(0, abs=0.01)
+    assert haversine_meters(-6.7924, 39.2083, -6.7924, 39.2083) == pytest.approx(
+        0, abs=0.01
+    )
 
 
 def test_haversine_rejectable_distance_is_not_radius():
@@ -76,7 +79,9 @@ def test_student_registration_rejects_non_numeric_numbers(registration_number):
         )
 
 
-@pytest.mark.parametrize("registration_number", ["123", "202612345", "99999999999999999999"])
+@pytest.mark.parametrize(
+    "registration_number", ["123", "202612345", "99999999999999999999"]
+)
 def test_student_registration_accepts_any_numeric_number(registration_number):
     request = StudentRegisterRequest(
         fullName="New Student",
@@ -112,37 +117,55 @@ def test_registration_device_hash_is_stable_and_non_reversible():
 
 def test_registration_uses_forwarded_client_ip():
     # Secure: trust only X-Real-IP from nginx, ignore client-supplied X-Forwarded-For
-    request = Request({
-        "type": "http",
-        "headers": [(b"x-real-ip", b"203.0.113.9")],
-        "client": ("10.0.0.3", 1234),
-    })
+    request = Request(
+        {
+            "type": "http",
+            "headers": [(b"x-real-ip", b"203.0.113.9")],
+            "client": ("10.0.0.3", 1234),
+        }
+    )
     assert _client_ip(request) == "203.0.113.9"
     # X-Forwarded-For alone is NOT trusted - fallback to client.host
-    spoofed = Request({
-        "type": "http",
-        "headers": [(b"x-forwarded-for", b"203.0.113.9, 10.0.0.2")],
-        "client": ("10.0.0.3", 1234),
-    })
+    spoofed = Request(
+        {
+            "type": "http",
+            "headers": [(b"x-forwarded-for", b"203.0.113.9, 10.0.0.2")],
+            "client": ("10.0.0.3", 1234),
+        }
+    )
     assert _client_ip(spoofed) == "10.0.0.3"
 
 
 def test_student_device_guard_is_a_unique_partial_index():
-    index = next(index for index in Student.__table__.indexes if index.name == "uq_students_registration_device_hash")
+    index = next(
+        index
+        for index in Student.__table__.indexes
+        if index.name == "uq_students_registration_device_hash"
+    )
 
     assert index.unique
-    assert str(index.dialect_options["postgresql"]["where"]) == "registration_device_hash IS NOT NULL"
+    assert (
+        str(index.dialect_options["postgresql"]["where"])
+        == "registration_device_hash IS NOT NULL"
+    )
 
 
 def test_membership_id_is_a_unique_partial_index():
-    index = next(index for index in Student.__table__.indexes if index.name == "uq_students_membership_id")
+    index = next(
+        index
+        for index in Student.__table__.indexes
+        if index.name == "uq_students_membership_id"
+    )
 
     assert index.unique
-    assert str(index.dialect_options["postgresql"]["where"]) == "membership_id IS NOT NULL"
+    assert (
+        str(index.dialect_options["postgresql"]["where"]) == "membership_id IS NOT NULL"
+    )
 
 
 def test_student_registration_normalizes_optional_membership_id():
-    from app.schemas import StudentRegisterRequest, StudentAdminCreateRequest, normalize_membership_id
+    from app.schemas import (StudentAdminCreateRequest, StudentRegisterRequest,
+                             normalize_membership_id)
 
     request = StudentRegisterRequest(
         fullName="New Student",
@@ -152,13 +175,16 @@ def test_student_registration_normalizes_optional_membership_id():
         password="SecurePass9",
     )
     assert request.membership_id == "CCD-2026-015"
-    assert StudentAdminCreateRequest(
-        fullName="New Student",
-        email="admin-created@example.com",
-        registrationNumber="2402424123456",
-        membershipId="",
-        password="SecurePass9",
-    ).membership_id is None
+    assert (
+        StudentAdminCreateRequest(
+            fullName="New Student",
+            email="admin-created@example.com",
+            registrationNumber="2402424123456",
+            membershipId="",
+            password="SecurePass9",
+        ).membership_id
+        is None
+    )
     assert normalize_membership_id("") is None
     with pytest.raises(ValueError):
         normalize_membership_id("REG-123")

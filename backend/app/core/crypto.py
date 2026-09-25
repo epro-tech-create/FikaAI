@@ -9,9 +9,8 @@ never included in any API response or log record.
 from __future__ import annotations
 
 import numpy as np
-from cryptography.fernet import Fernet, InvalidToken
-
 from app.core.config import settings
+from cryptography.fernet import Fernet, InvalidToken
 
 
 class EmbeddingCipher:
@@ -27,7 +26,9 @@ class EmbeddingCipher:
         try:
             plain = self._fernet.decrypt(blob)
         except InvalidToken as exc:  # wrong/rotated key
-            raise RuntimeError("Stored embedding cannot be decrypted with the current key.") from exc
+            raise RuntimeError(
+                "Stored embedding cannot be decrypted with the current key."
+            ) from exc
         dim = int(np.frombuffer(plain[:4], dtype="<i4")[0])
         vec = np.frombuffer(plain[4:], dtype="<f4")
         if vec.size != dim:

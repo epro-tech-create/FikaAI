@@ -5,6 +5,10 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
+from app.api.v1 import api_router
+from app.core.config import settings
+from app.core.deps import limiter
+from app.core.errors import error_response
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,29 +18,57 @@ from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from app.api.v1 import api_router
-from app.core.config import settings
-from app.core.deps import limiter
-from app.core.errors import error_response
-
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         # HSTS only over https - Caddy terminates TLS, we set anyway
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains; preload"
+        )
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-        response.headers["Permissions-Policy"] = "camera=(self), geolocation=(self), microphone=(), payment=()"
+        response.headers["Permissions-Policy"] = (
+            "camera=(self), geolocation=(self), microphone=(), payment=()"
+        )
         # Minimal CSP for API (no inline). Frontend CSP is set at nginx/Caddy.
-        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
-        response.headers["Cache-Control"] = response.headers.get("Cache-Control", "no-store")
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+        )
+        response.headers["Cache-Control"] = response.headers.get(
+            "Cache-Control", "no-store"
+        )
         return response
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+class ContentSizeLimitMiddleware(BaseHTTPMiddleware):
+    """Reject huge payloads before JSON parsing / cv2 decode to prevent DoS."""
+
+    def __init__(self, app, max_content_length: int = 16 * 1024 * 1024):
+        super().__init__(app)
+        self.max_content_length = max_content_length
+
+    async def dispatch(self, request: Request, call_next):
+        cl = request.headers.get("content-length")
+        if cl and cl.isdigit() and int(cl) > self.max_content_length:
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "error": {
+                        "code": "PAYLOAD_TOO_LARGE",
+                        "message": "Request body too large.",
+                    }
+                },
+            )
+        return await call_next(request)
+
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 logger = logging.getLogger("ccd")
 
 
@@ -44,6 +76,19 @@ logger = logging.getLogger("ccd")
 async def lifespan(app: FastAPI):
     # Re-validate on startup (env may differ from import time)
     settings.validate_production()
+    # Best-effort auto-migration for token_version column (zero-downtime for existing DBs)
+    try:
+        from app.db.session import engine
+        from sqlalchemy import text
+
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 0 NOT NULL"
+                )
+            )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("token_version migration check failed: %s", e)
     provider = settings.face_embedding_provider
     logger.info(
         "CCD-Attendance starting | face_provider=%s | threshold=%.2f (dev default - calibrate!)",
@@ -51,10 +96,13 @@ async def lifespan(app: FastAPI):
         settings.face_match_threshold,
     )
     if provider == "fake" and settings.is_production:
-        raise RuntimeError("FACE_EMBEDDING_PROVIDER=fake is forbidden in production (ENV=production)")
+        raise RuntimeError(
+            "FACE_EMBEDDING_PROVIDER=fake is forbidden in production (ENV=production)"
+        )
     if provider == "insightface":
         from app.face_ai.liveness_service import get_liveness_analyzer
-        from app.face_ai.recognition_service import get_face_recognition_service
+        from app.face_ai.recognition_service import \
+            get_face_recognition_service
 
         logger.info("Preloading face recognition and liveness models")
         await run_in_threadpool(get_face_recognition_service().warm_up)
@@ -87,13 +135,22 @@ def create_app() -> FastAPI:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed)
 
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(ContentSizeLimitMiddleware, max_content_length=16 * 1024 * 1024)
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-Requested-With",
+            "X-Device-Id",
+            "X-Device-Mac",
+            "X-Registration-Device",
+            "X-Mac-Address",
+        ],
         max_age=600,
     )
 
@@ -103,7 +160,9 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(RateLimitExceeded)
     async def rate_limit_handler(_: Request, exc: RateLimitExceeded) -> JSONResponse:
-        return error_response(429, "RATE_LIMITED", "Too many requests. Please wait a moment and retry.")
+        return error_response(
+            429, "RATE_LIMITED", "Too many requests. Please wait a moment and retry."
+        )
 
     from app.core.errors import register_exception_handlers
 
@@ -143,9 +202,15 @@ def create_app() -> FastAPI:
         if problems:
             return JSONResponse(
                 status_code=503,
-                content={"status": "unavailable", "service": "ccd-attendance-backend", "problems": problems},
+                content={
+                    "status": "unavailable",
+                    "service": "ccd-attendance-backend",
+                    "problems": problems,
+                },
             )
-        return JSONResponse(content={"status": "ready", "service": "ccd-attendance-backend"})
+        return JSONResponse(
+            content={"status": "ready", "service": "ccd-attendance-backend"}
+        )
 
     app.include_router(api_router, prefix="/api")
     return app

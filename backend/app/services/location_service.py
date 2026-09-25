@@ -14,32 +14,31 @@ import math
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
-from app.models.entities import AttendanceSession, LocationVerification, Student
+from app.models.entities import (AttendanceSession, LocationVerification,
+                                 Student)
 from app.services.audit_service import audit_detached
 from app.services.device_service import verify_device_binding
-from app.services.session_service import (
-    campus_now,
-    get_active_session_or_error,
-    validate_window,
-)
+from app.services.session_service import (campus_now,
+                                          get_active_session_or_error,
+                                          validate_window)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("ccd.geo")
 
 EARTH_RADIUS_METERS = 6_371_000.0
 
 
-def haversine_meters(
-    lat1: float, lon1: float, lat2: float, lon2: float
-) -> float:
+def haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance between two points in metres (Haversine formula)."""
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
     return 2.0 * EARTH_RADIUS_METERS * math.asin(math.sqrt(a))
 
 
@@ -47,7 +46,9 @@ def _parse_captured_at(raw: str) -> datetime:
     try:
         captured = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except (ValueError, TypeError) as exc:
-        raise ApiError(ErrorCode.INVALID_COORDS, "Location capture timestamp is invalid.", 422) from exc
+        raise ApiError(
+            ErrorCode.INVALID_COORDS, "Location capture timestamp is invalid.", 422
+        ) from exc
     if captured.tzinfo is None:
         captured = captured.replace(tzinfo=timezone.utc)
     return captured
@@ -77,8 +78,8 @@ async def verify_location(
     assert isinstance(session, AttendanceSession)
 
     # Session time window: students with an existing check-in are validating for checkout
-    from sqlalchemy import select
     from app.models.entities import AttendanceRecord
+    from sqlalchemy import select
 
     existing = (
         await db.execute(
@@ -88,10 +89,19 @@ async def verify_location(
             )
         )
     ).scalar_one_or_none()
-    purpose = "check_out" if (existing is not None and existing.check_in_at is not None) else "check_in"
+    purpose = (
+        "check_out"
+        if (existing is not None and existing.check_in_at is not None)
+        else "check_in"
+    )
     # Device binding - for checkout allow mismatch and auto-update (Halima cleared data after check-in)
     try:
-        verify_device_binding(student, device_id=device_id, mac_address=mac_address, is_checkout=(purpose == "check_out"))
+        verify_device_binding(
+            student,
+            device_id=device_id,
+            mac_address=mac_address,
+            is_checkout=(purpose == "check_out"),
+        )
     except ApiError as exc:
         await audit_detached(
             action="location_verification_failed",
@@ -123,11 +133,12 @@ async def verify_location(
 
     _validate_coordinates(latitude, longitude)
 
-    # Coordinate freshness
+    # Coordinate freshness — lenient for slow indoor fixes and minor phone clock skew
     now_utc = datetime.now(timezone.utc)
     captured_at = _parse_captured_at(captured_at_raw)
     age_seconds = (now_utc - captured_at).total_seconds()
-    if age_seconds < -30 or age_seconds > settings.gps_max_age_seconds:
+    # Allow 60s future (phone ahead) and up to gps_max_age+60s past (slow fix)
+    if age_seconds < -60 or age_seconds > settings.gps_max_age_seconds + 60:
         await audit_detached(
             action="location_verification_failed",
             actor_user_id=actor_user_id,
@@ -136,29 +147,66 @@ async def verify_location(
             details={"reason": "STALE_LOCATION", "age_seconds": round(age_seconds)},
             ip_address=ip_address,
         )
-        raise ApiError(ErrorCode.STALE_LOCATION,
-                       "Your location data is outdated. Refresh your GPS position and retry.", 400,
-                       {"ageSeconds": int(age_seconds)})
+        raise ApiError(
+            ErrorCode.STALE_LOCATION,
+            "Your location data is outdated (phone clock may be off). Enable auto time, refresh GPS near a window and retry.",
+            400,
+            {"ageSeconds": int(age_seconds)},
+        )
 
-    # Radius first: a student already inside RAFIC should not fail just because
-    # indoor GPS reports a large accuracy circle.
+    # Radius: indoor GPS often drifts 80-250m even inside RAFIC.
+    # Be lenient: if accuracy circle overlaps the permitted radius, allow with warning.
+    # This helps phones with poor indoor fix while still blocking far spoofs.
     distance = haversine_meters(
-        latitude, longitude,
-        float(session.location.latitude), float(session.location.longitude),
+        latitude,
+        longitude,
+        float(session.location.latitude),
+        float(session.location.longitude),
     )
     allowed_radius = float(session.permitted_radius_meters)
-    if distance > allowed_radius:
+    # Fuzzy buffer: allow up to 200m extra if accuracy is poor but not absurd (>500m likely spoof)
+    # Effective = distance - min(accuracy, 200) <= allowed_radius  => circle overlaps
+    accuracy_for_buffer = min(max(accuracy_meters, 0), 200)
+    effective_distance = max(0, distance - accuracy_for_buffer * 0.6)
+    # Also hard cap: if raw accuracy > 800m, treat as unreliable -> require tighter
+    if distance > allowed_radius and effective_distance > allowed_radius:
+        # Provide helpful hint for borderline indoor cases
         await audit_detached(
             action="location_verification_failed",
             actor_user_id=actor_user_id,
             entity_type="attendance_session",
             entity_id=session_id,
-            details={"reason": "OUTSIDE_RADIUS", "distance_m": round(distance, 1), "radius_m": allowed_radius},
+            details={
+                "reason": "OUTSIDE_RADIUS",
+                "distance_m": round(distance, 1),
+                "radius_m": allowed_radius,
+                "accuracy_m": round(accuracy_meters, 1),
+                "effective_m": round(effective_distance, 1),
+            },
             ip_address=ip_address,
         )
-        raise ApiError(ErrorCode.OUTSIDE_RADIUS,
-                       "You are outside the permitted attendance area.", 403,
-                       {"distanceMeters": round(distance, 1), "allowedRadiusMeters": allowed_radius})
+        # User-friendly message with actionable advice
+        raise ApiError(
+            ErrorCode.OUTSIDE_RADIUS,
+            f"You appear {round(distance)}m from RAFIC (allowed {int(allowed_radius)}m). Move near a window/outside, enable Precise Location, and retry.",
+            403,
+            {
+                "distanceMeters": round(distance, 1),
+                "allowedRadiusMeters": allowed_radius,
+                "accuracyMeters": round(accuracy_meters, 1),
+                "hint": "Enable Precise Location and move near window",
+            },
+        )
+    if distance > allowed_radius:
+        # Fuzzy pass: log for audit but allow — prevents indoor false rejects
+        logger.info(
+            "Fuzzy location pass student=%s distance=%.1fm accuracy=%.1fm effective=%.1fm radius=%.1fm",
+            student.id,
+            distance,
+            accuracy_meters,
+            effective_distance,
+            allowed_radius,
+        )
 
     record = LocationVerification(
         student_id=student.id,
@@ -173,5 +221,10 @@ async def verify_location(
     db.add(record)
     await db.commit()
     await db.refresh(record)
-    logger.info("Location verified student=%s session=%s distance=%.1fm", student.id, session_id, distance)
+    logger.info(
+        "Location verified student=%s session=%s distance=%.1fm",
+        student.id,
+        session_id,
+        distance,
+    )
     return record

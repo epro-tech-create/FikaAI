@@ -3,15 +3,15 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from pydantic import ValidationError
-
 from app.api.v1.admin import _daily_timeline
+from app.core.config import settings
 from app.core.deps import require_roles
 from app.core.errors import ApiError, ErrorCode
-from app.core.config import settings
 from app.main import app
-from app.schemas import SessionCreateRequest, ManualAttendanceRequest, SessionHoursUpdate
+from app.schemas import (ManualAttendanceRequest, SessionCreateRequest,
+                         SessionHoursUpdate)
 from app.services.attendance_service import _campus_datetime
+from pydantic import ValidationError
 
 
 def test_management_portal_routes_are_mounted():
@@ -39,7 +39,9 @@ def test_management_portal_routes_are_mounted():
     assert {"get", "post"} <= set(openapi_paths["/api/admin/students"])
     assert {"patch", "delete"} <= set(openapi_paths["/api/admin/students/{student_id}"])
     assert {"get", "post"} <= set(openapi_paths["/api/admin/instructors"])
-    assert {"patch", "delete"} <= set(openapi_paths["/api/admin/instructors/{instructor_id}"])
+    assert {"patch", "delete"} <= set(
+        openapi_paths["/api/admin/instructors/{instructor_id}"]
+    )
     assert "/api/admin/courses" not in paths
     assert "/api/instructor/courses" not in paths
     assert "post" not in openapi_paths["/api/admin/sessions"]
@@ -66,8 +68,12 @@ def test_daily_timeline_counts_arrivals_and_departures_cumulatively():
     timeline = _daily_timeline(records)
 
     assert timeline[0] == {"time": "08:00", "arrivals": 1, "departures": 0}
-    assert next(point for point in timeline if point["time"] == "09:30")["arrivals"] == 2
-    assert next(point for point in timeline if point["time"] == "11:00")["departures"] == 1
+    assert (
+        next(point for point in timeline if point["time"] == "09:30")["arrivals"] == 2
+    )
+    assert (
+        next(point for point in timeline if point["time"] == "11:00")["departures"] == 1
+    )
     assert timeline[-1] == {"time": "16:00", "arrivals": 2, "departures": 1}
 
 
@@ -95,13 +101,15 @@ def test_session_payload_rejects_out_of_order_times():
 
 
 def test_manual_attendance_accepts_naive_campus_times():
-    payload = ManualAttendanceRequest.model_validate({
-        "studentId": str(uuid4()),
-        "sessionId": str(uuid4()),
-        "checkInAt": "2026-09-17T08:15:00",
-        "checkOutAt": "2026-09-17T15:02:00",
-        "status": "PRESENT",
-    })
+    payload = ManualAttendanceRequest.model_validate(
+        {
+            "studentId": str(uuid4()),
+            "sessionId": str(uuid4()),
+            "checkInAt": "2026-09-17T08:15:00",
+            "checkOutAt": "2026-09-17T15:02:00",
+            "status": "PRESENT",
+        }
+    )
     assert payload.check_in_at == datetime(2026, 9, 17, 8, 15)
     assert payload.check_out_at == datetime(2026, 9, 17, 15, 2)
     assert payload.check_in_at.tzinfo is None
@@ -109,12 +117,14 @@ def test_manual_attendance_accepts_naive_campus_times():
 
 def test_manual_attendance_rejects_checkout_before_checkin():
     with pytest.raises(ValidationError):
-        ManualAttendanceRequest.model_validate({
-            "studentId": str(uuid4()),
-            "sessionId": str(uuid4()),
-            "checkInAt": "2026-09-17T15:00:00",
-            "checkOutAt": "2026-09-17T08:00:00",
-        })
+        ManualAttendanceRequest.model_validate(
+            {
+                "studentId": str(uuid4()),
+                "sessionId": str(uuid4()),
+                "checkInAt": "2026-09-17T15:00:00",
+                "checkOutAt": "2026-09-17T08:00:00",
+            }
+        )
 
 
 def test_campus_datetime_treats_naive_values_as_dar_es_salaam():
@@ -126,23 +136,27 @@ def test_campus_datetime_treats_naive_values_as_dar_es_salaam():
 
 
 def test_session_hours_update_accepts_custom_windows():
-    hours = SessionHoursUpdate.model_validate({
-        "checkInOpen": "07:00",
-        "officialStart": "09:00",
-        "checkInClose": "16:00",
-        "expectedEnd": "16:00",
-        "checkOutClose": "18:00",
-    })
+    hours = SessionHoursUpdate.model_validate(
+        {
+            "checkInOpen": "07:00",
+            "officialStart": "09:00",
+            "checkInClose": "16:00",
+            "expectedEnd": "16:00",
+            "checkOutClose": "18:00",
+        }
+    )
     assert hours.check_in_open.hour == 7
     assert hours.check_out_close.hour == 18
 
 
 def test_session_hours_update_rejects_inverted_checkin_window():
     with pytest.raises(ValidationError):
-        SessionHoursUpdate.model_validate({
-            "checkInOpen": "15:00",
-            "officialStart": "09:30",
-            "checkInClose": "08:00",
-            "expectedEnd": "15:00",
-            "checkOutClose": "17:00",
-        })
+        SessionHoursUpdate.model_validate(
+            {
+                "checkInOpen": "15:00",
+                "officialStart": "09:30",
+                "checkInClose": "08:00",
+                "expectedEnd": "15:00",
+                "checkOutClose": "17:00",
+            }
+        )

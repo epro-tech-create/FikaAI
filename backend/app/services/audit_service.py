@@ -11,10 +11,9 @@ import logging
 import uuid
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.db.session import session_factory
 from app.models.entities import AuditLog
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("ccd.audit")
 

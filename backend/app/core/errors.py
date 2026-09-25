@@ -102,7 +102,9 @@ class ApiError(Exception):
         super().__init__(message)
 
 
-def error_response(status_code: int, code: str, message: str, details: Any = None) -> JSONResponse:
+def error_response(
+    status_code: int, code: str, message: str, details: Any = None
+) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={"error": {"code": code, "message": message, "details": details}},
@@ -112,26 +114,40 @@ def error_response(status_code: int, code: str, message: str, details: Any = Non
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
-        return error_response(exc.status_code, exc.code.value, exc.message, exc.details or None)
+        return error_response(
+            exc.status_code, exc.code.value, exc.message, exc.details or None
+        )
 
     @app.exception_handler(RequestValidationError)
-    async def validation_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    async def validation_handler(
+        _: Request, exc: RequestValidationError
+    ) -> JSONResponse:
         # Pydantic custom validators include the original ValueError object in
         # `ctx`; JSONResponse cannot serialize that object and used to turn a
         # normal 422 (e.g. weak signup password) into an internal server error.
         errors = exc.errors()
         details = [
             {
-                "field": ".".join(str(part) for part in error.get("loc", []) if part != "body"),
-                "message": str(error.get("msg", "Invalid value")).removeprefix("Value error, "),
+                "field": ".".join(
+                    str(part) for part in error.get("loc", []) if part != "body"
+                ),
+                "message": str(error.get("msg", "Invalid value")).removeprefix(
+                    "Value error, "
+                ),
                 "type": str(error.get("type", "validation_error")),
             }
             for error in errors
         ]
         first_message = details[0]["message"] if details else "Invalid request payload."
-        return error_response(422, ErrorCode.VALIDATION_ERROR.value, first_message, details)
+        return error_response(
+            422, ErrorCode.VALIDATION_ERROR.value, first_message, details
+        )
 
     @app.exception_handler(Exception)
     async def unhandled_handler(_: Request, exc: Exception) -> JSONResponse:
-        logger.exception("Unhandled server error")  # logs type only, never payloads/images/embeddings
-        return error_response(500, ErrorCode.INTERNAL_ERROR.value, "Internal server error.")
+        logger.exception(
+            "Unhandled server error"
+        )  # logs type only, never payloads/images/embeddings
+        return error_response(
+            500, ErrorCode.INTERNAL_ERROR.value, "Internal server error."
+        )

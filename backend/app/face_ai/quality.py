@@ -21,16 +21,18 @@ class QualityResult:
     brightness: float = 0.0
 
 
-MIN_BLUR_VARIANCE = 35.0   # Keep ordinary 640px webcam captures while rejecting clear blur
-MIN_BRIGHTNESS = 45.0      # mean grayscale below this => too dark
-MAX_BRIGHTNESS = 238.0     # mean grayscale above this => washed out / overexposed
+MIN_BLUR_VARIANCE = (
+    35.0  # Keep ordinary 640px webcam captures while rejecting clear blur
+)
+MIN_BRIGHTNESS = 45.0  # mean grayscale below this => too dark
+MAX_BRIGHTNESS = 238.0  # mean grayscale above this => washed out / overexposed
 
 
 def assess_quality(bgr: np.ndarray) -> QualityResult:
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     height, width = gray.shape
     y_margin, x_margin = int(height * 0.15), int(width * 0.15)
-    center = gray[y_margin:height - y_margin, x_margin:width - x_margin]
+    center = gray[y_margin : height - y_margin, x_margin : width - x_margin]
     if center.size == 0:
         center = gray
     blur_variance = float(cv2.Laplacian(center, cv2.CV_64F).var())
@@ -62,5 +64,7 @@ def select_temporally_distributed(indices: list[int], max_count: int = 5) -> lis
         raise ValueError("max_count must be positive")
     if len(indices) <= max_count:
         return list(indices)
-    positions = [round(i * (len(indices) - 1) / (max_count - 1)) for i in range(max_count)]
+    positions = [
+        round(i * (len(indices) - 1) / (max_count - 1)) for i in range(max_count)
+    ]
     return [indices[position] for position in positions]

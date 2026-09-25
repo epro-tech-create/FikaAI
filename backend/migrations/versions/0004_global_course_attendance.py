@@ -28,21 +28,19 @@ LEGACY_PASSWORD_HASH = (
 )
 
 
-def _replace_user_role(*, source_type: str, target: sa.Enum, role_from: str, role_to: str) -> None:
+def _replace_user_role(
+    *, source_type: str, target: sa.Enum, role_from: str, role_to: str
+) -> None:
     """Replace a PostgreSQL enum without relying on ALTER VALUE semantics."""
     op.execute(sa.text(f"ALTER TYPE user_role RENAME TO {source_type}"))
     target.create(op.get_bind(), checkfirst=False)
-    op.execute(
-        sa.text(
-            f"""
+    op.execute(sa.text(f"""
             ALTER TABLE users
             ALTER COLUMN role TYPE user_role
             USING (
                 CASE WHEN role::text = '{role_from}' THEN '{role_to}' ELSE role::text END
             )::user_role
-            """
-        )
-    )
+            """))
     op.execute(sa.text(f"DROP TYPE {source_type}"))
 
 
@@ -75,40 +73,47 @@ def upgrade() -> None:
             sa.ForeignKey("users.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.UniqueConstraint("user_id", name="uq_instructor_user"),
     )
     op.create_index("ix_instructors_user_id", "instructors", ["user_id"])
 
     # Reusing the user UUID keeps migrated profile IDs deterministic.
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             INSERT INTO instructors (id, user_id, created_at, updated_at)
             SELECT id, id, created_at, updated_at
             FROM users
             WHERE role = 'instructor'::user_role
-            """
-        )
-    )
+            """))
 
     # A pre-0004 session has no owner. Only create a disabled placeholder when
     # there is data to preserve and no real migrated instructor can own it.
     op.execute(
-        sa.text(
-            """
+        sa.text("""
             INSERT INTO users (id, email, password_hash, full_name, role, is_active, created_at, updated_at)
             SELECT CAST(:user_id AS uuid), :email, :password_hash,
                    'Legacy session owner', 'instructor'::user_role, false, now(), now()
             WHERE EXISTS (SELECT 1 FROM attendance_sessions)
               AND NOT EXISTS (SELECT 1 FROM instructors)
-            """
-        ).bindparams(user_id=LEGACY_USER_ID, email=LEGACY_EMAIL, password_hash=LEGACY_PASSWORD_HASH)
+            """).bindparams(
+            user_id=LEGACY_USER_ID,
+            email=LEGACY_EMAIL,
+            password_hash=LEGACY_PASSWORD_HASH,
+        )
     )
     op.execute(
-        sa.text(
-            """
+        sa.text("""
             INSERT INTO instructors (id, user_id, created_at, updated_at)
             SELECT CAST(:instructor_id AS uuid), CAST(:user_id AS uuid), now(), now()
             WHERE EXISTS (
@@ -116,8 +121,11 @@ def upgrade() -> None:
                 WHERE id = CAST(:user_id AS uuid) AND email = :email
             )
               AND NOT EXISTS (SELECT 1 FROM instructors)
-            """
-        ).bindparams(instructor_id=LEGACY_INSTRUCTOR_ID, user_id=LEGACY_USER_ID, email=LEGACY_EMAIL)
+            """).bindparams(
+            instructor_id=LEGACY_INSTRUCTOR_ID,
+            user_id=LEGACY_USER_ID,
+            email=LEGACY_EMAIL,
+        )
     )
 
     op.create_table(
@@ -135,8 +143,18 @@ def upgrade() -> None:
             sa.ForeignKey("courses.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.UniqueConstraint("instructor_id", "course_id", name="uq_instructor_course"),
     )
     op.create_index(
@@ -149,31 +167,38 @@ def upgrade() -> None:
         "instructor_course_assignments",
         ["course_id"],
     )
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             INSERT INTO instructor_course_assignments
                 (id, instructor_id, course_id, created_at, updated_at)
             SELECT md5(i.id::text || ':' || c.id::text)::uuid, i.id, c.id, now(), now()
             FROM instructors AS i
             CROSS JOIN courses AS c
-            """
-        )
-    )
+            """))
 
-    op.add_column("attendance_sessions", sa.Column("course_id", pg.UUID(as_uuid=True), nullable=True))
-    op.add_column("attendance_sessions", sa.Column("instructor_id", pg.UUID(as_uuid=True), nullable=True))
-    op.add_column("attendance_sessions", sa.Column("official_start", sa.Time(), nullable=True))
-    op.add_column("attendance_sessions", sa.Column("check_out_close", sa.Time(), nullable=True))
-    op.add_column("attendance_sessions", sa.Column("permitted_radius_meters", sa.Integer(), nullable=True))
+    op.add_column(
+        "attendance_sessions",
+        sa.Column("course_id", pg.UUID(as_uuid=True), nullable=True),
+    )
+    op.add_column(
+        "attendance_sessions",
+        sa.Column("instructor_id", pg.UUID(as_uuid=True), nullable=True),
+    )
+    op.add_column(
+        "attendance_sessions", sa.Column("official_start", sa.Time(), nullable=True)
+    )
+    op.add_column(
+        "attendance_sessions", sa.Column("check_out_close", sa.Time(), nullable=True)
+    )
+    op.add_column(
+        "attendance_sessions",
+        sa.Column("permitted_radius_meters", sa.Integer(), nullable=True),
+    )
     op.add_column(
         "attendance_sessions",
         sa.Column("instructions", sa.String(500), nullable=True),
     )
 
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE attendance_sessions AS s
             SET course_id = cg.course_id,
                 instructor_id = (
@@ -190,9 +215,7 @@ def upgrade() -> None:
             FROM class_groups AS cg, practical_locations AS l
             WHERE cg.id = s.class_group_id
               AND l.id = s.location_id
-            """
-        )
-    )
+            """))
 
     for column in (
         "course_id",
@@ -227,15 +250,23 @@ def upgrade() -> None:
         ["instructor_id", "course_id"],
         ondelete="RESTRICT",
     )
-    op.create_index("ix_attendance_sessions_course_id", "attendance_sessions", ["course_id"])
-    op.create_index("ix_attendance_sessions_instructor_id", "attendance_sessions", ["instructor_id"])
+    op.create_index(
+        "ix_attendance_sessions_course_id", "attendance_sessions", ["course_id"]
+    )
+    op.create_index(
+        "ix_attendance_sessions_instructor_id", "attendance_sessions", ["instructor_id"]
+    )
     op.create_check_constraint(
         "ck_session_radius_positive",
         "attendance_sessions",
         "permitted_radius_meters > 0",
     )
 
-    op.drop_constraint("attendance_sessions_class_group_id_fkey", "attendance_sessions", type_="foreignkey")
+    op.drop_constraint(
+        "attendance_sessions_class_group_id_fkey",
+        "attendance_sessions",
+        type_="foreignkey",
+    )
     op.drop_column("attendance_sessions", "class_group_id")
     op.drop_table("student_class_enrollments")
     op.drop_table("class_groups")
@@ -255,15 +286,27 @@ def downgrade() -> None:
         sa.Column(
             "default_location_id",
             pg.UUID(as_uuid=True),
-            sa.ForeignKey("practical_locations.id", ondelete="SET NULL", name="fk_class_groups_default_location"),
+            sa.ForeignKey(
+                "practical_locations.id",
+                ondelete="SET NULL",
+                name="fk_class_groups_default_location",
+            ),
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.UniqueConstraint("course_id", "name", name="uq_class_course_name"),
     )
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             INSERT INTO class_groups
                 (id, course_id, name, default_location_id, created_at, updated_at)
             SELECT md5('downgrade-class:' || c.id::text)::uuid,
@@ -278,9 +321,7 @@ def downgrade() -> None:
                    ),
                    now(), now()
             FROM courses AS c
-            """
-        )
-    )
+            """))
 
     op.create_table(
         "student_class_enrollments",
@@ -297,37 +338,47 @@ def downgrade() -> None:
             sa.ForeignKey("class_groups.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("enrolled_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "enrolled_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.UniqueConstraint("student_id", "class_group_id", name="uq_student_class"),
     )
     # 0004 makes students globally eligible. Enrolling every student in every
     # reconstructed group is the closest lossless representation in 0003.
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             INSERT INTO student_class_enrollments
                 (id, student_id, class_group_id, enrolled_at, created_at, updated_at)
             SELECT md5(s.id::text || ':' || cg.id::text)::uuid,
                    s.id, cg.id, now(), now(), now()
             FROM students AS s
             CROSS JOIN class_groups AS cg
-            """
-        )
-    )
+            """))
 
-    op.add_column("attendance_sessions", sa.Column("class_group_id", pg.UUID(as_uuid=True), nullable=True))
-    op.execute(
-        sa.text(
-            """
+    op.add_column(
+        "attendance_sessions",
+        sa.Column("class_group_id", pg.UUID(as_uuid=True), nullable=True),
+    )
+    op.execute(sa.text("""
             UPDATE attendance_sessions AS s
             SET class_group_id = cg.id
             FROM class_groups AS cg
             WHERE cg.course_id = s.course_id
-            """
-        )
-    )
+            """))
     op.alter_column("attendance_sessions", "class_group_id", nullable=False)
     op.create_foreign_key(
         "attendance_sessions_class_group_id_fkey",
@@ -338,12 +389,24 @@ def downgrade() -> None:
         ondelete="RESTRICT",
     )
 
-    op.drop_constraint("ck_session_radius_positive", "attendance_sessions", type_="check")
-    op.drop_constraint("fk_session_instructor_course_assignment", "attendance_sessions", type_="foreignkey")
-    op.drop_index("ix_attendance_sessions_instructor_id", table_name="attendance_sessions")
+    op.drop_constraint(
+        "ck_session_radius_positive", "attendance_sessions", type_="check"
+    )
+    op.drop_constraint(
+        "fk_session_instructor_course_assignment",
+        "attendance_sessions",
+        type_="foreignkey",
+    )
+    op.drop_index(
+        "ix_attendance_sessions_instructor_id", table_name="attendance_sessions"
+    )
     op.drop_index("ix_attendance_sessions_course_id", table_name="attendance_sessions")
-    op.drop_constraint("fk_attendance_sessions_instructor", "attendance_sessions", type_="foreignkey")
-    op.drop_constraint("fk_attendance_sessions_course", "attendance_sessions", type_="foreignkey")
+    op.drop_constraint(
+        "fk_attendance_sessions_instructor", "attendance_sessions", type_="foreignkey"
+    )
+    op.drop_constraint(
+        "fk_attendance_sessions_course", "attendance_sessions", type_="foreignkey"
+    )
     for column in (
         "instructions",
         "permitted_radius_meters",
@@ -356,16 +419,12 @@ def downgrade() -> None:
 
     op.drop_table("instructor_course_assignments")
     op.drop_table("instructors")
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             DELETE FROM users
             WHERE id = CAST(:user_id AS uuid)
               AND email = :email
               AND is_active = false
-            """
-        ).bindparams(user_id=LEGACY_USER_ID, email=LEGACY_EMAIL)
-    )
+            """).bindparams(user_id=LEGACY_USER_ID, email=LEGACY_EMAIL))
 
     op.drop_index("ix_students_status", table_name="students")
     op.drop_column("students", "status")

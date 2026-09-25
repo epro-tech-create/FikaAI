@@ -18,24 +18,21 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
-from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
 from app.face_ai.liveness_service import LivenessAnalyzer
-from app.face_ai.recognition_service import BaseFaceRecognitionService, cosine_similarity
-from app.models.entities import (
-    CHALLENGE_INSTRUCTIONS,
-    FaceEnrollment,
-    FaceVerification,
-    LivenessChallengeType,
-    Student,
-)
+from app.face_ai.recognition_service import (BaseFaceRecognitionService,
+                                             cosine_similarity)
+from app.models.entities import (CHALLENGE_INSTRUCTIONS, FaceEnrollment,
+                                 FaceVerification, LivenessChallengeType,
+                                 Student)
 from app.services.audit_service import audit_detached
-from app.services.enrollment_service import decode_frame, load_active_enrollment
+from app.services.enrollment_service import (decode_frame,
+                                             load_active_enrollment)
 from app.services.session_service import get_active_session_or_error
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("ccd.verify")
 
@@ -77,8 +74,11 @@ async def issue_challenge(
         )
     ).scalar_one_or_none()
     if active is None:
-        raise ApiError(ErrorCode.FACE_NOT_ENROLLED,
-                       "No face enrolment found. Complete face enrolment first.", 409)
+        raise ApiError(
+            ErrorCode.FACE_NOT_ENROLLED,
+            "No face enrolment found. Complete face enrolment first.",
+            409,
+        )
 
     await get_active_session_or_error(db, session_id)
 
@@ -87,7 +87,8 @@ async def issue_challenge(
         student_id=student.id,
         session_id=session_id,
         challenge_type=challenge_type,
-        challenge_expires_at=_now_utc() + timedelta(seconds=settings.liveness_challenge_ttl_seconds),
+        challenge_expires_at=_now_utc()
+        + timedelta(seconds=settings.liveness_challenge_ttl_seconds),
     )
     db.add(record)
     await db.commit()
@@ -115,12 +116,17 @@ async def verify_face(
     liveness: LivenessAnalyzer,
 ) -> dict:
     if len(frames_b64) > settings.max_frames_per_request:
-        raise ApiError(ErrorCode.FRAME_LIMIT_EXCEEDED,
-                       f"Too many frames (max {settings.max_frames_per_request}).", 413)
+        raise ApiError(
+            ErrorCode.FRAME_LIMIT_EXCEEDED,
+            f"Too many frames (max {settings.max_frames_per_request}).",
+            413,
+        )
     try:
         token_uuid = uuid.UUID(challenge_token)
     except ValueError as exc:
-        raise ApiError(ErrorCode.CHALLENGE_INVALID, "Unknown liveness challenge.", 404) from exc
+        raise ApiError(
+            ErrorCode.CHALLENGE_INVALID, "Unknown liveness challenge.", 404
+        ) from exc
 
     row = (
         await db.execute(
@@ -135,15 +141,21 @@ async def verify_face(
 
     now = _now_utc()
     if row is None:
-        raise ApiError(ErrorCode.CHALLENGE_INVALID,
-                       "No pending liveness challenge. Start a new face scan.", 404)
+        raise ApiError(
+            ErrorCode.CHALLENGE_INVALID,
+            "No pending liveness challenge. Start a new face scan.",
+            404,
+        )
     if row.challenge_expires_at < now:
         row.completed_at = now
         row.verified = False
         row.failure_reason = ErrorCode.CHALLENGE_EXPIRED.value
         await db.commit()
-        raise ApiError(ErrorCode.CHALLENGE_EXPIRED,
-                       "The liveness challenge expired. Start a new face scan.", 410)
+        raise ApiError(
+            ErrorCode.CHALLENGE_EXPIRED,
+            "The liveness challenge expired. Start a new face scan.",
+            410,
+        )
 
     blobs = [decode_frame(f) for f in frames_b64]
 
@@ -153,7 +165,9 @@ async def verify_face(
     for blob in blobs:
         img = cv2.imdecode(np.frombuffer(blob, dtype=np.uint8), cv2.IMREAD_COLOR)
         if img is None:
-            raise ApiError(ErrorCode.UNSUPPORTED_MEDIA_TYPE, "A frame could not be decoded.", 422)
+            raise ApiError(
+                ErrorCode.UNSUPPORTED_MEDIA_TYPE, "A frame could not be decoded.", 422
+            )
         decoded.append(img)
 
     # ---- server-side liveness decision ----
@@ -180,11 +194,14 @@ async def verify_face(
             ErrorCode.MULTIPLE_FACES: "More than one face was visible. Only one person may be in frame.",
             ErrorCode.LIVENESS_NOT_COMPLETED: "Liveness could not be confirmed. Retake the scan.",
         }
-        message = messages.get(reason, "Liveness check failed. Please perform the requested action.")
+        message = messages.get(
+            reason, "Liveness check failed. Please perform the requested action."
+        )
         raise ApiError(reason, message, 422)
 
     # ---- quality-gated, multi-frame 1:1 match against THIS student ----
-    from app.face_ai.quality import assess_quality, select_temporally_distributed
+    from app.face_ai.quality import (assess_quality,
+                                     select_temporally_distributed)
 
     quality_failures = []
     valid_indices = []
@@ -198,7 +215,8 @@ async def verify_face(
     if len(valid_indices) < MIN_MATCH_FRAMES:
         reason = (
             ErrorCode.TOO_DARK
-            if quality_failures.count("TOO_DARK") >= quality_failures.count("BLURRED_IMAGE")
+            if quality_failures.count("TOO_DARK")
+            >= quality_failures.count("BLURRED_IMAGE")
             else ErrorCode.BLURRED_IMAGE
         )
         if not quality_failures:
@@ -212,16 +230,27 @@ async def verify_face(
         row.verified = False
         row.failure_reason = reason.value
         await db.commit()
-        raise ApiError(reason, messages[reason], 422,
-                       {"validFrameCount": len(valid_indices), "requiredFrameCount": MIN_MATCH_FRAMES})
+        raise ApiError(
+            reason,
+            messages[reason],
+            422,
+            {
+                "validFrameCount": len(valid_indices),
+                "requiredFrameCount": MIN_MATCH_FRAMES,
+            },
+        )
 
     candidate_indices = select_temporally_distributed(valid_indices, MAX_MATCH_FRAMES)
     try:
-        enrollment, enrolled_embedding = await load_active_enrollment(db, student.id, recognizer.provider_name)
+        enrollment, enrolled_embedding = await load_active_enrollment(
+            db, student.id, recognizer.provider_name
+        )
         live_embeddings = []
         for index in candidate_indices:
             try:
-                live_embeddings.append(await run_in_threadpool(recognizer.detect_and_embed, decoded[index]))
+                live_embeddings.append(
+                    await run_in_threadpool(recognizer.detect_and_embed, decoded[index])
+                )
             except ApiError as exc:
                 if exc.code == ErrorCode.NO_FACE:
                     continue
@@ -238,11 +267,20 @@ async def verify_face(
         row.verified = False
         row.failure_reason = ErrorCode.NO_FACE.value
         await db.commit()
-        raise ApiError(ErrorCode.NO_FACE,
-                       "A face was not consistently detectable. Center your face and retry.", 422,
-                       {"validFrameCount": len(live_embeddings), "requiredFrameCount": MIN_MATCH_FRAMES})
+        raise ApiError(
+            ErrorCode.NO_FACE,
+            "A face was not consistently detectable. Center your face and retry.",
+            422,
+            {
+                "validFrameCount": len(live_embeddings),
+                "requiredFrameCount": MIN_MATCH_FRAMES,
+            },
+        )
 
-    scores = [cosine_similarity(embedding, enrolled_embedding) for embedding in live_embeddings]
+    scores = [
+        cosine_similarity(embedding, enrolled_embedding)
+        for embedding in live_embeddings
+    ]
     similarity = aggregate_match_scores(scores)
     row.similarity_score = round(float(similarity), 4)
     row.face_enrollment_id = enrollment.id
@@ -261,8 +299,11 @@ async def verify_face(
             details={"reason": "FACE_MISMATCH"},  # score stays internal
             ip_address=ip_address,
         )
-        raise ApiError(ErrorCode.FACE_MISMATCH,
-                       "Your face did not match the enrolled face. Retry in even lighting.", 422)
+        raise ApiError(
+            ErrorCode.FACE_MISMATCH,
+            "Your face did not match the enrolled face. Retry in even lighting.",
+            422,
+        )
 
     # Success -> mint one-time short-lived token
     row.completed_at = now

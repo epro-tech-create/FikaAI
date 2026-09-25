@@ -4,17 +4,18 @@ from datetime import datetime, timezone
 
 import numpy as np
 import pytest
-
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
-from app.face_ai.liveness_service import MediaPipeLivenessAnalyzer, _FrameSignals
-from app.face_ai.quality import MIN_BLUR_VARIANCE, assess_quality, select_temporally_distributed
+from app.face_ai.liveness_service import (MediaPipeLivenessAnalyzer,
+                                          _FrameSignals)
+from app.face_ai.quality import (MIN_BLUR_VARIANCE, assess_quality,
+                                 select_temporally_distributed)
 from app.face_ai.recognition_service import FakeRecognitionService
-from app.models.entities import LivenessChallengeType
-from app.models.entities import Student
+from app.models.entities import LivenessChallengeType, Student
 from app.schemas import ChallengeResponse, EnrollmentStatusResponse
 from app.services.enrollment_service import decode_frame, enroll_face
-from app.services.verification_service import aggregate_match_scores, is_robust_match
+from app.services.verification_service import (aggregate_match_scores,
+                                               is_robust_match)
 
 
 class StubSignalAnalyzer(MediaPipeLivenessAnalyzer):
@@ -53,7 +54,9 @@ def test_liveness_returns_original_indices_for_near_frontal_faces():
         _FrameSignals(1, 0.0, 0.1, 0.01),
         _FrameSignals(1, 0.0, 0.1, 0.2),
     ]
-    frames = [np.full((20, 20, 3), value, dtype=np.uint8) for value in (0, 10, 20, 30, 40)]
+    frames = [
+        np.full((20, 20, 3), value, dtype=np.uint8) for value in (0, 10, 20, 30, 40)
+    ]
     frames[3][::2, ::2] = 255
 
     result = StubSignalAnalyzer(signals).analyze(frames, LivenessChallengeType.SMILE)
@@ -81,7 +84,9 @@ def test_no_face_frame_cannot_supply_challenge_signal():
 
 
 def test_quality_reports_low_light_before_blur():
-    dark_noise = np.random.default_rng(2).integers(0, 40, size=(100, 100, 3), dtype=np.uint8)
+    dark_noise = np.random.default_rng(2).integers(
+        0, 40, size=(100, 100, 3), dtype=np.uint8
+    )
     result = assess_quality(dark_noise)
 
     assert not result.ok

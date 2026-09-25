@@ -16,7 +16,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("students", sa.Column("membership_id", sa.String(length=30), nullable=True))
+    op.add_column(
+        "students", sa.Column("membership_id", sa.String(length=30), nullable=True)
+    )
     op.create_index(
         "uq_students_membership_id",
         "students",

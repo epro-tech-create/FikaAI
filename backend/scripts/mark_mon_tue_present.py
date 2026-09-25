@@ -19,12 +19,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sqlalchemy import select  # noqa: E402
-from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
-
 from app.core.config import settings  # noqa: E402
 from app.db.session import make_engine  # noqa: E402
-from app.models.entities import AttendanceRecord, AttendanceSession, AttendanceStatus  # noqa: E402
+from app.models.entities import AttendanceRecord  # noqa: E402
+from app.models.entities import AttendanceSession, AttendanceStatus
+from sqlalchemy import select  # noqa: E402
+from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
 
 EARLY_CHECK_IN = time(9, 0)
 OFFICIAL_START = time(11, 0)
@@ -52,14 +52,19 @@ def early_check_in(session_date, _current: datetime) -> datetime:
 
 
 async def main(apply: bool) -> int:
-    engine = make_engine(async_url(os.environ.get("DATABASE_URL") or settings.database_url))
+    engine = make_engine(
+        async_url(os.environ.get("DATABASE_URL") or settings.database_url)
+    )
     factory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
     changed = 0
     async with factory() as db:
         rows = (
             await db.execute(
                 select(AttendanceRecord, AttendanceSession)
-                .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
+                .join(
+                    AttendanceSession,
+                    AttendanceSession.id == AttendanceRecord.session_id,
+                )
                 .where(AttendanceSession.session_date == TARGET_DATE)
                 .order_by(AttendanceRecord.check_in_at)
             )
@@ -68,7 +73,11 @@ async def main(apply: bool) -> int:
         for record, session in rows:
             new_check_in = early_check_in(session.session_date, record.check_in_at)
             new_status = AttendanceStatus.PRESENT
-            if record.minutes_late == 0 and record.check_in_at == new_check_in and record.status == new_status:
+            if (
+                record.minutes_late == 0
+                and record.check_in_at == new_check_in
+                and record.status == new_status
+            ):
                 continue
             changed += 1
             print(
@@ -85,13 +94,17 @@ async def main(apply: bool) -> int:
             await db.commit()
             print(f"Updated {changed} record(s) to arrived early.")
         else:
-            print(f"Dry run: {changed} record(s) would change. Re-run with --apply to write.")
+            print(
+                f"Dry run: {changed} record(s) would change. Re-run with --apply to write."
+            )
     await engine.dispose()
     return 0
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Write changes to the database")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write changes to the database"
+    )
     args = parser.parse_args()
     raise SystemExit(asyncio.run(main(args.apply)))

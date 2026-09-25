@@ -17,21 +17,42 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Extend verification_method enum for VENUE_GPS
-    op.execute(sa.text("ALTER TYPE verification_method ADD VALUE IF NOT EXISTS 'venue_gps'"))
+    op.execute(
+        sa.text("ALTER TYPE verification_method ADD VALUE IF NOT EXISTS 'venue_gps'")
+    )
     # Create venue_verifications table (mirrors location_verifications)
     op.create_table(
         "venue_verifications",
         sa.Column("id", sa.UUID(), nullable=False, primary_key=True),
         sa.Column("token", sa.UUID(), nullable=False, unique=True),
-        sa.Column("student_id", sa.UUID(), sa.ForeignKey("students.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("session_id", sa.UUID(), sa.ForeignKey("attendance_sessions.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "student_id",
+            sa.UUID(),
+            sa.ForeignKey("students.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "session_id",
+            sa.UUID(),
+            sa.ForeignKey("attendance_sessions.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("verified", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("code_hash", sa.String(64), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
     )
-    op.create_index("ix_venueverif_student_session", "venue_verifications", ["student_id", "session_id"])
+    op.create_index(
+        "ix_venueverif_student_session",
+        "venue_verifications",
+        ["student_id", "session_id"],
+    )
 
 
 def downgrade() -> None:

@@ -2,25 +2,19 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.concurrency import run_in_threadpool
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.config import settings
 from app.core.deps import get_current_student, get_db, limiter
 from app.face_ai.liveness_service import get_liveness_analyzer
 from app.face_ai.recognition_service import get_face_recognition_service
 from app.models.entities import Student
-from app.schemas import (
-    ChallengeRequest,
-    ChallengeResponse,
-    EnrollmentStatusResponse,
-    FaceEnrollmentRequest,
-    FaceVerificationResponse,
-    VerifyFaceRequest,
-)
+from app.schemas import (ChallengeRequest, ChallengeResponse,
+                         EnrollmentStatusResponse, FaceEnrollmentRequest,
+                         FaceVerificationResponse, VerifyFaceRequest)
 from app.services.enrollment_service import enroll_face, get_enrollment_status
 from app.services.verification_service import issue_challenge, verify_face
+from fastapi import APIRouter, Depends, Request
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/student", tags=["student-face"])
 
@@ -30,9 +24,11 @@ async def face_enrollment_status(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ) -> EnrollmentStatusResponse:
-    return EnrollmentStatusResponse(**await get_enrollment_status(
-        db, student, get_face_recognition_service().provider_name
-    ))
+    return EnrollmentStatusResponse(
+        **await get_enrollment_status(
+            db, student, get_face_recognition_service().provider_name
+        )
+    )
 
 
 @router.post("/face-enrollment", response_model=EnrollmentStatusResponse)

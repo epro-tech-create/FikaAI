@@ -26,12 +26,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sqlalchemy import select  # noqa: E402
-from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
-
 from app.core.config import settings  # noqa: E402
 from app.db.session import make_engine  # noqa: E402
 from app.models.entities import Student, User, UserRole  # noqa: E402
+from sqlalchemy import select  # noqa: E402
+from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
 
 MEMBERSHIPS: list[tuple[str, str, str]] = [
     ("CCD-2026-015", "BETTY AFRAEL NGOILALE", "240545445690"),
@@ -143,10 +142,14 @@ async def main(apply: bool) -> int:
             )
         ).all()
 
-        by_reg = {student.registration_number: (student, user) for student, user in rows}
+        by_reg = {
+            student.registration_number: (student, user) for student, user in rows
+        }
         by_name: dict[str, list[tuple[Student, User]]] = {}
         for student, user in rows:
-            by_name.setdefault(normalize_name(user.full_name), []).append((student, user))
+            by_name.setdefault(normalize_name(user.full_name), []).append(
+                (student, user)
+            )
 
         updates: list[tuple[str, str, str, str, str]] = []
         missing: list[tuple[str, str, str]] = []
@@ -165,7 +168,9 @@ async def main(apply: bool) -> int:
                 continue
             student, user = match
             next_name = clean_name(user.full_name)
-            already_set = student.membership_id == membership_id and user.full_name == next_name
+            already_set = (
+                student.membership_id == membership_id and user.full_name == next_name
+            )
             if already_set:
                 already += 1
                 continue
@@ -199,6 +204,8 @@ async def main(apply: bool) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Write membership IDs to the database")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write membership IDs to the database"
+    )
     args = parser.parse_args()
     raise SystemExit(asyncio.run(main(args.apply)))

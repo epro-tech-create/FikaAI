@@ -2,12 +2,12 @@ import inspect
 from datetime import date, datetime
 
 import pytest
-
 from app.core.errors import ApiError, ErrorCode
 from app.models.base import Base
 from app.models.entities import AttendanceSession, AttendanceStatus
 from app.services import session_service
-from app.services.session_service import CampusClock, classify_check_in, find_active_session, validate_window
+from app.services.session_service import (CampusClock, classify_check_in,
+                                          find_active_session, validate_window)
 
 
 def test_domain_metadata_has_no_class_or_enrollment_tables():
@@ -37,7 +37,11 @@ def test_session_metadata_supports_automatic_daily_rows():
     assert "fk_session_instructor_course_assignment" not in {
         constraint.name for constraint in table.foreign_key_constraints
     }
-    automatic_index = next(index for index in table.indexes if index.name == "uq_attendance_sessions_automatic_date")
+    automatic_index = next(
+        index
+        for index in table.indexes
+        if index.name == "uq_attendance_sessions_automatic_date"
+    )
     assert automatic_index.unique
     assert str(automatic_index.dialect_options["postgresql"]["where"]) == "is_automatic"
 
@@ -97,11 +101,15 @@ async def test_active_session_lookup_creates_fixed_daily_session(monkeypatch):
             return None
 
     write_db = WriteDb()
-    monkeypatch.setattr(session_service, "session_factory", lambda: SessionContext(write_db))
+    monkeypatch.setattr(
+        session_service, "session_factory", lambda: SessionContext(write_db)
+    )
     monkeypatch.setattr(session_service.settings, "training_latitude", -6.8137482)
     monkeypatch.setattr(session_service.settings, "training_longitude", 39.2801352)
     monkeypatch.setattr(session_service.settings, "training_radius_meters", 100)
-    monkeypatch.setattr(session_service.settings, "training_location_name", "DIT RAFIC Building")
+    monkeypatch.setattr(
+        session_service.settings, "training_location_name", "DIT RAFIC Building"
+    )
     monkeypatch.setattr(
         session_service.settings,
         "training_location_address",
@@ -218,11 +226,15 @@ async def test_existing_automatic_session_keeps_custom_hours(monkeypatch):
             return None
 
     write_db = WriteDb()
-    monkeypatch.setattr(session_service, "session_factory", lambda: SessionContext(write_db))
+    monkeypatch.setattr(
+        session_service, "session_factory", lambda: SessionContext(write_db)
+    )
     monkeypatch.setattr(session_service.settings, "training_latitude", -6.8137482)
     monkeypatch.setattr(session_service.settings, "training_longitude", 39.2801352)
     monkeypatch.setattr(session_service.settings, "training_radius_meters", 100)
-    monkeypatch.setattr(session_service.settings, "training_location_name", "DIT RAFIC Building")
+    monkeypatch.setattr(
+        session_service.settings, "training_location_name", "DIT RAFIC Building"
+    )
     monkeypatch.setattr(
         session_service.settings,
         "training_location_address",

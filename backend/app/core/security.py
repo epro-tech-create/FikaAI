@@ -7,11 +7,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import jwt
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
-
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
+from argon2 import PasswordHasher
+from argon2.exceptions import (InvalidHashError, VerificationError,
+                               VerifyMismatchError)
 
 _hasher = PasswordHasher()
 
@@ -27,7 +27,13 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def _create_token(subject: str, role: str, token_type: str, lifetime: timedelta) -> str:
+def _create_token(
+    subject: str,
+    role: str,
+    token_type: str,
+    lifetime: timedelta,
+    token_version: int = 0,
+) -> str:
     now = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "sub": subject,
@@ -36,19 +42,33 @@ def _create_token(subject: str, role: str, token_type: str, lifetime: timedelta)
         "iat": int(now.timestamp()),
         "exp": int((now + lifetime).timestamp()),
         "jti": uuid.uuid4().hex,
+        "ver": token_version,
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def create_access_token(user_id: uuid.UUID, role: str) -> str:
-    return _create_token(str(user_id), role, "access", timedelta(minutes=settings.access_token_expire_minutes))
+def create_access_token(user_id: uuid.UUID, role: str, token_version: int = 0) -> str:
+    return _create_token(
+        str(user_id),
+        role,
+        "access",
+        timedelta(minutes=settings.access_token_expire_minutes),
+        token_version,
+    )
 
 
-def create_refresh_token(user_id: uuid.UUID, role: str) -> str:
-    return _create_token(str(user_id), role, "refresh", timedelta(days=settings.refresh_token_expire_days))
+def create_refresh_token(user_id: uuid.UUID, role: str, token_version: int = 0) -> str:
+    return _create_token(
+        str(user_id),
+        role,
+        "refresh",
+        timedelta(days=settings.refresh_token_expire_days),
+        token_version,
+    )
 
 
 _ALLOWED_ALGORITHMS = ["HS256"]
+
 
 def decode_token(token: str, expected_type: str) -> dict[str, Any]:
     # Enforce HS256 only - reject none/RS* injection via config
@@ -59,12 +79,21 @@ def decode_token(token: str, expected_type: str) -> dict[str, Any]:
             token,
             settings.jwt_secret,
             algorithms=_ALLOWED_ALGORITHMS,
-            options={"require": ["sub", "type", "exp", "iat", "jti"], "verify_aud": False},
+            options={
+                "require": ["sub", "type", "exp", "iat", "jti"],
+                "verify_aud": False,
+            },
         )
     except jwt.ExpiredSignatureError as exc:
-        raise ApiError(ErrorCode.TOKEN_EXPIRED, "Your session has expired. Please log in again.", 401) from exc
+        raise ApiError(
+            ErrorCode.TOKEN_EXPIRED,
+            "Your session has expired. Please log in again.",
+            401,
+        ) from exc
     except jwt.InvalidTokenError as exc:
-        raise ApiError(ErrorCode.TOKEN_INVALID, "Invalid authentication token.", 401) from exc
+        raise ApiError(
+            ErrorCode.TOKEN_INVALID, "Invalid authentication token.", 401
+        ) from exc
     if payload.get("type") != expected_type:
         raise ApiError(ErrorCode.TOKEN_INVALID, "Invalid authentication token.", 401)
     return payload

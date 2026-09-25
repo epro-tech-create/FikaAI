@@ -6,13 +6,18 @@ import re
 import uuid
 from datetime import date, datetime, time
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (BaseModel, ConfigDict, Field, field_validator,
+                      model_validator)
 from pydantic.alias_generators import to_camel
 
 
 class CamelModel(BaseModel):
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True,
-                              from_attributes=True, serialize_by_alias=True)
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+        serialize_by_alias=True,
+    )
 
 
 MEMBERSHIP_ID_PATTERN = re.compile(r"^CCD-\d{4}-\d{3}$")
@@ -143,11 +148,21 @@ class StudentAdminCreateRequest(CamelModel):
     year_of_study: int | None = Field(default=None, ge=1, le=20)
     is_active: bool = True
 
-    _normalize_name = field_validator("full_name")(StudentRegisterRequest.normalize_name.__func__)
-    _normalize_email = field_validator("email")(StudentRegisterRequest.normalize_registration_email.__func__)
-    _normalize_registration = field_validator("registration_number")(StudentRegisterRequest.normalize_registration_number.__func__)
-    _normalize_membership = field_validator("membership_id", mode="before")(StudentRegisterRequest.normalize_membership.__func__)
-    _validate_password = field_validator("password")(StudentRegisterRequest.validate_password_strength.__func__)
+    _normalize_name = field_validator("full_name")(
+        StudentRegisterRequest.normalize_name.__func__
+    )
+    _normalize_email = field_validator("email")(
+        StudentRegisterRequest.normalize_registration_email.__func__
+    )
+    _normalize_registration = field_validator("registration_number")(
+        StudentRegisterRequest.normalize_registration_number.__func__
+    )
+    _normalize_membership = field_validator("membership_id", mode="before")(
+        StudentRegisterRequest.normalize_membership.__func__
+    )
+    _validate_password = field_validator("password")(
+        StudentRegisterRequest.validate_password_strength.__func__
+    )
 
 
 class StudentAdminUpdateRequest(CamelModel):
@@ -159,11 +174,21 @@ class StudentAdminUpdateRequest(CamelModel):
     year_of_study: int | None = Field(default=None, ge=1, le=20)
     is_active: bool = None
 
-    _normalize_name = field_validator("full_name")(StudentRegisterRequest.normalize_name.__func__)
-    _normalize_email = field_validator("email")(StudentRegisterRequest.normalize_registration_email.__func__)
-    _normalize_registration = field_validator("registration_number")(StudentRegisterRequest.normalize_registration_number.__func__)
-    _normalize_membership = field_validator("membership_id", mode="before")(StudentRegisterRequest.normalize_membership.__func__)
-    _validate_password = field_validator("password")(StudentRegisterRequest.validate_password_strength.__func__)
+    _normalize_name = field_validator("full_name")(
+        StudentRegisterRequest.normalize_name.__func__
+    )
+    _normalize_email = field_validator("email")(
+        StudentRegisterRequest.normalize_registration_email.__func__
+    )
+    _normalize_registration = field_validator("registration_number")(
+        StudentRegisterRequest.normalize_registration_number.__func__
+    )
+    _normalize_membership = field_validator("membership_id", mode="before")(
+        StudentRegisterRequest.normalize_membership.__func__
+    )
+    _validate_password = field_validator("password")(
+        StudentRegisterRequest.validate_password_strength.__func__
+    )
 
 
 class InstructorUpdateRequest(CamelModel):
@@ -172,9 +197,15 @@ class InstructorUpdateRequest(CamelModel):
     password: str = Field(default=None, min_length=8, max_length=200)
     is_active: bool = None
 
-    _normalize_name = field_validator("full_name")(InstructorCreateRequest.normalize_name.__func__)
-    _normalize_email = field_validator("email")(InstructorCreateRequest.normalize_email.__func__)
-    _validate_password = field_validator("password")(InstructorCreateRequest.validate_password_strength.__func__)
+    _normalize_name = field_validator("full_name")(
+        InstructorCreateRequest.normalize_name.__func__
+    )
+    _normalize_email = field_validator("email")(
+        InstructorCreateRequest.normalize_email.__func__
+    )
+    _validate_password = field_validator("password")(
+        InstructorCreateRequest.validate_password_strength.__func__
+    )
 
 
 class TokenPairResponse(CamelModel):
@@ -214,6 +245,7 @@ class ActiveSessionResponse(CamelModel):
     check_in_close_at: datetime
     checkout_opens_at: datetime
     checkout_closes_at: datetime
+    server_now: datetime
     late_threshold_minutes: int
     status: str
     permitted_radius_meters: float
@@ -299,12 +331,18 @@ class ChallengeResponse(CamelModel):
 class VerifyFaceRequest(CamelModel):
     session_id: uuid.UUID
     challenge_token: str
-    frames: list[str] = Field(min_length=1)
+    frames: list[str] = Field(min_length=1, max_length=60)
 
     @field_validator("frames")
     @classmethod
     def limit_frame_size(cls, v: list[str]) -> list[str]:
-        # Per-frame byte ceiling enforced again after decode in the service layer
+        from app.core.config import settings
+
+        if len(v) > settings.max_frames_per_request:
+            raise ValueError(f"Too many frames: max {settings.max_frames_per_request}")
+        for f in v:
+            if len(f) > settings.max_frame_bytes * 2:  # base64 ~1.33x
+                raise ValueError("Frame too large")
         return v
 
 
@@ -337,7 +375,9 @@ class VerifyVenueRequest(CamelModel):
         if self.code is not None:
             normalized = self.code.strip().upper()
             if len(normalized) != 8 or not normalized.isalnum():
-                raise ValueError("Venue code must be exactly 8 alphanumeric characters.")
+                raise ValueError(
+                    "Venue code must be exactly 8 alphanumeric characters."
+                )
         return self
 
 
@@ -452,26 +492,40 @@ class MessageResponse(CamelModel):
 class ManualAttendanceRequest(CamelModel):
     student_id: uuid.UUID
     session_id: uuid.UUID
-    check_in_at: datetime | None = Field(default=None, description="Campus-local check-in time. Naive values are treated as Africa/Dar_es_Salaam.")
-    check_out_at: datetime | None = Field(default=None, description="Campus-local check-out time. Naive values are treated as Africa/Dar_es_Salaam.")
+    check_in_at: datetime | None = Field(
+        default=None,
+        description="Campus-local check-in time. Naive values are treated as Africa/Dar_es_Salaam.",
+    )
+    check_out_at: datetime | None = Field(
+        default=None,
+        description="Campus-local check-out time. Naive values are treated as Africa/Dar_es_Salaam.",
+    )
     minutes_late: int | None = None
     status: str | None = Field(default=None, description="PRESENT|LATE|ABSENT|EXCUSED")
     reason: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
     def checkout_after_checkin(self) -> "ManualAttendanceRequest":
-        if self.check_in_at and self.check_out_at and self.check_out_at <= self.check_in_at:
+        if (
+            self.check_in_at
+            and self.check_out_at
+            and self.check_out_at <= self.check_in_at
+        ):
             raise ValueError("Check-out time must be after check-in time.")
         return self
 
 
 class ExcuseRequest(CamelModel):
-    reason: str = Field(min_length=3, max_length=500, description="sickness, funeral, etc")
+    reason: str = Field(
+        min_length=3, max_length=500, description="sickness, funeral, etc"
+    )
     status: str = Field(default="EXCUSED", description="EXCUSED or ABSENT")
 
 
 class LocationModeRequest(CamelModel):
-    mode: str = Field(description="strict = configured location, any = allow any location")
+    mode: str = Field(
+        description="strict = configured location, any = allow any location"
+    )
     enabled: bool | None = None  # alternative boolean
 
     @field_validator("mode")

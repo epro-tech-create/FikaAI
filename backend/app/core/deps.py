@@ -9,6 +9,10 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncGenerator
 
+from app.core.errors import ApiError, ErrorCode
+from app.core.security import decode_token
+from app.db.session import session_factory
+from app.models.entities import Instructor, Student, StudentStatus, User
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from slowapi import Limiter
@@ -16,21 +20,36 @@ from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ApiError, ErrorCode
-from app.core.security import decode_token
-from app.db.session import session_factory
-from app.models.entities import Instructor, Student, StudentStatus, User
-
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def _get_ip_key(request: Request) -> str:
-    # Trust only X-Real-IP set by our nginx (Caddy already strips client XFF).
-    # Fallback to get_remote_address for dev direct.
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        # Use only the trusted header, ignore client-supplied X-Forwarded-For
-        return real_ip.strip()
+    # Only trust X-Real-IP when request comes from a trusted proxy (docker/nginx private net).
+    # Direct exposure without proxy must not allow attacker to spoof IP via header and bypass rate limits.
+    from ipaddress import ip_address
+
+    trusted_proxy_nets = (
+        "127.0.0.0/8",
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+    )
+    client_host = request.client.host if request.client else ""
+    try:
+        client_ip = ip_address(client_host)
+        is_trusted_proxy = any(
+            client_ip in __import__("ipaddress").ip_network(n)
+            for n in trusted_proxy_nets
+        )
+    except ValueError:
+        is_trusted_proxy = False
+    if is_trusted_proxy:
+        real_ip = request.headers.get("x-real-ip")
+        if real_ip:
+            try:
+                return ip_address(real_ip.strip()).compressed
+            except ValueError:
+                pass
     return get_remote_address(request)
 
 
@@ -54,11 +73,20 @@ async def get_current_user(
     try:
         user_id = uuid.UUID(payload["sub"])
     except (KeyError, ValueError) as exc:
-        raise ApiError(ErrorCode.TOKEN_INVALID, "Invalid authentication token.", 401) from exc
+        raise ApiError(
+            ErrorCode.TOKEN_INVALID, "Invalid authentication token.", 401
+        ) from exc
 
     user = await db.get(User, user_id)
     if user is None or not user.is_active:
         raise ApiError(ErrorCode.ACCOUNT_DISABLED, "This account is disabled.", 403)
+    # Token version check: invalidates all tokens on password change / logout / admin revoke
+    token_ver = payload.get("ver", 0)
+    user_ver = getattr(user, "token_version", 0) or 0
+    if int(token_ver) != int(user_ver):
+        raise ApiError(
+            ErrorCode.TOKEN_INVALID, "Session revoked. Please log in again.", 401
+        )
     request.state.user_id = str(user.id)
     return user
 
@@ -66,7 +94,11 @@ async def get_current_user(
 def require_roles(*roles: str):
     async def guard(user: User = Depends(get_current_user)) -> User:
         if user.role.value not in roles:
-            raise ApiError(ErrorCode.FORBIDDEN, "You do not have permission to perform this action.", 403)
+            raise ApiError(
+                ErrorCode.FORBIDDEN,
+                "You do not have permission to perform this action.",
+                403,
+            )
         return user
 
     return guard
@@ -81,7 +113,9 @@ async def get_current_student(
     if student is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Student profile not found.", 404)
     if student.status != StudentStatus.ACTIVE:
-        raise ApiError(ErrorCode.ACCOUNT_DISABLED, "This student profile is inactive.", 403)
+        raise ApiError(
+            ErrorCode.ACCOUNT_DISABLED, "This student profile is inactive.", 403
+        )
     return student
 
 

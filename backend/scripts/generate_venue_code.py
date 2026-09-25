@@ -9,6 +9,7 @@ Usage:
 Phone cameras should scan a URL QR that opens /checkin?code=XXXXXXXX
 so students land on login, then auto check-in with GPS.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -35,8 +36,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Generate static venue code hash")
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--code", help="8-char alphanumeric code (uppercase)")
-    g.add_argument("--generate", action="store_true", help="generate random 8-char code")
-    ap.add_argument("--qr", action="store_true", help="also generate QR PNG (requires qrcode)")
+    g.add_argument(
+        "--generate", action="store_true", help="generate random 8-char code"
+    )
+    ap.add_argument(
+        "--qr", action="store_true", help="also generate QR PNG (requires qrcode)"
+    )
     ap.add_argument(
         "--url",
         default="https://attendance.cyberclubdit.org/checkin",
@@ -66,6 +71,7 @@ def main() -> None:
     if args.qr:
         try:
             import qrcode
+
             img = qrcode.make(checkin_url)
             path = args.out
             img.save(path)

@@ -3,39 +3,26 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query, Request, Response
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
-
-from app.core.deps import get_db, require_roles
 from app.core.config import settings
+from app.core.deps import get_db, require_roles
 from app.core.errors import ApiError, ErrorCode
 from app.core.security import hash_password
-from app.models.entities import (
-    AttendanceRecord,
-    AttendanceSession,
-    AuditLog,
-    FaceEnrollment,
-    Instructor,
-    PracticalLocation,
-    Student,
-    StudentStatus,
-    User,
-    UserRole,
-)
-from app.schemas import (
-    InstructorCreateRequest,
-    InstructorUpdateRequest,
-    SessionHoursUpdate,
-    SessionResponse,
-    StudentAdminCreateRequest,
-    StudentAdminUpdateRequest,
-    VenueQrResponse,
-)
-from app.services.report_service import build_attendance_report, parse_period, render_attendance_pdf, weekly_attendance_series
+from app.models.entities import (AttendanceRecord, AttendanceSession, AuditLog,
+                                 FaceEnrollment, Instructor, PracticalLocation,
+                                 Student, StudentStatus, User, UserRole)
+from app.schemas import (InstructorCreateRequest, InstructorUpdateRequest,
+                         SessionHoursUpdate, SessionResponse,
+                         StudentAdminCreateRequest, StudentAdminUpdateRequest,
+                         VenueQrResponse)
+from app.services.report_service import (build_attendance_report, parse_period,
+                                         render_attendance_pdf,
+                                         weekly_attendance_series)
+from fastapi import APIRouter, Depends, Query, Request, Response
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(
     prefix="/admin",
@@ -48,7 +35,9 @@ def session_response(session: AttendanceSession) -> SessionResponse:
     return SessionResponse(
         id=session.id,
         instructor_id=session.instructor_id,
-        instructor_name=session.instructor.user.full_name if session.instructor else None,
+        instructor_name=(
+            session.instructor.user.full_name if session.instructor else None
+        ),
         location_id=session.location_id,
         location_name=session.location.name,
         title=session.title,
@@ -67,7 +56,11 @@ def session_response(session: AttendanceSession) -> SessionResponse:
 
 
 async def _count(db: AsyncSession, model, *criteria) -> int:
-    return int((await db.execute(select(func.count()).select_from(model).where(*criteria))).scalar_one())
+    return int(
+        (
+            await db.execute(select(func.count()).select_from(model).where(*criteria))
+        ).scalar_one()
+    )
 
 
 def _campus_time(value: datetime | None) -> datetime | None:
@@ -102,23 +95,34 @@ def _daily_timeline(records: list[AttendanceRecord]) -> list[dict]:
     for index, minute in enumerate(slots):
         arrival_total += arrivals[index]
         departure_total += departures[index]
-        timeline.append({
-            "time": f"{minute // 60:02d}:{minute % 60:02d}",
-            "arrivals": arrival_total,
-            "departures": departure_total,
-        })
+        timeline.append(
+            {
+                "time": f"{minute // 60:02d}:{minute % 60:02d}",
+                "arrivals": arrival_total,
+                "departures": departure_total,
+            }
+        )
     return timeline
 
 
 @router.get("/dashboard", response_model=None)
 async def dashboard(db: AsyncSession = Depends(get_db)) -> dict:
     today = datetime.now(settings.campus_tz).date()
-    records = (await db.execute(
-        select(AttendanceRecord)
-        .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
-        .where(AttendanceSession.session_date == today)
-        .order_by(AttendanceRecord.check_in_at)
-    )).scalars().all()
+    records = (
+        (
+            await db.execute(
+                select(AttendanceRecord)
+                .join(
+                    AttendanceSession,
+                    AttendanceSession.id == AttendanceRecord.session_id,
+                )
+                .where(AttendanceSession.session_date == today)
+                .order_by(AttendanceRecord.check_in_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return {
         "date": today.isoformat(),
         "timezone": settings.campus_timezone,
@@ -129,20 +133,35 @@ async def dashboard(db: AsyncSession = Depends(get_db)) -> dict:
         "departuresToday": sum(record.check_out_at is not None for record in records),
         "timeline": _daily_timeline(list(records)),
         "weeklySeries": await weekly_attendance_series(db, today),
-        "activeFaceEnrollments": await _count(db, FaceEnrollment, FaceEnrollment.is_active.is_(True)),
+        "activeFaceEnrollments": await _count(
+            db, FaceEnrollment, FaceEnrollment.is_active.is_(True)
+        ),
     }
 
 
 @router.get("/students", response_model=None)
 async def list_students(db: AsyncSession = Depends(get_db)) -> list[dict]:
-    students = (await db.execute(select(Student).order_by(Student.membership_id.asc().nulls_last(), Student.registration_number))).scalars().all()
+    students = (
+        (
+            await db.execute(
+                select(Student).order_by(
+                    Student.membership_id.asc().nulls_last(),
+                    Student.registration_number,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     return [_student_response(student) for student in students]
 
 
 def _student_conflict(exc: IntegrityError) -> ApiError:
     detail = str(getattr(exc, "orig", exc)).lower()
     if "membership_id" in detail:
-        return ApiError(ErrorCode.MEMBERSHIP_ID_EXISTS, "This student ID is already assigned.", 409)
+        return ApiError(
+            ErrorCode.MEMBERSHIP_ID_EXISTS, "This student ID is already assigned.", 409
+        )
     return ApiError(
         ErrorCode.REGISTRATION_NUMBER_EXISTS,
         "The email address, student ID, or registration number is already registered.",
@@ -178,6 +197,7 @@ async def bind_student_device(
     """Admin binds or re-binds a student's device/MAC. Clears previous binding."""
     import hashlib as _hashlib
     import re as _re
+
     student = await db.get(Student, student_id)
     if student is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
@@ -193,25 +213,45 @@ async def bind_student_device(
                 did = _re.sub(r"\s", "", str(device_id_raw))
                 # validate UUID
                 uuid.UUID(did)
-                student.registration_device_hash = _hashlib.sha256(did.encode()).hexdigest()
+                student.registration_device_hash = _hashlib.sha256(
+                    did.encode()
+                ).hexdigest()
             except ValueError as exc:
-                raise ApiError(ErrorCode.VALIDATION_ERROR, "Invalid deviceId UUID.", 422) from exc
+                raise ApiError(
+                    ErrorCode.VALIDATION_ERROR, "Invalid deviceId UUID.", 422
+                ) from exc
         if mac_raw:
             normalized = str(mac_raw).strip().upper().replace("-", ":")
             if not _re.fullmatch(r"([0-9A-F]{2}:){5}[0-9A-F]{2}", normalized):
-                raise ApiError(ErrorCode.VALIDATION_ERROR, "MAC must look like 01:23:45:67:89:AB.", 422)
-            student.registration_mac_hash = _hashlib.sha256(normalized.encode()).hexdigest()
+                raise ApiError(
+                    ErrorCode.VALIDATION_ERROR,
+                    "MAC must look like 01:23:45:67:89:AB.",
+                    422,
+                )
+            student.registration_mac_hash = _hashlib.sha256(
+                normalized.encode()
+            ).hexdigest()
         if not device_id_raw and not mac_raw and not clear:
-            raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide deviceId, macAddress, or clear=true.", 422)
+            raise ApiError(
+                ErrorCode.VALIDATION_ERROR,
+                "Provide deviceId, macAddress, or clear=true.",
+                422,
+            )
     await db.flush()
-    db.add(AuditLog(
-        actor_user_id=admin.id,
-        action="student_device_bound",
-        entity_type="student",
-        entity_id=student.id,
-        details={"deviceBound": bool(student.registration_device_hash), "macBound": bool(student.registration_mac_hash), "cleared": clear},
-        ip_address=request.client.host if request.client else None,
-    ))
+    db.add(
+        AuditLog(
+            actor_user_id=admin.id,
+            action="student_device_bound",
+            entity_type="student",
+            entity_id=student.id,
+            details={
+                "deviceBound": bool(student.registration_device_hash),
+                "macBound": bool(student.registration_mac_hash),
+                "cleared": clear,
+            },
+            ip_address=request.client.host if request.client else None,
+        )
+    )
     await db.commit()
     await db.refresh(student)
     return _student_response(student)
@@ -230,14 +270,16 @@ async def unbind_student_device(
     student.registration_device_hash = None
     student.registration_mac_hash = None
     await db.flush()
-    db.add(AuditLog(
-        actor_user_id=admin.id,
-        action="student_device_unbound",
-        entity_type="student",
-        entity_id=student.id,
-        details={},
-        ip_address=request.client.host if request.client else None,
-    ))
+    db.add(
+        AuditLog(
+            actor_user_id=admin.id,
+            action="student_device_unbound",
+            entity_type="student",
+            entity_id=student.id,
+            details={},
+            ip_address=request.client.host if request.client else None,
+        )
+    )
     await db.commit()
     return _student_response(student)
 
@@ -266,14 +308,20 @@ async def create_student(
     db.add_all([user, student])
     try:
         await db.flush()
-        db.add(AuditLog(
-            actor_user_id=admin.id,
-            action="student_created",
-            entity_type="student",
-            entity_id=student.id,
-            details={"email": user.email, "registration_number": student.registration_number, "membership_id": student.membership_id},
-            ip_address=request.client.host if request.client else None,
-        ))
+        db.add(
+            AuditLog(
+                actor_user_id=admin.id,
+                action="student_created",
+                entity_type="student",
+                entity_id=student.id,
+                details={
+                    "email": user.email,
+                    "registration_number": student.registration_number,
+                    "membership_id": student.membership_id,
+                },
+                ip_address=request.client.host if request.client else None,
+            )
+        )
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
@@ -298,22 +346,29 @@ async def update_student(
             setattr(student.user, field, values[field])
     if "password" in values:
         student.user.password_hash = hash_password(values["password"])
+        student.user.token_version = (
+            int(getattr(student.user, "token_version", 0) or 0) + 1
+        )
     for field in ("registration_number", "membership_id", "year_of_study"):
         if field in values:
             setattr(student, field, values[field])
     if "is_active" in values:
         student.user.is_active = values["is_active"]
-        student.status = StudentStatus.ACTIVE if values["is_active"] else StudentStatus.INACTIVE
+        student.status = (
+            StudentStatus.ACTIVE if values["is_active"] else StudentStatus.INACTIVE
+        )
     try:
         await db.flush()
-        db.add(AuditLog(
-            actor_user_id=admin.id,
-            action="student_updated",
-            entity_type="student",
-            entity_id=student.id,
-            details={"fields": sorted(values)},
-            ip_address=request.client.host if request.client else None,
-        ))
+        db.add(
+            AuditLog(
+                actor_user_id=admin.id,
+                action="student_updated",
+                entity_type="student",
+                entity_id=student.id,
+                details={"fields": sorted(values)},
+                ip_address=request.client.host if request.client else None,
+            )
+        )
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
@@ -332,14 +387,20 @@ async def delete_student(
     if student is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
     user = student.user
-    db.add(AuditLog(
-        actor_user_id=admin.id,
-        action="student_deleted",
-        entity_type="student",
-        entity_id=student.id,
-        details={"email": user.email, "registration_number": student.registration_number, "membership_id": student.membership_id},
-        ip_address=request.client.host if request.client else None,
-    ))
+    db.add(
+        AuditLog(
+            actor_user_id=admin.id,
+            action="student_deleted",
+            entity_type="student",
+            entity_id=student.id,
+            details={
+                "email": user.email,
+                "registration_number": student.registration_number,
+                "membership_id": student.membership_id,
+            },
+            ip_address=request.client.host if request.client else None,
+        )
+    )
     await db.flush()
     await db.delete(user)
     await db.commit()
@@ -348,7 +409,11 @@ async def delete_student(
 
 @router.get("/instructors", response_model=None)
 async def list_instructors(db: AsyncSession = Depends(get_db)) -> list[dict]:
-    instructors = (await db.execute(select(Instructor).order_by(Instructor.created_at))).scalars().all()
+    instructors = (
+        (await db.execute(select(Instructor).order_by(Instructor.created_at)))
+        .scalars()
+        .all()
+    )
     return [
         {
             "id": instructor.id,
@@ -369,8 +434,14 @@ async def create_instructor(
     admin: User = Depends(require_roles("admin")),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    if (await db.execute(select(User.id).where(User.email == payload.email))).scalar_one_or_none():
-        raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account already uses this email address.", 409)
+    if (
+        await db.execute(select(User.id).where(User.email == payload.email))
+    ).scalar_one_or_none():
+        raise ApiError(
+            ErrorCode.EMAIL_ALREADY_REGISTERED,
+            "An account already uses this email address.",
+            409,
+        )
 
     user = User(
         email=payload.email,
@@ -385,18 +456,24 @@ async def create_instructor(
         instructor = Instructor(user_id=user.id, user=user)
         db.add(instructor)
         await db.flush()
-        db.add(AuditLog(
-            actor_user_id=admin.id,
-            action="instructor_created",
-            entity_type="instructor",
-            entity_id=instructor.id,
-            details={"email": user.email},
-            ip_address=request.client.host if request.client else None,
-        ))
+        db.add(
+            AuditLog(
+                actor_user_id=admin.id,
+                action="instructor_created",
+                entity_type="instructor",
+                entity_id=instructor.id,
+                details={"email": user.email},
+                ip_address=request.client.host if request.client else None,
+            )
+        )
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
-        raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account already uses this email address.", 409) from exc
+        raise ApiError(
+            ErrorCode.EMAIL_ALREADY_REGISTERED,
+            "An account already uses this email address.",
+            409,
+        ) from exc
 
     return {
         "id": instructor.id,
@@ -425,24 +502,36 @@ async def update_instructor(
             setattr(instructor.user, field, values[field])
     if "password" in values:
         instructor.user.password_hash = hash_password(values["password"])
+        instructor.user.token_version = (
+            int(getattr(instructor.user, "token_version", 0) or 0) + 1
+        )
     try:
         await db.flush()
-        db.add(AuditLog(
-            actor_user_id=admin.id,
-            action="instructor_updated",
-            entity_type="instructor",
-            entity_id=instructor.id,
-            details={"fields": sorted(values)},
-            ip_address=request.client.host if request.client else None,
-        ))
+        db.add(
+            AuditLog(
+                actor_user_id=admin.id,
+                action="instructor_updated",
+                entity_type="instructor",
+                entity_id=instructor.id,
+                details={"fields": sorted(values)},
+                ip_address=request.client.host if request.client else None,
+            )
+        )
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
-        raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account already uses this email address.", 409) from exc
+        raise ApiError(
+            ErrorCode.EMAIL_ALREADY_REGISTERED,
+            "An account already uses this email address.",
+            409,
+        ) from exc
     return {
-        "id": instructor.id, "userId": instructor.user_id,
-        "fullName": instructor.user.full_name, "email": instructor.user.email,
-        "isActive": instructor.user.is_active, "createdAt": instructor.created_at,
+        "id": instructor.id,
+        "userId": instructor.user_id,
+        "fullName": instructor.user.full_name,
+        "email": instructor.user.email,
+        "isActive": instructor.user.is_active,
+        "createdAt": instructor.created_at,
     }
 
 
@@ -458,27 +547,37 @@ async def delete_instructor(
         raise ApiError(ErrorCode.NOT_FOUND, "Instructor not found.", 404)
     user = instructor.user
     try:
-        db.add(AuditLog(
-            actor_user_id=admin.id,
-            action="instructor_deleted",
-            entity_type="instructor",
-            entity_id=instructor.id,
-            details={"email": user.email},
-            ip_address=request.client.host if request.client else None,
-        ))
+        db.add(
+            AuditLog(
+                actor_user_id=admin.id,
+                action="instructor_deleted",
+                entity_type="instructor",
+                entity_id=instructor.id,
+                details={"email": user.email},
+                ip_address=request.client.host if request.client else None,
+            )
+        )
         await db.flush()
         await db.delete(user)
         await db.flush()
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "Instructor is referenced by an attendance session.", 409) from exc
+        raise ApiError(
+            ErrorCode.VALIDATION_ERROR,
+            "Instructor is referenced by an attendance session.",
+            409,
+        ) from exc
     return Response(status_code=204)
 
 
 @router.get("/locations", response_model=None)
 async def list_locations(db: AsyncSession = Depends(get_db)) -> list[dict]:
-    locations = (await db.execute(select(PracticalLocation).order_by(PracticalLocation.name))).scalars().all()
+    locations = (
+        (await db.execute(select(PracticalLocation).order_by(PracticalLocation.name)))
+        .scalars()
+        .all()
+    )
     return [
         {
             "id": item.id,
@@ -496,8 +595,15 @@ async def list_locations(db: AsyncSession = Depends(get_db)) -> list[dict]:
 
 @router.get("/venue-qr", response_model=VenueQrResponse)
 async def venue_qr(db: AsyncSession = Depends(get_db)) -> VenueQrResponse:
-    if not settings.venue_static_code_hash or len(settings.venue_static_code_hash) != 64:
-        raise ApiError(ErrorCode.VENUE_NOT_CONFIGURED, "Venue code not configured. Set VENUE_STATIC_CODE_HASH.", 503)
+    if (
+        not settings.venue_static_code_hash
+        or len(settings.venue_static_code_hash) != 64
+    ):
+        raise ApiError(
+            ErrorCode.VENUE_NOT_CONFIGURED,
+            "Venue code not configured. Set VENUE_STATIC_CODE_HASH.",
+            503,
+        )
     return VenueQrResponse(
         qr_data="VENUE_CODE_IN_ROOM",
         code_hint=f"{settings.venue_static_code_hash[:2].upper()}****",
@@ -509,8 +615,17 @@ async def venue_qr(db: AsyncSession = Depends(get_db)) -> VenueQrResponse:
 @router.get("/sessions", response_model=list[SessionResponse])
 async def list_sessions(db: AsyncSession = Depends(get_db)) -> list[SessionResponse]:
     sessions = (
-        await db.execute(select(AttendanceSession).order_by(AttendanceSession.session_date.desc(), AttendanceSession.check_in_open))
-    ).scalars().all()
+        (
+            await db.execute(
+                select(AttendanceSession).order_by(
+                    AttendanceSession.session_date.desc(),
+                    AttendanceSession.check_in_open,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     return [session_response(item) for item in sessions]
 
 
@@ -523,6 +638,7 @@ async def admin_update_session_hours(
     db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
     from app.services.session_service import update_session_hours
+
     session = await update_session_hours(
         db,
         session_id,
@@ -533,6 +649,7 @@ async def admin_update_session_hours(
         check_out_close=payload.check_out_close,
     )
     from app.services.audit_service import audit_detached
+
     response = session_response(session)
     await db.commit()
     await audit_detached(
@@ -553,12 +670,14 @@ async def admin_update_session_hours(
 
 @router.get("/face-enrollments", response_model=None)
 async def list_face_enrollments(db: AsyncSession = Depends(get_db)) -> list[dict]:
-    rows = (await db.execute(
-        select(FaceEnrollment, Student, User)
-        .join(Student, Student.id == FaceEnrollment.student_id)
-        .join(User, User.id == Student.user_id)
-        .order_by(FaceEnrollment.created_at.desc())
-    )).all()
+    rows = (
+        await db.execute(
+            select(FaceEnrollment, Student, User)
+            .join(Student, Student.id == FaceEnrollment.student_id)
+            .join(User, User.id == Student.user_id)
+            .order_by(FaceEnrollment.created_at.desc())
+        )
+    ).all()
     return [
         {
             "id": enrollment.id,
@@ -580,10 +699,20 @@ async def list_face_enrollments(db: AsyncSession = Depends(get_db)) -> list[dict
 
 @router.get("/users", response_model=None)
 async def list_users(db: AsyncSession = Depends(get_db)) -> list[dict]:
-    users = (await db.execute(select(User).order_by(User.created_at.desc()))).scalars().all()
+    users = (
+        (await db.execute(select(User).order_by(User.created_at.desc())))
+        .scalars()
+        .all()
+    )
     return [
-        {"id": item.id, "email": item.email, "fullName": item.full_name, "role": item.role.value,
-         "isActive": item.is_active, "createdAt": item.created_at}
+        {
+            "id": item.id,
+            "email": item.email,
+            "fullName": item.full_name,
+            "role": item.role.value,
+            "isActive": item.is_active,
+            "createdAt": item.created_at,
+        }
         for item in users
     ]
 
@@ -595,7 +724,11 @@ async def list_audit_logs(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
     # Hide admin's own actions by default; use ?includeSelf=true to see them
-    include_self = request.query_params.get("includeSelf", "").lower() in ("1", "true", "yes")
+    include_self = request.query_params.get("includeSelf", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     # Exclude logs where actor is any admin (keeps view focused on instructor/student activity)
     # If you only want to hide *current* admin, replace subquery with AuditLog.actor_user_id != admin.id
     admin_ids = select(User.id).where(User.role == UserRole.ADMIN)
@@ -604,9 +737,16 @@ async def list_audit_logs(
         stmt = stmt.where(AuditLog.actor_user_id.not_in(admin_ids))
     logs = (await db.execute(stmt)).scalars().all()
     return [
-        {"id": item.id, "actorUserId": item.actor_user_id, "action": item.action,
-         "entityType": item.entity_type, "entityId": item.entity_id, "details": item.details,
-         "ipAddress": item.ip_address, "createdAt": item.created_at}
+        {
+            "id": item.id,
+            "actorUserId": item.actor_user_id,
+            "action": item.action,
+            "entityType": item.entity_type,
+            "entityId": item.entity_id,
+            "details": item.details,
+            "ipAddress": item.ip_address,
+            "createdAt": item.created_at,
+        }
         for item in logs
     ]
 
@@ -620,6 +760,17 @@ async def delete_audit_log(
     log = await db.get(AuditLog, log_id)
     if log is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Audit log not found.", 404)
+    # WORM in production: prevent deletion of logs younger than 30 days
+    if settings.is_production:
+        from datetime import timezone as _tz
+
+        age_days = (datetime.now(_tz.utc) - log.created_at).days
+        if age_days < 30:
+            raise ApiError(
+                ErrorCode.FORBIDDEN,
+                "Audit logs younger than 30 days cannot be deleted in production (WORM).",
+                403,
+            )
     await db.delete(log)
     await db.commit()
     return Response(status_code=204)
@@ -641,12 +792,22 @@ async def delete_audit_logs_range(
     from sqlalchemy import delete
 
     if not any([start_date, end_date, before, after]):
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide at least one of startDate, endDate, before, after.", 422)
+        raise ApiError(
+            ErrorCode.VALIDATION_ERROR,
+            "Provide at least one of startDate, endDate, before, after.",
+            422,
+        )
+
     # Build range in campus TZ then convert to UTC for comparison (AuditLog.created_at stored UTC)
     def _day_start(d: date) -> datetime:
-        return datetime.combine(d, datetime.min.time(), tzinfo=settings.campus_tz).astimezone(timezone.utc)
+        return datetime.combine(
+            d, datetime.min.time(), tzinfo=settings.campus_tz
+        ).astimezone(timezone.utc)
+
     def _day_end(d: date) -> datetime:
-        return datetime.combine(d, datetime.max.time(), tzinfo=settings.campus_tz).astimezone(timezone.utc)
+        return datetime.combine(
+            d, datetime.max.time(), tzinfo=settings.campus_tz
+        ).astimezone(timezone.utc)
 
     conditions = []
     if start_date:
@@ -660,18 +821,51 @@ async def delete_audit_logs_range(
 
     # Combine with AND
     from sqlalchemy import and_
+
     where_clause = and_(*conditions)
+
+    # Production WORM: only allow bulk delete of logs older than 30 days, max 500 per call
+    if settings.is_production:
+        from datetime import timezone as _tz
+
+        cutoff = datetime.now(_tz.utc) - timedelta(days=30)
+        recent_check = await db.execute(
+            select(AuditLog.id)
+            .where(AuditLog.created_at > cutoff, where_clause)
+            .limit(1)
+        )
+        if recent_check.scalar_one_or_none() is not None:
+            raise ApiError(
+                ErrorCode.FORBIDDEN,
+                "Bulk delete in production only allowed for logs older than 30 days.",
+                403,
+            )
+        count_res = await db.execute(select(AuditLog.id).where(where_clause))
+        if len(count_res.scalars().all()) > 500:
+            raise ApiError(
+                ErrorCode.VALIDATION_ERROR,
+                "Bulk delete limited to 500 logs per request in production.",
+                422,
+            )
+
     result = await db.execute(delete(AuditLog).where(where_clause))
     await db.commit()
     deleted = result.rowcount or 0
     # Audit the bulk delete itself (visible only with includeSelf=true)
     from app.services.audit_service import audit_detached
+
     await audit_detached(
         action="audit_logs_bulk_deleted",
         actor_user_id=admin.id,
         entity_type="audit_log",
         entity_id=None,
-        details={"deleted": deleted, "startDate": str(start_date) if start_date else None, "endDate": str(end_date) if end_date else None, "before": str(before) if before else None, "after": str(after) if after else None},
+        details={
+            "deleted": deleted,
+            "startDate": str(start_date) if start_date else None,
+            "endDate": str(end_date) if end_date else None,
+            "before": str(before) if before else None,
+            "after": str(after) if after else None,
+        },
         ip_address=request.client.host if request.client else None,
     )
     return {"deleted": deleted}
@@ -687,11 +881,22 @@ async def admin_manual_check_in(
 ) -> dict:
     from app.schemas import ManualAttendanceRequest
     from app.services.attendance_service import manual_check_in
+
     data = ManualAttendanceRequest.model_validate(payload)
     student = await db.get(Student, data.student_id)
     if student is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
-    return await manual_check_in(db, student=student, actor_user_id=admin.id, session_id=data.session_id, ip_address=request.client.host if request.client else None, check_in_at=data.check_in_at, check_out_at=data.check_out_at, status=data.status, reason=data.reason)
+    return await manual_check_in(
+        db,
+        student=student,
+        actor_user_id=admin.id,
+        session_id=data.session_id,
+        ip_address=request.client.host if request.client else None,
+        check_in_at=data.check_in_at,
+        check_out_at=data.check_out_at,
+        status=data.status,
+        reason=data.reason,
+    )
 
 
 @router.post("/attendance/manual-check-out", response_model=None)
@@ -703,11 +908,19 @@ async def admin_manual_check_out(
 ) -> dict:
     from app.schemas import ManualAttendanceRequest
     from app.services.attendance_service import manual_check_out
+
     data = ManualAttendanceRequest.model_validate(payload)
     student = await db.get(Student, data.student_id)
     if student is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
-    return await manual_check_out(db, student=student, actor_user_id=admin.id, session_id=data.session_id, ip_address=request.client.host if request.client else None, check_out_at=data.check_out_at)
+    return await manual_check_out(
+        db,
+        student=student,
+        actor_user_id=admin.id,
+        session_id=data.session_id,
+        ip_address=request.client.host if request.client else None,
+        check_out_at=data.check_out_at,
+    )
 
 
 @router.post("/attendance/{record_id}/excuse", response_model=None)
@@ -719,12 +932,27 @@ async def admin_excuse_attendance(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     from app.services.attendance_service import excuse_attendance
+
     reason = payload.get("reason") or payload.get("excuseReason")
     status = payload.get("status") or "EXCUSED"
     if not reason or len(str(reason).strip()) < 3:
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide reason (e.g. sickness, funeral).", 422)
-    rec = await excuse_attendance(db, record_id=record_id, actor_user_id=admin.id, reason=str(reason).strip(), status=str(status), ip_address=request.client.host if request.client else None)
-    return {"id": str(rec.id), "status": rec.status.value, "excuseReason": rec.excuse_reason, "excusedAt": rec.excused_at}
+        raise ApiError(
+            ErrorCode.VALIDATION_ERROR, "Provide reason (e.g. sickness, funeral).", 422
+        )
+    rec = await excuse_attendance(
+        db,
+        record_id=record_id,
+        actor_user_id=admin.id,
+        reason=str(reason).strip(),
+        status=str(status),
+        ip_address=request.client.host if request.client else None,
+    )
+    return {
+        "id": str(rec.id),
+        "status": rec.status.value,
+        "excuseReason": rec.excuse_reason,
+        "excusedAt": rec.excused_at,
+    }
 
 
 @router.delete("/attendance/{record_id}/excuse", response_model=None)
@@ -735,13 +963,23 @@ async def admin_clear_excuse(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     from app.services.attendance_service import clear_excuse
-    rec = await clear_excuse(db, record_id=record_id, actor_user_id=admin.id, ip_address=request.client.host if request.client else None)
+
+    rec = await clear_excuse(
+        db,
+        record_id=record_id,
+        actor_user_id=admin.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return {"id": str(rec.id), "status": rec.status.value}
 
 
 @router.get("/settings/location-mode", response_model=None)
 async def get_location_mode(db: AsyncSession = Depends(get_db)) -> dict:
-    return {"gpsVerificationEnabled": settings.gps_verification_enabled, "mode": "strict" if settings.gps_verification_enabled else "any", "default": "strict"}
+    return {
+        "gpsVerificationEnabled": settings.gps_verification_enabled,
+        "mode": "strict" if settings.gps_verification_enabled else "any",
+        "default": "strict",
+    }
 
 
 @router.post("/settings/location-mode", response_model=None)
@@ -761,16 +999,32 @@ async def set_location_mode(
         settings.gps_verification_enabled = False
     else:
         raise ApiError(ErrorCode.VALIDATION_ERROR, "mode must be strict or any", 422)
-    db.add(AuditLog(actor_user_id=admin.id, action="location_mode_changed", entity_type="settings", entity_id=None, details={"mode": "strict" if settings.gps_verification_enabled else "any"}, ip_address=request.client.host if request.client else None))
+    db.add(
+        AuditLog(
+            actor_user_id=admin.id,
+            action="location_mode_changed",
+            entity_type="settings",
+            entity_id=None,
+            details={"mode": "strict" if settings.gps_verification_enabled else "any"},
+            ip_address=request.client.host if request.client else None,
+        )
+    )
     await db.commit()
-    return {"gpsVerificationEnabled": settings.gps_verification_enabled, "mode": "strict" if settings.gps_verification_enabled else "any"}
+    return {
+        "gpsVerificationEnabled": settings.gps_verification_enabled,
+        "mode": "strict" if settings.gps_verification_enabled else "any",
+    }
 
 
 @router.get("/reports/summary", response_model=None)
 async def reports_summary(db: AsyncSession = Depends(get_db)) -> dict:
-    status_rows = (await db.execute(
-        select(AttendanceRecord.status, func.count(AttendanceRecord.id)).group_by(AttendanceRecord.status)
-    )).all()
+    status_rows = (
+        await db.execute(
+            select(AttendanceRecord.status, func.count(AttendanceRecord.id)).group_by(
+                AttendanceRecord.status
+            )
+        )
+    ).all()
     return {
         "totalSessions": await _count(db, AttendanceSession),
         "totalAttendanceRecords": sum(count for _, count in status_rows),

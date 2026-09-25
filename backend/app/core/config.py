@@ -23,7 +23,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")
 
     # Database
-    database_url: str = "postgresql+asyncpg://fikaai:fikaai_dev@localhost:5433/fikaai_db"
+    database_url: str = (
+        "postgresql+asyncpg://fikaai:fikaai_dev@localhost:5433/fikaai_db"
+    )
 
     # Security
     env: str = "development"  # development | production
@@ -32,7 +34,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
     embedding_encryption_key: str = ""
-    trusted_hosts: str = ""  # comma-separated, e.g. attendance.cyberclubdit.org,admin-attendance.cyberclubdit.org
+    trusted_hosts: str = (
+        ""  # comma-separated, e.g. attendance.cyberclubdit.org,admin-attendance.cyberclubdit.org
+    )
 
     # Face AI
     face_embedding_provider: str = "insightface"  # insightface | fake (dev-only)
@@ -52,7 +56,9 @@ class Settings(BaseSettings):
     training_longitude: float = 39.2801352
     training_radius_meters: int = 300
     training_location_name: str = "DIT RAFIC Building"
-    training_location_address: str = "Dar es Salaam Institute of Technology, RAFIC Building"
+    training_location_address: str = (
+        "Dar es Salaam Institute of Technology, RAFIC Building"
+    )
 
     # Liveness / verification tokens
     liveness_challenge_ttl_seconds: int = 120
@@ -61,7 +67,9 @@ class Settings(BaseSettings):
     venue_token_ttl_seconds: int = 300
 
     # Venue proof — static 8-char code for entire IPT (same for all days)
-    venue_static_code_hash: str = ""  # sha256 hex of 8-char code (uppercase alphanumeric)
+    venue_static_code_hash: str = (
+        ""  # sha256 hex of 8-char code (uppercase alphanumeric)
+    )
     venue_code_length: int = 8
     # Optional: show hint like "A7K9****" in instructor UI (derived from hash check logs only)
 
@@ -121,19 +129,40 @@ class Settings(BaseSettings):
         insecure_jwt = "dev-insecure-jwt-secret-change-me-please-1234567890abcdef"
         if self.is_production:
             if self.jwt_secret == insecure_jwt or len(self.jwt_secret) < 32:
-                raise RuntimeError("JWT_SECRET is insecure in production: set a random 32+ char secret (ENV=production)")
+                raise RuntimeError(
+                    "JWT_SECRET is insecure in production: set a random 32+ char secret (ENV=production)"
+                )
             if self.jwt_algorithm != "HS256":
-                raise RuntimeError(f"JWT_ALGORITHM must be HS256 in production, got {self.jwt_algorithm}")
+                raise RuntimeError(
+                    f"JWT_ALGORITHM must be HS256 in production, got {self.jwt_algorithm}"
+                )
             if not self.embedding_encryption_key:
-                logger.warning("EMBEDDING_ENCRYPTION_KEY is empty in production - embeddings will be ephemeral!")
+                raise RuntimeError(
+                    "EMBEDDING_ENCRYPTION_KEY is empty in production - set a persistent Fernet key or embeddings will be lost on restart"
+                )
+            if not self.trusted_hosts.strip():
+                raise RuntimeError(
+                    "TRUSTED_HOSTS is empty in production - set comma-separated allowed Hosts (e.g. attendance.cyberclubdit.org)"
+                )
             if self.face_embedding_provider == "fake":
-                raise RuntimeError("FACE_EMBEDDING_PROVIDER=fake forbidden in production")
+                raise RuntimeError(
+                    "FACE_EMBEDDING_PROVIDER=fake forbidden in production"
+                )
             if self.fake_face_always_match:
-                logger.warning("FAKE_FACE_ALWAYS_MATCH=true in production - must be false")
+                raise RuntimeError(
+                    "FAKE_FACE_ALWAYS_MATCH=true forbidden in production: set false"
+                )
             if not self.gps_verification_enabled:
-                logger.warning("GPS_VERIFICATION_ENABLED=false in production - geofence bypassed!")
-            if not self.venue_static_code_hash or len(self.venue_static_code_hash) != 64:
-                logger.warning("VENUE_STATIC_CODE_HASH missing/invalid - venue proof disabled")
+                raise RuntimeError(
+                    "GPS_VERIFICATION_ENABLED=false forbidden in production: geofence bypassed"
+                )
+            if (
+                not self.venue_static_code_hash
+                or len(self.venue_static_code_hash) != 64
+            ):
+                raise RuntimeError(
+                    "VENUE_STATIC_CODE_HASH missing/invalid in production - venue proof disabled"
+                )
 
     @property
     def campus_tz(self) -> ZoneInfo:

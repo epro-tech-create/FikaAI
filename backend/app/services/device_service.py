@@ -64,7 +64,9 @@ def verify_device_binding(
     if not settings.device_binding_enabled:
         return
 
-    should_auto_bind = settings.device_auto_bind_on_first_use if auto_bind is None else auto_bind
+    should_auto_bind = (
+        settings.device_auto_bind_on_first_use if auto_bind is None else auto_bind
+    )
 
     # Determine what the student has bound
     has_device_binding = bool(student.registration_device_hash)
@@ -84,49 +86,80 @@ def verify_device_binding(
     if not has_device_binding and not has_mac_binding:
         if not device_id and not mac_address:
             if settings.mac_binding_enabled:
-                raise ApiError(ErrorCode.DEVICE_ID_REQUIRED,
-                               "This student has no registered device. Check in from the device used at registration, or contact admin to bind your device.", 403)
+                raise ApiError(
+                    ErrorCode.DEVICE_ID_REQUIRED,
+                    "This student has no registered device. Check in from the device used at registration, or contact admin to bind your device.",
+                    403,
+                )
             # Allow through when no binding exists and none configured strictly — but optionally auto-bind
             if should_auto_bind and supplied_device_hash:
                 student.registration_device_hash = supplied_device_hash
             if should_auto_bind and supplied_mac_hash:
                 student.registration_mac_hash = supplied_mac_hash
             return
-        # Auto-bind for all students on first use - if uuid not stored, store new one (for all, not just Halima)
-        if supplied_device_hash:
-            student.registration_device_hash = supplied_device_hash
-        if supplied_mac_hash:
-            student.registration_mac_hash = supplied_mac_hash
-        return
+        # First use: bind only if auto_bind explicitly enabled (prevents proxy check-in with attacker's device)
+        if should_auto_bind:
+            if supplied_device_hash:
+                student.registration_device_hash = supplied_device_hash
+            if supplied_mac_hash:
+                student.registration_mac_hash = supplied_mac_hash
+            return
+        # When auto_bind is False, require admin to bind device first — reject anonymous bind
+        raise ApiError(
+            ErrorCode.DEVICE_ID_REQUIRED,
+            "Device not registered. Contact admin to bind your device before check-in.",
+            403,
+            {"reason": "DEVICE_NOT_BOUND"},
+        )
 
     # Enforce device-id binding (primary, always checked when student has one)
     if has_device_binding:
         if not supplied_device_hash:
             if is_checkout:
-                # Halima case: cleared Site data after check-in, checkout from new UUID should still succeed
+                # Allow checkout without device_id (cleared storage case) — audit but not block
                 import logging as _logging
-                _logging.getLogger("ccd.device").info("checkout without device_id, allowing student=%s", student.id)
+
+                _logging.getLogger("ccd.device").info(
+                    "checkout without device_id, allowing student=%s", student.id
+                )
                 return
-            raise ApiError(ErrorCode.DEVICE_ID_REQUIRED,
-                           "Check-in must be performed from your registered device.", 403,
-                           {"reason": "DEVICE_ID_MISSING"})
+            raise ApiError(
+                ErrorCode.DEVICE_ID_REQUIRED,
+                "Check-in must be performed from your registered device.",
+                403,
+                {"reason": "DEVICE_ID_MISSING"},
+            )
         if supplied_device_hash != student.registration_device_hash:
-            # For all students, auto-store new device on mismatch for check-in and checkout (prevents Halima daily block for all)
-            import logging as _logging
-            _logging.getLogger("ccd.device").info("device mismatch, auto-updating binding student=%s is_checkout=%s", student.id, is_checkout)
-            student.registration_device_hash = supplied_device_hash
-            return
+            # Strict rejection: do not auto-update binding (prevents proxy check-in with stolen credentials)
+            # Student must use registered device or request admin rebind
+            raise ApiError(
+                ErrorCode.DEVICE_MISMATCH,
+                "Check-in must be from your registered device. Contact admin to rebind if you changed device.",
+                403,
+                {"reason": "DEVICE_MISMATCH"},
+            )
 
     # Enforce MAC binding when enabled and student has a MAC bound
     if settings.mac_binding_enabled and has_mac_binding:
         if not supplied_mac_hash:
-            raise ApiError(ErrorCode.MAC_MISMATCH,
-                           "MAC address verification is required for this account.", 403)
+            raise ApiError(
+                ErrorCode.MAC_MISMATCH,
+                "MAC address verification is required for this account.",
+                403,
+            )
         if supplied_mac_hash != student.registration_mac_hash:
-            raise ApiError(ErrorCode.MAC_MISMATCH,
-                           "MAC address does not match the registered device.", 403,
-                           {"reason": "MAC_MISMATCH"})
+            raise ApiError(
+                ErrorCode.MAC_MISMATCH,
+                "MAC address does not match the registered device.",
+                403,
+                {"reason": "MAC_MISMATCH"},
+            )
 
     # If MAC binding is enabled but student has no MAC yet, optionally bind on first MAC-supplied check-in
-    if settings.mac_binding_enabled and not has_mac_binding and supplied_mac_hash and should_auto_bind:
+    if (
+        settings.mac_binding_enabled
+        and not has_mac_binding
+        and supplied_mac_hash
+        and should_auto_bind
+    ):
         student.registration_mac_hash = supplied_mac_hash

@@ -17,7 +17,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.drop_constraint("fk_attendance_sessions_course", "attendance_sessions", type_="foreignkey")
+    op.drop_constraint(
+        "fk_attendance_sessions_course", "attendance_sessions", type_="foreignkey"
+    )
     op.drop_index("ix_attendance_sessions_course_id", table_name="attendance_sessions")
     op.drop_column("attendance_sessions", "course_id")
     op.drop_table("instructor_course_assignments")
@@ -27,7 +29,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.add_column("students", sa.Column("course_of_study", sa.String(length=120), nullable=True))
+    op.add_column(
+        "students", sa.Column("course_of_study", sa.String(length=120), nullable=True)
+    )
     op.create_table(
         "courses",
         sa.Column("id", pg.UUID(as_uuid=True), primary_key=True),
@@ -40,14 +44,29 @@ def downgrade() -> None:
     op.create_table(
         "instructor_course_assignments",
         sa.Column("id", pg.UUID(as_uuid=True), primary_key=True),
-        sa.Column("instructor_id", pg.UUID(as_uuid=True), sa.ForeignKey("instructors.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("course_id", pg.UUID(as_uuid=True), sa.ForeignKey("courses.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "instructor_id",
+            pg.UUID(as_uuid=True),
+            sa.ForeignKey("instructors.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "course_id",
+            pg.UUID(as_uuid=True),
+            sa.ForeignKey("courses.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.UniqueConstraint("instructor_id", "course_id", name="uq_instructor_course"),
     )
-    op.add_column("attendance_sessions", sa.Column("course_id", pg.UUID(as_uuid=True), nullable=True))
-    op.create_index("ix_attendance_sessions_course_id", "attendance_sessions", ["course_id"])
+    op.add_column(
+        "attendance_sessions",
+        sa.Column("course_id", pg.UUID(as_uuid=True), nullable=True),
+    )
+    op.create_index(
+        "ix_attendance_sessions_course_id", "attendance_sessions", ["course_id"]
+    )
     op.create_foreign_key(
         "fk_attendance_sessions_course",
         "attendance_sessions",

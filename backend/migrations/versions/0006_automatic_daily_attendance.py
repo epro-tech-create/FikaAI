@@ -28,7 +28,9 @@ def upgrade() -> None:
     op.alter_column("attendance_sessions", "instructor_id", nullable=True)
     op.add_column(
         "attendance_sessions",
-        sa.Column("is_automatic", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column(
+            "is_automatic", sa.Boolean(), nullable=False, server_default=sa.false()
+        ),
     )
     op.create_index(
         "uq_attendance_sessions_automatic_date",
@@ -37,9 +39,7 @@ def upgrade() -> None:
         unique=True,
         postgresql_where=sa.text("is_automatic"),
     )
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             INSERT INTO practical_locations
                 (id, name, address, latitude, longitude, radius_meters,
                  location_type, is_active, created_at, updated_at)
@@ -54,15 +54,15 @@ def upgrade() -> None:
                 location_type = EXCLUDED.location_type,
                 is_active = true,
                 updated_at = now()
-            """
-        ).bindparams(name=LOCATION_NAME, address=LOCATION_ADDRESS)
-    )
+            """).bindparams(name=LOCATION_NAME, address=LOCATION_ADDRESS))
 
 
 def downgrade() -> None:
     # Automatic rows cannot satisfy the legacy mandatory assignment constraint.
     op.execute(sa.text("DELETE FROM attendance_sessions WHERE is_automatic"))
-    op.drop_index("uq_attendance_sessions_automatic_date", table_name="attendance_sessions")
+    op.drop_index(
+        "uq_attendance_sessions_automatic_date", table_name="attendance_sessions"
+    )
     op.drop_column("attendance_sessions", "is_automatic")
     op.alter_column("attendance_sessions", "instructor_id", nullable=False)
     op.alter_column("attendance_sessions", "course_id", nullable=False)

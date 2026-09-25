@@ -19,27 +19,20 @@ import zlib
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select, text, update
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
-
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
-from app.models.entities import (
-    AttendanceRecord,
-    AttendanceSession,
-    AttendanceStatus,
-    FaceVerification,
-    LocationVerification,
-    RecordSource,
-    SessionStatus,
-    Student,
-    VenueVerification,
-    VerificationMethod,
-)
+from app.models.entities import (AttendanceRecord, AttendanceSession,
+                                 AttendanceStatus, FaceVerification,
+                                 LocationVerification, RecordSource,
+                                 SessionStatus, Student, VenueVerification,
+                                 VerificationMethod)
 from app.services.audit_service import audit_detached
 from app.services.device_service import verify_device_binding
-from app.services.session_service import CampusClock, campus_now, classify_check_in, validate_window
+from app.services.session_service import (CampusClock, campus_now,
+                                          classify_check_in, validate_window)
+from sqlalchemy import select, text, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("ccd.attendance")
 
@@ -58,13 +51,20 @@ def _advisory_key(session_id: uuid.UUID, student_id: uuid.UUID) -> int:
     return zlib.crc32(f"{session_id}:{student_id}".encode()) | (1 << 31)
 
 
-async def _lock_attendance_row(db: AsyncSession, session_id: uuid.UUID, student_id: uuid.UUID) -> None:
-    await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _advisory_key(session_id, student_id)})
+async def _lock_attendance_row(
+    db: AsyncSession, session_id: uuid.UUID, student_id: uuid.UUID
+) -> None:
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(:key)"),
+        {"key": _advisory_key(session_id, student_id)},
+    )
 
 
 async def _consume_token(
     db: AsyncSession,
-    model: type[LocationVerification] | type[FaceVerification] | type[VenueVerification],
+    model: (
+        type[LocationVerification] | type[FaceVerification] | type[VenueVerification]
+    ),
     *,
     raw_token: str,
     student_id: uuid.UUID,
@@ -99,8 +99,16 @@ async def _consume_token(
     row = (
         await db.execute(select(model).where(model.token == token_uuid))
     ).scalar_one_or_none()
-    if row is None or str(row.student_id) != str(student_id) or str(row.session_id) != str(session_id):
-        raise ApiError(invalid_code, f"The {label} verification is missing or does not match this attempt.", 400)
+    if (
+        row is None
+        or str(row.student_id) != str(student_id)
+        or str(row.session_id) != str(session_id)
+    ):
+        raise ApiError(
+            invalid_code,
+            f"The {label} verification is missing or does not match this attempt.",
+            400,
+        )
     if not row.verified:
         raise ApiError(invalid_code, f"The {label} verification did not succeed.", 400)
     if row.used_at is not None:
@@ -111,11 +119,17 @@ async def _consume_token(
             entity_id=session_id,
             details={"reason": "TOKEN_ALREADY_USED", "token_type": label},
         )
-        raise ApiError(ErrorCode.TOKEN_ALREADY_USED,
-                       f"The {label} verification was already used. Repeat the verification step.", 409)
+        raise ApiError(
+            ErrorCode.TOKEN_ALREADY_USED,
+            f"The {label} verification was already used. Repeat the verification step.",
+            409,
+        )
     if row.expires_at <= now:
-        raise ApiError(invalid_code,
-                       f"The {label} verification has expired. Repeat the verification step.", 410)
+        raise ApiError(
+            invalid_code,
+            f"The {label} verification has expired. Repeat the verification step.",
+            410,
+        )
     raise ApiError(invalid_code, f"The {label} verification could not be used.", 400)
 
 
@@ -124,7 +138,10 @@ async def _get_locked_record(
 ) -> AttendanceRecord | None:
     result = await db.execute(
         select(AttendanceRecord)
-        .where(AttendanceRecord.session_id == session_id, AttendanceRecord.student_id == student_id)
+        .where(
+            AttendanceRecord.session_id == session_id,
+            AttendanceRecord.student_id == student_id,
+        )
         .with_for_update()
     )
     return result.scalar_one_or_none()
@@ -136,14 +153,20 @@ def _record_dto(record: AttendanceRecord, replay: bool = False) -> dict[str, Any
         "faceId": str(record.face_enrollment_id) if record.face_enrollment_id else None,
         "checkInAt": record.check_in_at.isoformat(),
         "checkOutAt": record.check_out_at.isoformat() if record.check_out_at else None,
-        "status": record.status.value if hasattr(record.status, "value") else str(record.status),
+        "status": (
+            record.status.value
+            if hasattr(record.status, "value")
+            else str(record.status)
+        ),
         "minutesLate": record.minutes_late,
         "timeSpentMinutes": record.time_spent_minutes,
         "replay": replay,
     }
 
 
-async def _load_locked_session(db: AsyncSession, session_id: uuid.UUID) -> AttendanceSession:
+async def _load_locked_session(
+    db: AsyncSession, session_id: uuid.UUID
+) -> AttendanceSession:
     result = await db.execute(
         # Joined relationships include nullable outer joins. PostgreSQL cannot
         # lock the nullable side, so explicitly lock only the session table.
@@ -174,13 +197,18 @@ async def check_in(
     try:
         idem_uuid = uuid.UUID(idempotency_key)
     except (ValueError, TypeError) as exc:
-        raise ApiError(ErrorCode.IDEMPOTENCY_KEY_REQUIRED,
-                       "A valid UUID idempotency key is required.", 400) from exc
+        raise ApiError(
+            ErrorCode.IDEMPOTENCY_KEY_REQUIRED,
+            "A valid UUID idempotency key is required.",
+            400,
+        ) from exc
 
     # Enforce device / MAC binding before touching session locks — prevents
     # proxy check-ins where one device signs for an absent student.
     try:
-        verify_device_binding(student, device_id=device_id, mac_address=mac_address, is_checkout=False)
+        verify_device_binding(
+            student, device_id=device_id, mac_address=mac_address, is_checkout=False
+        )
     except ApiError as exc:
         await audit_detached(
             action="attendance_rejected",
@@ -192,14 +220,18 @@ async def check_in(
         )
         raise
 
-     # get_current_student may have started an implicit read transaction on this
-     # request's shared session. Close it before opening the atomic write tx.
+    # get_current_student may have started an implicit read transaction on this
+    # request's shared session. Close it before opening the atomic write tx.
     if db.in_transaction():
         await db.commit()
     async with db.begin():
         session = await _load_locked_session(db, session_id)
         if session.status != SessionStatus.ACTIVE:
-            raise ApiError(ErrorCode.SESSION_INACTIVE, "This attendance session is no longer active.", 409)
+            raise ApiError(
+                ErrorCode.SESSION_INACTIVE,
+                "This attendance session is no longer active.",
+                409,
+            )
 
         clock = campus_now()
         validate_window(session, "check_in", clock)
@@ -209,7 +241,9 @@ async def check_in(
         existing = await _get_locked_record(db, session.id, student.id)
         if existing is not None:
             if existing.idempotency_key == idem_uuid:
-                return _record_dto(existing, replay=True)  # safe retry of the same submission
+                return _record_dto(
+                    existing, replay=True
+                )  # safe retry of the same submission
             await audit_detached(
                 action="attendance_rejected",
                 actor_user_id=actor_user_id,
@@ -218,43 +252,65 @@ async def check_in(
                 details={"reason": "DUPLICATE_CHECK_IN"},
                 ip_address=ip_address,
             )
-            raise ApiError(ErrorCode.DUPLICATE_CHECK_IN,
-                           "You have already checked in to this session.", 409)
+            raise ApiError(
+                ErrorCode.DUPLICATE_CHECK_IN,
+                "You have already checked in to this session.",
+                409,
+            )
 
         # Both verifications must exist, match, be unused & unexpired; consumed atomically.
         await _consume_token(
-            db, LocationVerification,
+            db,
+            LocationVerification,
             raw_token=location_verification_token,
-            student_id=student.id, session_id=session.id,
-            invalid_code=ErrorCode.INVALID_LOCATION_TOKEN, label="location",
+            student_id=student.id,
+            session_id=session.id,
+            invalid_code=ErrorCode.INVALID_LOCATION_TOKEN,
+            label="location",
         )
         face_enrollment_id = None
         verification_method = VerificationMethod.VENUE_GPS
         if face_verification_token:
             face_verification_id = await _consume_token(
-                db, FaceVerification,
+                db,
+                FaceVerification,
                 raw_token=face_verification_token,
-                student_id=student.id, session_id=session.id,
-                invalid_code=ErrorCode.INVALID_FACE_TOKEN, label="face",
+                student_id=student.id,
+                session_id=session.id,
+                invalid_code=ErrorCode.INVALID_FACE_TOKEN,
+                label="face",
             )
             face_enrollment_id = (
                 await db.execute(
-                    select(FaceVerification.face_enrollment_id).where(FaceVerification.id == face_verification_id)
+                    select(FaceVerification.face_enrollment_id).where(
+                        FaceVerification.id == face_verification_id
+                    )
                 )
             ).scalar_one()
             if face_enrollment_id is None:
-                raise ApiError(ErrorCode.INVALID_FACE_TOKEN, "The face verification has no enrolled FaceID reference.", 400)
+                raise ApiError(
+                    ErrorCode.INVALID_FACE_TOKEN,
+                    "The face verification has no enrolled FaceID reference.",
+                    400,
+                )
             verification_method = VerificationMethod.FACE_GPS
         elif venue_verification_token:
             await _consume_token(
-                db, VenueVerification,
+                db,
+                VenueVerification,
                 raw_token=venue_verification_token,
-                student_id=student.id, session_id=session.id,
-                invalid_code=ErrorCode.INVALID_VENUE_TOKEN, label="venue",
+                student_id=student.id,
+                session_id=session.id,
+                invalid_code=ErrorCode.INVALID_VENUE_TOKEN,
+                label="venue",
             )
             verification_method = VerificationMethod.VENUE_GPS
         else:
-            raise ApiError(ErrorCode.INVALID_FACE_TOKEN, "Provide face or venue verification token.", 400)
+            raise ApiError(
+                ErrorCode.INVALID_FACE_TOKEN,
+                "Provide face or venue verification token.",
+                400,
+            )
 
         # Server time is authoritative: PRESENT (early) until official start, LATE from then on.
         now_local = clock.now_local
@@ -279,18 +335,32 @@ async def check_in(
             # Roll back everything - including token consumption - so nothing
             # is half-consumed; the client's retry replays via idempotency key.
             await db.rollback()
-            raise ApiError(ErrorCode.DUPLICATE_CHECK_IN,
-                           "You have already checked in to this session.", 409)
+            raise ApiError(
+                ErrorCode.DUPLICATE_CHECK_IN,
+                "You have already checked in to this session.",
+                409,
+            )
 
     await audit_detached(
         action=f"attendance_{status.value.lower()}",
         actor_user_id=actor_user_id,
         entity_type="attendance_record",
         entity_id=record.id,
-        details={"session_id": str(session.id), "face_id": str(face_enrollment_id) if face_enrollment_id else None, "verification_method": verification_method.value, "minutes_late": minutes_late},
+        details={
+            "session_id": str(session.id),
+            "face_id": str(face_enrollment_id) if face_enrollment_id else None,
+            "verification_method": verification_method.value,
+            "minutes_late": minutes_late,
+        },
         ip_address=ip_address,
     )
-    logger.info("Check-in recorded student=%s session=%s status=%s method=%s", student.id, session.id, status.value, verification_method.value)
+    logger.info(
+        "Check-in recorded student=%s session=%s status=%s method=%s",
+        student.id,
+        session.id,
+        status.value,
+        verification_method.value,
+    )
     return _record_dto(record)
 
 
@@ -311,11 +381,16 @@ async def check_out(
     try:
         idem_uuid = uuid.UUID(idempotency_key)
     except (ValueError, TypeError) as exc:
-        raise ApiError(ErrorCode.IDEMPOTENCY_KEY_REQUIRED,
-                       "A valid UUID idempotency key is required.", 400) from exc
+        raise ApiError(
+            ErrorCode.IDEMPOTENCY_KEY_REQUIRED,
+            "A valid UUID idempotency key is required.",
+            400,
+        ) from exc
 
     try:
-        verify_device_binding(student, device_id=device_id, mac_address=mac_address, is_checkout=True)
+        verify_device_binding(
+            student, device_id=device_id, mac_address=mac_address, is_checkout=True
+        )
     except ApiError as exc:
         await audit_detached(
             action="attendance_rejected",
@@ -332,7 +407,11 @@ async def check_out(
     async with db.begin():
         session = await _load_locked_session(db, session_id)
         if session.status != SessionStatus.ACTIVE:
-            raise ApiError(ErrorCode.SESSION_INACTIVE, "This attendance session is no longer active.", 409)
+            raise ApiError(
+                ErrorCode.SESSION_INACTIVE,
+                "This attendance session is no longer active.",
+                409,
+            )
 
         clock = campus_now()
         validate_window(session, "check_out", clock)
@@ -341,47 +420,78 @@ async def check_out(
 
         record = await _get_locked_record(db, session.id, student.id)
         if record is None or record.check_in_at is None:
-            raise ApiError(ErrorCode.CHECKOUT_WITHOUT_CHECKIN,
-                           "You must check in before checking out.", 409)
-        if record.check_out_at is not None or record.status == AttendanceStatus.CHECKED_OUT:
+            raise ApiError(
+                ErrorCode.CHECKOUT_WITHOUT_CHECKIN,
+                "You must check in before checking out.",
+                409,
+            )
+        if (
+            record.check_out_at is not None
+            or record.status == AttendanceStatus.CHECKED_OUT
+        ):
             if record.idempotency_key == idem_uuid:
                 return _record_dto(record, replay=True)
-            raise ApiError(ErrorCode.ALREADY_CHECKED_OUT, "You have already checked out of this session.", 409)
+            raise ApiError(
+                ErrorCode.ALREADY_CHECKED_OUT,
+                "You have already checked out of this session.",
+                409,
+            )
 
         await _consume_token(
-            db, LocationVerification,
+            db,
+            LocationVerification,
             raw_token=location_verification_token,
-            student_id=student.id, session_id=session.id,
-            invalid_code=ErrorCode.INVALID_LOCATION_TOKEN, label="location",
+            student_id=student.id,
+            session_id=session.id,
+            invalid_code=ErrorCode.INVALID_LOCATION_TOKEN,
+            label="location",
         )
         checkout_face_id = None
         if face_verification_token:
             face_verification_id = await _consume_token(
-                db, FaceVerification,
+                db,
+                FaceVerification,
                 raw_token=face_verification_token,
-                student_id=student.id, session_id=session.id,
-                invalid_code=ErrorCode.INVALID_FACE_TOKEN, label="face",
+                student_id=student.id,
+                session_id=session.id,
+                invalid_code=ErrorCode.INVALID_FACE_TOKEN,
+                label="face",
             )
             checkout_face_id = (
                 await db.execute(
-                    select(FaceVerification.face_enrollment_id).where(FaceVerification.id == face_verification_id)
+                    select(FaceVerification.face_enrollment_id).where(
+                        FaceVerification.id == face_verification_id
+                    )
                 )
             ).scalar_one()
             if checkout_face_id is None:
-                raise ApiError(ErrorCode.INVALID_FACE_TOKEN, "The face verification has no enrolled FaceID reference.", 400)
+                raise ApiError(
+                    ErrorCode.INVALID_FACE_TOKEN,
+                    "The face verification has no enrolled FaceID reference.",
+                    400,
+                )
         elif venue_verification_token:
             await _consume_token(
-                db, VenueVerification,
+                db,
+                VenueVerification,
                 raw_token=venue_verification_token,
-                student_id=student.id, session_id=session.id,
-                invalid_code=ErrorCode.INVALID_VENUE_TOKEN, label="venue",
+                student_id=student.id,
+                session_id=session.id,
+                invalid_code=ErrorCode.INVALID_VENUE_TOKEN,
+                label="venue",
             )
         else:
-            raise ApiError(ErrorCode.INVALID_FACE_TOKEN, "Provide face or venue verification token.", 400)
+            raise ApiError(
+                ErrorCode.INVALID_FACE_TOKEN,
+                "Provide face or venue verification token.",
+                400,
+            )
 
         now_local = clock.now_local
         record.check_out_at = now_local
-        record.time_spent_minutes = max(0, int((now_local - record.check_in_at).total_seconds() // 60))
+        record.time_spent_minutes = max(
+            0, int((now_local - record.check_in_at).total_seconds() // 60)
+        )
         record.status = AttendanceStatus.CHECKED_OUT
 
     await audit_detached(
@@ -389,18 +499,30 @@ async def check_out(
         actor_user_id=actor_user_id,
         entity_type="attendance_record",
         entity_id=record.id,
-        details={"session_id": str(session.id), "face_id": str(checkout_face_id) if checkout_face_id else None, "time_spent_minutes": record.time_spent_minutes},
+        details={
+            "session_id": str(session.id),
+            "face_id": str(checkout_face_id) if checkout_face_id else None,
+            "time_spent_minutes": record.time_spent_minutes,
+        },
         ip_address=ip_address,
     )
     logger.info("Check-out recorded student=%s session=%s", student.id, session.id)
     return _record_dto(record)
 
 
-def _apply_manual_checkout(record: AttendanceRecord, check_out_at: datetime, check_in_at: datetime) -> None:
+def _apply_manual_checkout(
+    record: AttendanceRecord, check_out_at: datetime, check_in_at: datetime
+) -> None:
     if check_out_at < check_in_at:
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "Check-out time must be after check-in time.", 422)
+        raise ApiError(
+            ErrorCode.VALIDATION_ERROR,
+            "Check-out time must be after check-in time.",
+            422,
+        )
     record.check_out_at = check_out_at
-    record.time_spent_minutes = max(0, int((check_out_at - check_in_at).total_seconds() // 60))
+    record.time_spent_minutes = max(
+        0, int((check_out_at - check_in_at).total_seconds() // 60)
+    )
     if record.status in (AttendanceStatus.PRESENT, AttendanceStatus.LATE):
         record.status = AttendanceStatus.CHECKED_OUT
 
@@ -433,18 +555,36 @@ async def manual_check_in(
             try:
                 target_status = AttendanceStatus(status.upper())
             except ValueError:
-                raise ApiError(ErrorCode.VALIDATION_ERROR, f"Invalid status {status}", 422)
-            if target_status not in (AttendanceStatus.PRESENT, AttendanceStatus.LATE, AttendanceStatus.ABSENT, AttendanceStatus.EXCUSED, AttendanceStatus.MANUALLY_APPROVED):
-                raise ApiError(ErrorCode.VALIDATION_ERROR, "Manual status must be PRESENT/LATE/ABSENT/EXCUSED", 422)
+                raise ApiError(
+                    ErrorCode.VALIDATION_ERROR, f"Invalid status {status}", 422
+                )
+            if target_status not in (
+                AttendanceStatus.PRESENT,
+                AttendanceStatus.LATE,
+                AttendanceStatus.ABSENT,
+                AttendanceStatus.EXCUSED,
+                AttendanceStatus.MANUALLY_APPROVED,
+            ):
+                raise ApiError(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Manual status must be PRESENT/LATE/ABSENT/EXCUSED",
+                    422,
+                )
         minutes_late = 0
         if target_status == AttendanceStatus.LATE:
             minutes_late = classified_late or 5
-        checkout_at = _campus_datetime(check_out_at) if check_out_at is not None else None
+        checkout_at = (
+            _campus_datetime(check_out_at) if check_out_at is not None else None
+        )
         if existing is not None:
             existing.check_in_at = now_local
             existing.status = target_status
             existing.verification_method = VerificationMethod.MANUAL
-            existing.minutes_late = minutes_late if target_status in (AttendanceStatus.LATE, AttendanceStatus.PRESENT) else 0
+            existing.minutes_late = (
+                minutes_late
+                if target_status in (AttendanceStatus.LATE, AttendanceStatus.PRESENT)
+                else 0
+            )
             if target_status == AttendanceStatus.EXCUSED:
                 existing.excuse_reason = reason
                 existing.excused_by = actor_user_id
@@ -452,7 +592,9 @@ async def manual_check_in(
             if checkout_at is not None:
                 _apply_manual_checkout(existing, checkout_at, now_local)
             elif existing.check_out_at is not None:
-                existing.time_spent_minutes = max(0, int((existing.check_out_at - now_local).total_seconds() // 60))
+                existing.time_spent_minutes = max(
+                    0, int((existing.check_out_at - now_local).total_seconds() // 60)
+                )
             record = existing
         else:
             record = AttendanceRecord(
@@ -460,14 +602,27 @@ async def manual_check_in(
                 student_id=student.id,
                 face_enrollment_id=None,
                 check_in_at=now_local,
-                minutes_late=minutes_late if target_status in (AttendanceStatus.LATE, AttendanceStatus.PRESENT) else 0,
+                minutes_late=(
+                    minutes_late
+                    if target_status
+                    in (AttendanceStatus.LATE, AttendanceStatus.PRESENT)
+                    else 0
+                ),
                 status=target_status,
                 verification_method=VerificationMethod.MANUAL,
                 source=RecordSource.ONLINE,
                 idempotency_key=uuid.uuid4(),
-                excuse_reason=reason if target_status == AttendanceStatus.EXCUSED else None,
-                excused_by=actor_user_id if target_status == AttendanceStatus.EXCUSED else None,
-                excused_at=datetime.now(timezone.utc) if target_status == AttendanceStatus.EXCUSED else None,
+                excuse_reason=(
+                    reason if target_status == AttendanceStatus.EXCUSED else None
+                ),
+                excused_by=(
+                    actor_user_id if target_status == AttendanceStatus.EXCUSED else None
+                ),
+                excused_at=(
+                    datetime.now(timezone.utc)
+                    if target_status == AttendanceStatus.EXCUSED
+                    else None
+                ),
             )
             db.add(record)
             await db.flush()
@@ -478,7 +633,14 @@ async def manual_check_in(
         actor_user_id=actor_user_id,
         entity_type="attendance_record",
         entity_id=record.id,
-        details={"session_id": str(session.id), "student_id": str(student.id), "status": record.status.value, "reason": reason, "check_in_at": now_local.isoformat(), "check_out_at": checkout_at.isoformat() if checkout_at else None},
+        details={
+            "session_id": str(session.id),
+            "student_id": str(student.id),
+            "status": record.status.value,
+            "reason": reason,
+            "check_in_at": now_local.isoformat(),
+            "check_out_at": checkout_at.isoformat() if checkout_at else None,
+        },
         ip_address=ip_address,
     )
     return _record_dto(record)
@@ -502,7 +664,9 @@ async def manual_check_out(
         await _lock_attendance_row(db, session.id, student.id)
         record = await _get_locked_record(db, session.id, student.id)
         if record is None or record.check_in_at is None:
-            raise ApiError(ErrorCode.CHECKOUT_WITHOUT_CHECKIN, "Student has not checked in.", 409)
+            raise ApiError(
+                ErrorCode.CHECKOUT_WITHOUT_CHECKIN, "Student has not checked in.", 409
+            )
         now_local = _campus_datetime(check_out_at)
         _apply_manual_checkout(record, now_local, record.check_in_at)
     await audit_detached(
@@ -510,7 +674,11 @@ async def manual_check_out(
         actor_user_id=actor_user_id,
         entity_type="attendance_record",
         entity_id=record.id,
-        details={"session_id": str(session.id), "student_id": str(student.id), "check_out_at": now_local.isoformat()},
+        details={
+            "session_id": str(session.id),
+            "student_id": str(student.id),
+            "check_out_at": now_local.isoformat(),
+        },
         ip_address=ip_address,
     )
     return _record_dto(record)
@@ -525,7 +693,11 @@ async def excuse_attendance(
     status: str = "EXCUSED",
     ip_address: str | None,
 ) -> AttendanceRecord:
-    target_status = AttendanceStatus.EXCUSED if status.upper() == "EXCUSED" else AttendanceStatus.ABSENT
+    target_status = (
+        AttendanceStatus.EXCUSED
+        if status.upper() == "EXCUSED"
+        else AttendanceStatus.ABSENT
+    )
     record = await db.get(AttendanceRecord, record_id)
     if record is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Attendance record not found.", 404)

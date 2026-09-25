@@ -12,15 +12,15 @@ import uuid
 from datetime import datetime, timezone
 
 import numpy as np
-from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.config import settings
 from app.core.crypto import cipher
 from app.core.errors import ApiError, ErrorCode
-from app.face_ai.recognition_service import BaseFaceRecognitionService, cosine_similarity
+from app.face_ai.recognition_service import (BaseFaceRecognitionService,
+                                             cosine_similarity)
 from app.models.entities import FaceEnrollment, Student
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("ccd.enroll")
 
@@ -39,13 +39,22 @@ def decode_image(encoded: str, *, max_bytes: int, label: str) -> bytes:
     try:
         blob = base64.b64decode(payload, validate=False)
     except (binascii.Error, ValueError) as exc:
-        raise ApiError(ErrorCode.UNSUPPORTED_MEDIA_TYPE, f"{label} is not valid base64.", 422) from exc
+        raise ApiError(
+            ErrorCode.UNSUPPORTED_MEDIA_TYPE, f"{label} is not valid base64.", 422
+        ) from exc
 
     if len(blob) > max_bytes:
-        raise ApiError(ErrorCode.FILE_TOO_LARGE,
-                       f"{label} {len(blob)} exceeds the size limit of {max_bytes} bytes.", 413)
+        raise ApiError(
+            ErrorCode.FILE_TOO_LARGE,
+            f"{label} {len(blob)} exceeds the size limit of {max_bytes} bytes.",
+            413,
+        )
     if not (blob[:3] == b"\xff\xd8\xff" or blob[:8] == b"\x89PNG\r\n\x1a\n"):
-        raise ApiError(ErrorCode.UNSUPPORTED_MEDIA_TYPE, f"{label} must be a JPEG or PNG image.", 415)
+        raise ApiError(
+            ErrorCode.UNSUPPORTED_MEDIA_TYPE,
+            f"{label} must be a JPEG or PNG image.",
+            415,
+        )
     return blob
 
 
@@ -87,7 +96,9 @@ async def get_enrollment_status(
         "enrolledAt": active.created_at.isoformat() if active else None,
         "sampleCount": active.sample_count if active else 0,
         "provider": active.provider if active else None,
-        "consentGivenAt": student.consent_given_at.isoformat() if student.consent_given_at else None,
+        "consentGivenAt": (
+            student.consent_given_at.isoformat() if student.consent_given_at else None
+        ),
     }
 
 
@@ -103,7 +114,11 @@ async def enroll_face(
 ) -> dict:
     if not consent_granted:
         await audit_detached_safe(actor_user_id, ip_address, "CONSENT_REQUIRED")
-        raise ApiError(ErrorCode.CONSENT_REQUIRED, "Biometric consent must be granted before enrolment.", 400)
+        raise ApiError(
+            ErrorCode.CONSENT_REQUIRED,
+            "Biometric consent must be granted before enrolment.",
+            400,
+        )
 
     if not (MIN_SAMPLES <= len(samples_b64) <= MAX_SAMPLES):
         raise ApiError(
@@ -125,11 +140,17 @@ async def enroll_face(
     for index, blob in enumerate(blobs):
         img = cv2.imdecode(np.frombuffer(blob, dtype=np.uint8), cv2.IMREAD_COLOR)
         if img is None:
-            rejected.append({"sampleIndex": index, "code": ErrorCode.UNSUPPORTED_MEDIA_TYPE.value})
+            rejected.append(
+                {"sampleIndex": index, "code": ErrorCode.UNSUPPORTED_MEDIA_TYPE.value}
+            )
             continue
         quality = assess_quality(img)
         if not quality.ok:
-            code = ErrorCode.BLURRED_IMAGE if quality.reason_code == "BLURRED_IMAGE" else ErrorCode.TOO_DARK
+            code = (
+                ErrorCode.BLURRED_IMAGE
+                if quality.reason_code == "BLURRED_IMAGE"
+                else ErrorCode.TOO_DARK
+            )
             rejected.append({"sampleIndex": index, "code": code.value})
             continue
         try:
@@ -151,8 +172,12 @@ async def enroll_face(
 
     consistency = _consistency(embeddings)
     if consistency < settings.face_min_consistency:
-        await audit_detached_safe(actor_user_id, ip_address, "INCONSISTENT_SAMPLES",
-                                  {"consistency": round(consistency, 3)})
+        await audit_detached_safe(
+            actor_user_id,
+            ip_address,
+            "INCONSISTENT_SAMPLES",
+            {"consistency": round(consistency, 3)},
+        )
         raise ApiError(
             ErrorCode.INCONSISTENT_SAMPLES,
             "The samples do not appear to belong to the same person. Retake them in even lighting.",
@@ -169,7 +194,9 @@ async def enroll_face(
     # Revoke any previous active enrolment (admin/student re-enrolment path)
     await db.execute(
         update(FaceEnrollment)
-        .where(FaceEnrollment.student_id == student.id, FaceEnrollment.is_active.is_(True))
+        .where(
+            FaceEnrollment.student_id == student.id, FaceEnrollment.is_active.is_(True)
+        )
         .values(is_active=False, revoked_at=now)
     )
 
@@ -188,11 +215,19 @@ async def enroll_face(
     if student.consent_given_at is None:
         student.consent_given_at = now
 
-    await audit_detached_safe(actor_user_id, ip_address, "face_enrolled",
-                              {"samples": len(embeddings), "consistency": round(consistency, 3)})
+    await audit_detached_safe(
+        actor_user_id,
+        ip_address,
+        "face_enrolled",
+        {"samples": len(embeddings), "consistency": round(consistency, 3)},
+    )
     await db.commit()
-    logger.info("Face enrolled student=%s provider=%s samples=%d", student.id, recognizer.provider_name,
-                 len(embeddings))
+    logger.info(
+        "Face enrolled student=%s provider=%s samples=%d",
+        student.id,
+        recognizer.provider_name,
+        len(embeddings),
+    )
     return {
         "enrolled": True,
         "faceId": str(enrollment.id),
@@ -203,12 +238,22 @@ async def enroll_face(
     }
 
 
-async def audit_detached_safe(actor_user_id: uuid.UUID, ip_address: str | None, action: str,
-                              details: dict | None = None) -> None:
+async def audit_detached_safe(
+    actor_user_id: uuid.UUID,
+    ip_address: str | None,
+    action: str,
+    details: dict | None = None,
+) -> None:
     from app.services.audit_service import audit_detached
 
-    await audit_detached(action=action, actor_user_id=actor_user_id, entity_type="face_enrollment",
-                         entity_id=None, details=details or {}, ip_address=ip_address)
+    await audit_detached(
+        action=action,
+        actor_user_id=actor_user_id,
+        entity_type="face_enrollment",
+        entity_id=None,
+        details=details or {},
+        ip_address=ip_address,
+    )
 
 
 async def load_active_enrollment(
@@ -223,8 +268,11 @@ async def load_active_enrollment(
     )
     enrollment = result.scalar_one_or_none()
     if enrollment is None:
-        raise ApiError(ErrorCode.FACE_NOT_ENROLLED,
-                       "No face enrolment found. Complete face enrolment first.", 409)
+        raise ApiError(
+            ErrorCode.FACE_NOT_ENROLLED,
+            "No face enrolment found. Complete face enrolment first.",
+            409,
+        )
     if expected_provider and enrollment.provider != expected_provider:
         raise ApiError(
             ErrorCode.FACE_REENROLL_REQUIRED,

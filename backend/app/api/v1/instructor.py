@@ -5,25 +5,20 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
+from app.api.v1.admin import _daily_timeline, session_response
+from app.core.config import settings
+from app.core.deps import get_current_instructor, get_db
+from app.core.errors import ApiError, ErrorCode
+from app.models.entities import (AttendanceRecord, AttendanceSession,
+                                 Instructor, PracticalLocation, Student, User)
+from app.schemas import SessionHoursUpdate, SessionResponse, VenueQrResponse
+from app.services.audit_service import audit_detached
+from app.services.report_service import (build_attendance_report, parse_period,
+                                         render_attendance_pdf,
+                                         weekly_attendance_series)
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.api.v1.admin import _daily_timeline, session_response
-from app.core.config import settings
-from app.core.errors import ApiError, ErrorCode
-from app.core.deps import get_current_instructor, get_db
-from app.models.entities import (
-    AttendanceRecord,
-    AttendanceSession,
-    Instructor,
-    PracticalLocation,
-    Student,
-    User,
-)
-from app.schemas import SessionHoursUpdate, SessionResponse, VenueQrResponse
-from app.services.audit_service import audit_detached
-from app.services.report_service import build_attendance_report, parse_period, render_attendance_pdf, weekly_attendance_series
 
 
 def _instructor_ip(request: Request) -> str | None:
@@ -32,13 +27,16 @@ def _instructor_ip(request: Request) -> str | None:
         return real.strip()
     return request.client.host if request.client else None
 
+
 router = APIRouter(prefix="/instructor", tags=["instructor"])
 
 
 async def _instructor_count(db: AsyncSession, model, instructor_id) -> int:
     if model is AttendanceSession:
-        stmt = select(func.count()).select_from(AttendanceSession).where(
-            AttendanceSession.is_automatic.is_(True)
+        stmt = (
+            select(func.count())
+            .select_from(AttendanceSession)
+            .where(AttendanceSession.is_automatic.is_(True))
         )
     else:
         stmt = select(func.count()).select_from(AttendanceRecord)
@@ -52,12 +50,21 @@ async def dashboard(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     today = datetime.now(settings.campus_tz).date()
-    attendance = (await db.execute(
-        select(AttendanceRecord)
-        .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
-        .where(AttendanceSession.session_date == today)
-        .order_by(AttendanceRecord.check_in_at)
-    )).scalars().all()
+    attendance = (
+        (
+            await db.execute(
+                select(AttendanceRecord)
+                .join(
+                    AttendanceSession,
+                    AttendanceSession.id == AttendanceRecord.session_id,
+                )
+                .where(AttendanceSession.session_date == today)
+                .order_by(AttendanceRecord.check_in_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
     await audit_detached(
         action="instructor_dashboard_viewed",
         actor_user_id=instructor.user_id,
@@ -71,9 +78,13 @@ async def dashboard(
         "fullName": instructor.user.full_name,
         "date": today.isoformat(),
         "timezone": settings.campus_timezone,
-        "attendanceRecords": await _instructor_count(db, AttendanceRecord, instructor.id),
+        "attendanceRecords": await _instructor_count(
+            db, AttendanceRecord, instructor.id
+        ),
         "arrivalsToday": len(attendance),
-        "departuresToday": sum(record.check_out_at is not None for record in attendance),
+        "departuresToday": sum(
+            record.check_out_at is not None for record in attendance
+        ),
         "timeline": _daily_timeline(list(attendance)),
         "weeklySeries": await weekly_attendance_series(db, today),
     }
@@ -84,7 +95,18 @@ async def list_students_instructor(
     instructor: Instructor = Depends(get_current_instructor),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
-    rows = (await db.execute(select(Student).order_by(Student.membership_id.asc().nulls_last(), Student.registration_number))).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(Student).order_by(
+                    Student.membership_id.asc().nulls_last(),
+                    Student.registration_number,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     # reuse admin student response shape
     return [
         {
@@ -107,11 +129,17 @@ async def active_locations(
     instructor: Instructor = Depends(get_current_instructor),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
-    locations = (await db.execute(
-        select(PracticalLocation)
-        .where(PracticalLocation.is_active.is_(True))
-        .order_by(PracticalLocation.name)
-    )).scalars().all()
+    locations = (
+        (
+            await db.execute(
+                select(PracticalLocation)
+                .where(PracticalLocation.is_active.is_(True))
+                .order_by(PracticalLocation.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
     await audit_detached(
         action="instructor_locations_viewed",
         actor_user_id=instructor.user_id,
@@ -136,14 +164,25 @@ async def list_sessions(
     instructor: Instructor = Depends(get_current_instructor),
     db: AsyncSession = Depends(get_db),
 ) -> list[SessionResponse]:
-    sessions = (await db.execute(
-        select(AttendanceSession)
-        .where(or_(
-            AttendanceSession.instructor_id == instructor.id,
-            AttendanceSession.is_automatic.is_(True),
-        ))
-        .order_by(AttendanceSession.session_date.desc(), AttendanceSession.check_in_open)
-    )).scalars().all()
+    sessions = (
+        (
+            await db.execute(
+                select(AttendanceSession)
+                .where(
+                    or_(
+                        AttendanceSession.instructor_id == instructor.id,
+                        AttendanceSession.is_automatic.is_(True),
+                    )
+                )
+                .order_by(
+                    AttendanceSession.session_date.desc(),
+                    AttendanceSession.check_in_open,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     await audit_detached(
         action="instructor_sessions_viewed",
         actor_user_id=instructor.user_id,
@@ -163,6 +202,7 @@ async def instructor_update_session_hours(
     db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
     from app.services.session_service import update_session_hours
+
     session = await db.get(AttendanceSession, session_id)
     if session is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Session not found.", 404)
@@ -201,13 +241,17 @@ async def attendance_list(
     instructor: Instructor = Depends(get_current_instructor),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
-    rows = (await db.execute(
-        select(AttendanceRecord, AttendanceSession, Student, User)
-        .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
-        .join(Student, Student.id == AttendanceRecord.student_id)
-        .join(User, User.id == Student.user_id)
-        .order_by(AttendanceRecord.check_in_at.desc())
-    )).all()
+    rows = (
+        await db.execute(
+            select(AttendanceRecord, AttendanceSession, Student, User)
+            .join(
+                AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id
+            )
+            .join(Student, Student.id == AttendanceRecord.student_id)
+            .join(User, User.id == Student.user_id)
+            .order_by(AttendanceRecord.check_in_at.desc())
+        )
+    ).all()
     await audit_detached(
         action="instructor_attendance_viewed",
         actor_user_id=instructor.user_id,
@@ -242,9 +286,17 @@ async def venue_qr(
     instructor: Instructor = Depends(get_current_instructor),
     db: AsyncSession = Depends(get_db),
 ) -> VenueQrResponse:
-    if not settings.venue_static_code_hash or len(settings.venue_static_code_hash) != 64:
+    if (
+        not settings.venue_static_code_hash
+        or len(settings.venue_static_code_hash) != 64
+    ):
         from app.core.errors import ApiError, ErrorCode
-        raise ApiError(ErrorCode.VENUE_NOT_CONFIGURED, "Venue code not configured. Set VENUE_STATIC_CODE_HASH.", 503)
+
+        raise ApiError(
+            ErrorCode.VENUE_NOT_CONFIGURED,
+            "Venue code not configured. Set VENUE_STATIC_CODE_HASH.",
+            503,
+        )
     code_hint = f"{settings.venue_static_code_hash[:2].upper()}****"
     await audit_detached(
         action="instructor_venue_qr_viewed",
@@ -270,11 +322,22 @@ async def instructor_manual_check_in(
 ) -> dict:
     from app.schemas import ManualAttendanceRequest
     from app.services.attendance_service import manual_check_in
+
     data = ManualAttendanceRequest.model_validate(payload)
     student = await db.get(Student, data.student_id)
     if student is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
-    return await manual_check_in(db, student=student, actor_user_id=instructor.user_id, session_id=data.session_id, ip_address=_instructor_ip(request), check_in_at=data.check_in_at, check_out_at=data.check_out_at, status=data.status, reason=data.reason)
+    return await manual_check_in(
+        db,
+        student=student,
+        actor_user_id=instructor.user_id,
+        session_id=data.session_id,
+        ip_address=_instructor_ip(request),
+        check_in_at=data.check_in_at,
+        check_out_at=data.check_out_at,
+        status=data.status,
+        reason=data.reason,
+    )
 
 
 @router.post("/attendance/manual-check-out", response_model=None)
@@ -286,11 +349,19 @@ async def instructor_manual_check_out(
 ) -> dict:
     from app.schemas import ManualAttendanceRequest
     from app.services.attendance_service import manual_check_out
+
     data = ManualAttendanceRequest.model_validate(payload)
     student = await db.get(Student, data.student_id)
     if student is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Student not found.", 404)
-    return await manual_check_out(db, student=student, actor_user_id=instructor.user_id, session_id=data.session_id, ip_address=_instructor_ip(request), check_out_at=data.check_out_at)
+    return await manual_check_out(
+        db,
+        student=student,
+        actor_user_id=instructor.user_id,
+        session_id=data.session_id,
+        ip_address=_instructor_ip(request),
+        check_out_at=data.check_out_at,
+    )
 
 
 @router.post("/attendance/{record_id}/excuse", response_model=None)
@@ -302,13 +373,26 @@ async def instructor_excuse_attendance(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     import uuid
+
     from app.services.attendance_service import excuse_attendance
+
     reason = payload.get("reason") or payload.get("excuseReason")
     status = payload.get("status") or "EXCUSED"
     if not reason or len(str(reason).strip()) < 3:
         raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide reason.", 422)
-    rec = await excuse_attendance(db, record_id=uuid.UUID(record_id), actor_user_id=instructor.user_id, reason=str(reason).strip(), status=str(status), ip_address=_instructor_ip(request))
-    return {"id": str(rec.id), "status": rec.status.value, "excuseReason": rec.excuse_reason}
+    rec = await excuse_attendance(
+        db,
+        record_id=uuid.UUID(record_id),
+        actor_user_id=instructor.user_id,
+        reason=str(reason).strip(),
+        status=str(status),
+        ip_address=_instructor_ip(request),
+    )
+    return {
+        "id": str(rec.id),
+        "status": rec.status.value,
+        "excuseReason": rec.excuse_reason,
+    }
 
 
 @router.delete("/attendance/{record_id}/excuse", response_model=None)
@@ -319,14 +403,24 @@ async def instructor_clear_excuse(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     import uuid
+
     from app.services.attendance_service import clear_excuse
-    rec = await clear_excuse(db, record_id=uuid.UUID(record_id), actor_user_id=instructor.user_id, ip_address=_instructor_ip(request))
+
+    rec = await clear_excuse(
+        db,
+        record_id=uuid.UUID(record_id),
+        actor_user_id=instructor.user_id,
+        ip_address=_instructor_ip(request),
+    )
     return {"id": str(rec.id), "status": rec.status.value}
 
 
 @router.get("/settings/location-mode", response_model=None)
 async def instructor_location_mode(db: AsyncSession = Depends(get_db)) -> dict:
-    return {"gpsVerificationEnabled": settings.gps_verification_enabled, "mode": "strict" if settings.gps_verification_enabled else "any"}
+    return {
+        "gpsVerificationEnabled": settings.gps_verification_enabled,
+        "mode": "strict" if settings.gps_verification_enabled else "any",
+    }
 
 
 @router.get("/attendance/reports", response_model=None)

@@ -15,35 +15,72 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sqlalchemy import select, update  # noqa: E402
-
 from app.core.config import settings  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.session import session_factory  # noqa: E402
-from app.models.entities import (  # noqa: E402
-    AttendanceSession,
-    Instructor,
-    LocationType,
-    PracticalLocation,
-    SessionStatus,
-    Student,
-    StudentStatus,
-    User,
-    UserRole,
-)
+from app.models.entities import Instructor  # noqa: E402
+from app.models.entities import (AttendanceSession, LocationType,
+                                 PracticalLocation, SessionStatus, Student,
+                                 StudentStatus, User, UserRole)
+from sqlalchemy import select, update  # noqa: E402
 
-SEED_PASSWORD = os.environ.get("SEED_PASSWORD", "Student@123")
+_seed_pw = os.environ.get("SEED_PASSWORD")
+if not _seed_pw:
+    if os.environ.get("ENV", "").lower() == "production":
+        raise RuntimeError("SEED_PASSWORD must be set in production (no default)")
+    _seed_pw = "Student@123"
+SEED_PASSWORD = _seed_pw
 FIRST_NAMES = [
-    "Amina", "Baraka", "Neema", "Juma", "Zawadi", "Tumaini", "Rehema", "Salma", "Hamisi", "Asha",
-    "Peter", "Grace", "Daniel", "Esther", "Michael", "Faith", "Joseph", "Mercy", "Elias", "Joyce",
-    "Frank", "Upendo", "Godfrey", "Halima", "Emmanuel", "Nuru", "Samuel", "Diana", "Isaac", "Pendo",
+    "Amina",
+    "Baraka",
+    "Neema",
+    "Juma",
+    "Zawadi",
+    "Tumaini",
+    "Rehema",
+    "Salma",
+    "Hamisi",
+    "Asha",
+    "Peter",
+    "Grace",
+    "Daniel",
+    "Esther",
+    "Michael",
+    "Faith",
+    "Joseph",
+    "Mercy",
+    "Elias",
+    "Joyce",
+    "Frank",
+    "Upendo",
+    "Godfrey",
+    "Halima",
+    "Emmanuel",
+    "Nuru",
+    "Samuel",
+    "Diana",
+    "Isaac",
+    "Pendo",
 ]
-LAST_NAMES = ["Mushi", "Kimaro", "Massawe", "Nyoni", "Lyimo", "Swai", "Macha", "Kessy", "Tarimo", "Mrema"]
+LAST_NAMES = [
+    "Mushi",
+    "Kimaro",
+    "Massawe",
+    "Nyoni",
+    "Lyimo",
+    "Swai",
+    "Macha",
+    "Kessy",
+    "Tarimo",
+    "Mrema",
+]
 
 
 async def main() -> None:
     async with session_factory() as db:
-        admin = (await db.execute(select(User).where(User.email == "admin@fikaai.io"))).scalar_one_or_none()
+        admin = (
+            await db.execute(select(User).where(User.email == "admin@fikaai.io"))
+        ).scalar_one_or_none()
         if admin is None:
             db.add(
                 User(
@@ -60,7 +97,9 @@ async def main() -> None:
             ("instructor@fikaai.io", "Dr. Neema Mushi"),
             ("instructor2@fikaai.io", "Mr. Baraka Lyimo"),
         ):
-            user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+            user = (
+                await db.execute(select(User).where(User.email == email))
+            ).scalar_one_or_none()
             if user is None:
                 user = User(
                     email=email,
@@ -71,7 +110,9 @@ async def main() -> None:
                 db.add(user)
                 await db.flush()
             profile = (
-                await db.execute(select(Instructor).where(Instructor.user_id == user.id))
+                await db.execute(
+                    select(Instructor).where(Instructor.user_id == user.id)
+                )
             ).scalar_one_or_none()
             if profile is None:
                 profile = Instructor(user_id=user.id)
@@ -89,13 +130,29 @@ async def main() -> None:
                 settings.training_radius_meters,
                 LocationType.CLASSROOM,
             ),
-            ("East Field Station", "Outdoor training ground", -6.7950000, 39.2115000, 150, LocationType.OUTDOOR_FIELD),
-            ("Cyber Range Lab", "Block A, Floor 1", -6.7910000, 39.2070000, 80, LocationType.CLASSROOM),
+            (
+                "East Field Station",
+                "Outdoor training ground",
+                -6.7950000,
+                39.2115000,
+                150,
+                LocationType.OUTDOOR_FIELD,
+            ),
+            (
+                "Cyber Range Lab",
+                "Block A, Floor 1",
+                -6.7910000,
+                39.2070000,
+                80,
+                LocationType.CLASSROOM,
+            ),
         ]
         locations: dict[str, PracticalLocation] = {}
         for name, address, latitude, longitude, radius, location_type in location_defs:
             location = (
-                await db.execute(select(PracticalLocation).where(PracticalLocation.name == name))
+                await db.execute(
+                    select(PracticalLocation).where(PracticalLocation.name == name)
+                )
             ).scalar_one_or_none()
             if location is None:
                 location = PracticalLocation(name=name)
@@ -112,7 +169,9 @@ async def main() -> None:
             registration_number = f"REG-2026-{i + 1:03d}"
             student = (
                 await db.execute(
-                    select(Student).where(Student.registration_number == registration_number)
+                    select(Student).where(
+                        Student.registration_number == registration_number
+                    )
                 )
             ).scalar_one_or_none()
             if student is None:
@@ -143,13 +202,17 @@ async def main() -> None:
         await db.flush()
         today = datetime.now(settings.campus_tz).date()
         active = (
-            await db.execute(
-                select(AttendanceSession).where(
-                    AttendanceSession.status == SessionStatus.ACTIVE,
-                    AttendanceSession.session_date == today,
+            (
+                await db.execute(
+                    select(AttendanceSession).where(
+                        AttendanceSession.status == SessionStatus.ACTIVE,
+                        AttendanceSession.session_date == today,
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         location = locations["Dar es Salaam Cybersecurity Training Area"]
         if active is None:
             active = AttendanceSession(
@@ -171,7 +234,9 @@ async def main() -> None:
         active.check_out_close = time(17, 0)
         active.late_threshold_minutes = 0
         active.permitted_radius_meters = location.radius_meters
-        active.instructions = "Complete face and location verification to record attendance."
+        active.instructions = (
+            "Complete face and location verification to record attendance."
+        )
 
         await db.execute(
             update(AttendanceSession)
@@ -179,7 +244,9 @@ async def main() -> None:
             .values(status=SessionStatus.CANCELLED)
         )
         await db.commit()
-        print("Seed complete: all active students are globally eligible for direct sessions.")
+        print(
+            "Seed complete: all active students are globally eligible for direct sessions."
+        )
 
 
 if __name__ == "__main__":

@@ -24,7 +24,6 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 
 import numpy as np
-
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
 from app.models.entities import LivenessChallengeType
@@ -33,11 +32,11 @@ logger = logging.getLogger("ccd.liveness")
 
 # MediaPipe FaceMesh canonical landmark indices
 NOSE_TIP = 1
-LEFT_EYE_OUTER = 33    # subject's left appears on image right for a selfie view
+LEFT_EYE_OUTER = 33  # subject's left appears on image right for a selfie view
 RIGHT_EYE_OUTER = 263
 
 MIN_FRAMES = 5
-FACE_PRESENCE_RATIO = 0.6   # >=60% of frames must contain exactly one face
+FACE_PRESENCE_RATIO = 0.6  # >=60% of frames must contain exactly one face
 BLINK_PEAK = 0.55
 BLINK_VALLEY = 0.35
 SMILE_THRESHOLD = 0.45
@@ -56,8 +55,9 @@ class LivenessResult:
 
 class LivenessAnalyzer(ABC):
     @abstractmethod
-    def analyze(self, frames: list[np.ndarray], challenge: LivenessChallengeType) -> LivenessResult:
-        ...
+    def analyze(
+        self, frames: list[np.ndarray], challenge: LivenessChallengeType
+    ) -> LivenessResult: ...
 
     def warm_up(self) -> None:
         """Load analyzer resources before serving verification requests."""
@@ -114,7 +114,9 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
                 num_faces=2,
                 output_face_blendshapes=True,
             )
-            self._landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(options)
+            self._landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(
+                options
+            )
             logger.info("MediaPipe Face Landmarker loaded")
             return self._landmarker
 
@@ -141,16 +143,35 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
         smile = 0.0
         if result.face_blendshapes:
             categories = {c.category_name: c.score for c in result.face_blendshapes[0]}
-            blink = max(categories.get("eyeBlinkLeft", 0.0), categories.get("eyeBlinkRight", 0.0))
-            smile = max(categories.get("mouthSmileLeft", 0.0), categories.get("mouthSmileRight", 0.0))
+            blink = max(
+                categories.get("eyeBlinkLeft", 0.0),
+                categories.get("eyeBlinkRight", 0.0),
+            )
+            smile = max(
+                categories.get("mouthSmileLeft", 0.0),
+                categories.get("mouthSmileRight", 0.0),
+            )
         yaw = _yaw_ratio(landmarks)
-        return _FrameSignals(face_count=face_count, blink=float(blink),
-                             smile=float(smile), yaw=float(yaw))
+        return _FrameSignals(
+            face_count=face_count,
+            blink=float(blink),
+            smile=float(smile),
+            yaw=float(yaw),
+        )
 
-    def analyze(self, frames: list[np.ndarray], challenge: LivenessChallengeType) -> LivenessResult:
+    def analyze(
+        self, frames: list[np.ndarray], challenge: LivenessChallengeType
+    ) -> LivenessResult:
         if len(frames) < MIN_FRAMES:
-            return LivenessResult(False, 0, ErrorCode.LIVENESS_NOT_COMPLETED,
-                                  {"reason": f"At least {MIN_FRAMES} frames required", "frames": len(frames)})
+            return LivenessResult(
+                False,
+                0,
+                ErrorCode.LIVENESS_NOT_COMPLETED,
+                {
+                    "reason": f"At least {MIN_FRAMES} frames required",
+                    "frames": len(frames),
+                },
+            )
 
         # MediaPipe's shared landmarker is not safe to invoke concurrently.
         with self._inference_lock:
@@ -167,11 +188,19 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
         }
 
         if sum(faces_ok) / len(frames) < FACE_PRESENCE_RATIO:
-            reason = ErrorCode.MULTIPLE_FACES if any(s.face_count > 1 for s in signals) else ErrorCode.NO_FACE
+            reason = (
+                ErrorCode.MULTIPLE_FACES
+                if any(s.face_count > 1 for s in signals)
+                else ErrorCode.NO_FACE
+            )
             return LivenessResult(False, 0, reason, metrics)
         if not faces_ok[-1]:
-            return LivenessResult(False, 0, ErrorCode.NO_FACE,
-                                  {**metrics, "reason": "Face missing at end of sequence"})
+            return LivenessResult(
+                False,
+                0,
+                ErrorCode.NO_FACE,
+                {**metrics, "reason": "Face missing at end of sequence"},
+            )
 
         from app.face_ai.quality import pick_sharpest
 
@@ -179,7 +208,9 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
         filtered_sharp_idx = pick_sharpest([frames[index] for index in valid_indices])
         sharp_idx = valid_indices[filtered_sharp_idx]
         near_frontal_indices = tuple(
-            index for index in valid_indices if abs(signals[index].yaw) <= LOOK_STRAIGHT_YAW
+            index
+            for index in valid_indices
+            if abs(signals[index].yaw) <= LOOK_STRAIGHT_YAW
         )
 
         # A missing face produces zero-valued signals; exclude those frames so
@@ -187,12 +218,24 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
         valid_signals = [signals[index] for index in valid_indices]
         challenge_result = self._evaluate_challenge(valid_signals, challenge)
         if not challenge_result.passed:
-            return LivenessResult(False, sharp_idx, ErrorCode.LIVENESS_FAILED,
-                                  {**metrics, **challenge_result.metrics}, near_frontal_indices)
-        return LivenessResult(True, sharp_idx, None, {**metrics, **challenge_result.metrics},
-                              near_frontal_indices)
+            return LivenessResult(
+                False,
+                sharp_idx,
+                ErrorCode.LIVENESS_FAILED,
+                {**metrics, **challenge_result.metrics},
+                near_frontal_indices,
+            )
+        return LivenessResult(
+            True,
+            sharp_idx,
+            None,
+            {**metrics, **challenge_result.metrics},
+            near_frontal_indices,
+        )
 
-    def _evaluate_challenge(self, signals: list[_FrameSignals], challenge: LivenessChallengeType) -> LivenessResult:
+    def _evaluate_challenge(
+        self, signals: list[_FrameSignals], challenge: LivenessChallengeType
+    ) -> LivenessResult:
         blinks = [s.blink for s in signals]
         yaws = [s.yaw for s in signals]
         smiles = [s.smile for s in signals]
@@ -232,7 +275,9 @@ class MediaPipeLivenessAnalyzer(LivenessAnalyzer):
         if challenge == LivenessChallengeType.LOOK_STRAIGHT:
             median_abs_yaw = float(np.median(np.abs(yaws)))
             ok = median_abs_yaw <= LOOK_STRAIGHT_YAW
-            return LivenessResult(ok, 0, None, {"median_abs_yaw": round(median_abs_yaw, 3)})
+            return LivenessResult(
+                ok, 0, None, {"median_abs_yaw": round(median_abs_yaw, 3)}
+            )
 
         return LivenessResult(False, 0, ErrorCode.LIVENESS_FAILED, {})
 
@@ -246,14 +291,25 @@ def cv2_cvt_rgb(bgr: np.ndarray) -> np.ndarray:
 class FakeLivenessAnalyzer(LivenessAnalyzer):
     """Test double: configurable pass/fail without any real CV work."""
 
-    def __init__(self, passed: bool = True, failure_reason: ErrorCode | None = None) -> None:
+    def __init__(
+        self, passed: bool = True, failure_reason: ErrorCode | None = None
+    ) -> None:
         self.passed = passed
         self.failure_reason = failure_reason
 
-    def analyze(self, frames: list[np.ndarray], challenge: LivenessChallengeType) -> LivenessResult:
+    def analyze(
+        self, frames: list[np.ndarray], challenge: LivenessChallengeType
+    ) -> LivenessResult:
         if self.passed:
-            return LivenessResult(True, 0, None, {"analyzer": "fake"}, tuple(range(len(frames))))
-        return LivenessResult(False, 0, self.failure_reason or ErrorCode.LIVENESS_FAILED, {"analyzer": "fake"})
+            return LivenessResult(
+                True, 0, None, {"analyzer": "fake"}, tuple(range(len(frames)))
+            )
+        return LivenessResult(
+            False,
+            0,
+            self.failure_reason or ErrorCode.LIVENESS_FAILED,
+            {"analyzer": "fake"},
+        )
 
 
 @lru_cache(maxsize=1)
@@ -262,6 +318,8 @@ def get_liveness_analyzer() -> LivenessAnalyzer:
         # In fake demo mode keep the real MediaPipe analyzer when weights exist;
         # fall back to auto-pass so the flow is clickable without downloads.
         if not (settings.models_dir / "face_landmarker.task").exists():
-            logger.warning("face_landmarker.task missing - FakeLivenessAnalyzer active (dev only)")
+            logger.warning(
+                "face_landmarker.task missing - FakeLivenessAnalyzer active (dev only)"
+            )
             return FakeLivenessAnalyzer(passed=True)
     return MediaPipeLivenessAnalyzer()

@@ -2,41 +2,36 @@
 
 from __future__ import annotations
 
+import uuid as _uuid
 from datetime import date, datetime
-
-from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_current_student, get_db, limiter
 from app.core.errors import ApiError, ErrorCode
-from app.models.entities import AttendanceRecord, AttendanceSession, Student, User
-from app.schemas import (
-    ActiveSessionResponse,
-    AttendanceRecordResponse,
-    AttendanceSubmitRequest,
-    LocationVerificationResponse,
-    VenueQrResponse,
-    VenueVerificationResponse,
-    VerifyLocationRequest,
-    VerifyVenueRequest,
-    StudentSummaryResponse,
-)
+from app.models.entities import (AttendanceRecord, AttendanceSession, Student,
+                                 User)
+from app.schemas import (ActiveSessionResponse, AttendanceRecordResponse,
+                         AttendanceSubmitRequest, LocationVerificationResponse,
+                         StudentSummaryResponse, VenueQrResponse,
+                         VenueVerificationResponse, VerifyLocationRequest,
+                         VerifyVenueRequest)
 from app.services.attendance_service import check_in as check_in_service
 from app.services.attendance_service import check_out as check_out_service
 from app.services.location_service import verify_location
 from app.services.session_service import find_active_session
 from app.services.venue_service import verify_venue
-
-import uuid as _uuid
+from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _resolve_device(payload_device_id, request: Request) -> _uuid.UUID | None:
     """Prefer body deviceId, fall back to X-Device-Id header."""
     if payload_device_id is not None:
         return payload_device_id
-    header = request.headers.get("x-device-id") or request.headers.get("x-registration-device")
+    header = request.headers.get("x-device-id") or request.headers.get(
+        "x-registration-device"
+    )
     if header:
         try:
             return _uuid.UUID(header.strip())
@@ -52,6 +47,7 @@ def _resolve_mac(payload_mac: str | None, request: Request) -> str | None:
     if header:
         return header.strip()
     return None
+
 
 router = APIRouter(prefix="/student/attendance", tags=["student-attendance"])
 profile_router = APIRouter(prefix="/student/profile", tags=["student-profile"])
@@ -72,7 +68,9 @@ async def student_summary(
         current_session_id=session.id if session else None,
         location_name=session.location.name if session else None,
         location_address=session.location.address if session else None,
-        permitted_radius_meters=float(session.permitted_radius_meters) if session else None,
+        permitted_radius_meters=(
+            float(session.permitted_radius_meters) if session else None
+        ),
     )
 
 
@@ -84,19 +82,29 @@ async def student_update_profile(
     db: AsyncSession = Depends(get_db),
 ):
     import logging
+
     logger = logging.getLogger("ccd.profile")
+    from app.schemas import StudentProfileUpdateRequest
     from sqlalchemy import select
     from sqlalchemy.exc import IntegrityError
-    from app.schemas import StudentProfileUpdateRequest
-    logger.info("profile patch payload=%s student=%s user=%s", payload, student.id, student.user_id)
+
+    # Do not log PII payload - only log keys
+    logger.info(
+        "profile patch keys=%s student=%s",
+        list(payload.keys()) if isinstance(payload, dict) else "unknown",
+        student.id,
+    )
     data = StudentProfileUpdateRequest.model_validate(payload)
     values = data.model_dump(exclude_unset=True, by_alias=False)
     # drop None unless it is explicit membership_id clear (empty -> None is allowed)
     # keep membership_id=None if provided, drop other Nones
     values = {k: v for k, v in values.items() if v is not None or k == "membership_id"}
-    logger.info("profile patch values=%s", values)
     if not values:
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "Provide fullName, email, membershipId or registrationNumber to update.", 422)
+        raise ApiError(
+            ErrorCode.VALIDATION_ERROR,
+            "Provide fullName, email, membershipId or registrationNumber to update.",
+            422,
+        )
     # Use explicit User model to avoid identity-map confusion with joined relationship
     user = await db.get(User, student.user_id)
     if user is None:
@@ -108,9 +116,17 @@ async def student_update_profile(
             student.user.full_name = values["full_name"]
     if "email" in values:
         # check uniqueness
-        existing = (await db.execute(select(User.id).where(User.email == values["email"], User.id != user.id))).scalar_one_or_none()
+        existing = (
+            await db.execute(
+                select(User.id).where(User.email == values["email"], User.id != user.id)
+            )
+        ).scalar_one_or_none()
         if existing is not None:
-            raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "An account already uses this email address.", 409)
+            raise ApiError(
+                ErrorCode.EMAIL_ALREADY_REGISTERED,
+                "An account already uses this email address.",
+                409,
+            )
         user.email = values["email"]
         if student.user is not user:
             student.user.email = values["email"]
@@ -119,34 +135,85 @@ async def student_update_profile(
         if new_mid is None:
             student.membership_id = None
         else:
-            existing_mid = (await db.execute(select(Student.id).where(Student.membership_id == new_mid, Student.id != student.id))).scalar_one_or_none()
+            existing_mid = (
+                await db.execute(
+                    select(Student.id).where(
+                        Student.membership_id == new_mid, Student.id != student.id
+                    )
+                )
+            ).scalar_one_or_none()
             if existing_mid is not None:
-                raise ApiError(ErrorCode.MEMBERSHIP_ID_EXISTS, "This student ID is already assigned.", 409)
+                raise ApiError(
+                    ErrorCode.MEMBERSHIP_ID_EXISTS,
+                    "This student ID is already assigned.",
+                    409,
+                )
             student.membership_id = new_mid
     if "registration_number" in values:
         new_reg = values["registration_number"]
-        existing_reg = (await db.execute(select(Student.id).where(Student.registration_number == new_reg, Student.id != student.id))).scalar_one_or_none()
+        existing_reg = (
+            await db.execute(
+                select(Student.id).where(
+                    Student.registration_number == new_reg, Student.id != student.id
+                )
+            )
+        ).scalar_one_or_none()
         if existing_reg is not None:
-            raise ApiError(ErrorCode.REGISTRATION_NUMBER_EXISTS, "This registration number is already registered.", 409)
+            raise ApiError(
+                ErrorCode.REGISTRATION_NUMBER_EXISTS,
+                "This registration number is already registered.",
+                409,
+            )
         student.registration_number = new_reg
     try:
         await db.flush()
-        logger.info("profile patch flushed user=%s full_name=%s email=%s student_mid=%s reg=%s", user.id, getattr(user, "full_name", None), getattr(user, "email", None), getattr(student, "membership_id", None), getattr(student, "registration_number", None))
+        logger.info(
+            "profile patch flushed user=%s full_name=%s email=%s student_mid=%s reg=%s",
+            user.id,
+            getattr(user, "full_name", None),
+            getattr(user, "email", None),
+            getattr(student, "membership_id", None),
+            getattr(student, "registration_number", None),
+        )
         from app.services.audit_service import audit_detached
-        await audit_detached(action="student_profile_updated", actor_user_id=user.id, entity_type="student", entity_id=student.id, details={"fields": sorted(values.keys())}, ip_address=request.client.host if request.client else None)
+
+        await audit_detached(
+            action="student_profile_updated",
+            actor_user_id=user.id,
+            entity_type="student",
+            entity_id=student.id,
+            details={"fields": sorted(values.keys())},
+            ip_address=request.client.host if request.client else None,
+        )
         await db.commit()
         logger.info("profile patch committed student=%s", student.id)
     except IntegrityError as exc:
         await db.rollback()
         detail = str(getattr(exc, "orig", exc)).lower()
         if "membership_id" in detail:
-            raise ApiError(ErrorCode.MEMBERSHIP_ID_EXISTS, "This student ID is already assigned.", 409) from exc
+            raise ApiError(
+                ErrorCode.MEMBERSHIP_ID_EXISTS,
+                "This student ID is already assigned.",
+                409,
+            ) from exc
         if "registration_number" in detail:
-            raise ApiError(ErrorCode.REGISTRATION_NUMBER_EXISTS, "This registration number is already registered.", 409) from exc
-        raise ApiError(ErrorCode.EMAIL_ALREADY_REGISTERED, "Email already in use.", 409) from exc
+            raise ApiError(
+                ErrorCode.REGISTRATION_NUMBER_EXISTS,
+                "This registration number is already registered.",
+                409,
+            ) from exc
+        raise ApiError(
+            ErrorCode.EMAIL_ALREADY_REGISTERED, "Email already in use.", 409
+        ) from exc
     await db.refresh(student)
     await db.refresh(user)
-    return {"ok": True, "fullName": user.full_name, "email": user.email, "registrationNumber": student.registration_number, "membershipId": student.membership_id}
+    return {
+        "ok": True,
+        "fullName": user.full_name,
+        "email": user.email,
+        "registrationNumber": student.registration_number,
+        "membershipId": student.membership_id,
+    }
 
 
 @profile_router.post("/change-password", response_model=None)
@@ -156,26 +223,50 @@ async def student_change_password(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
+    import re
+
     from app.core.security import hash_password, verify_password
     from app.schemas import InstructorCreateRequest  # reuse password validator
-    import re
+
     current = payload.get("currentPassword") or payload.get("current_password") or ""
     new = payload.get("newPassword") or payload.get("new_password") or ""
     confirm = payload.get("confirmPassword") or payload.get("confirm_password") or new
     if not current or not new:
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "Current and new password required.", 422)
+        raise ApiError(
+            ErrorCode.VALIDATION_ERROR, "Current and new password required.", 422
+        )
     if new != confirm:
         raise ApiError(ErrorCode.VALIDATION_ERROR, "New passwords do not match.", 422)
-    if len(new) < 8 or not re.search(r"[A-Z]", new) or not re.search(r"[a-z]", new) or not re.search(r"\d", new):
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "Use at least 8 characters with uppercase, lowercase and a number.", 422)
+    if (
+        len(new) < 8
+        or not re.search(r"[A-Z]", new)
+        or not re.search(r"[a-z]", new)
+        or not re.search(r"\d", new)
+    ):
+        raise ApiError(
+            ErrorCode.VALIDATION_ERROR,
+            "Use at least 8 characters with uppercase, lowercase and a number.",
+            422,
+        )
     user = await db.get(type(student.user), student.user_id)
     if not verify_password(current, user.password_hash):
-        raise ApiError(ErrorCode.INVALID_CREDENTIALS, "Current password is incorrect.", 401)
+        raise ApiError(
+            ErrorCode.INVALID_CREDENTIALS, "Current password is incorrect.", 401
+        )
     user.password_hash = hash_password(new)
+    # Revoke all other sessions
+    user.token_version = int(getattr(user, "token_version", 0) or 0) + 1
     await db.flush()
     await db.commit()
     from app.services.audit_service import audit_detached
-    await audit_detached(action="student_password_changed", actor_user_id=user.id, entity_type="student", entity_id=student.id, ip_address=request.client.host if request.client else None)
+
+    await audit_detached(
+        action="student_password_changed",
+        actor_user_id=user.id,
+        entity_type="student",
+        entity_id=student.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return {"ok": True}
 
 
@@ -187,7 +278,9 @@ def _session_dto(session) -> ActiveSessionResponse:
         session_id=session.id,
         title=session.title,
         instructor_id=session.instructor.id if session.instructor else None,
-        instructor_name=session.instructor.user.full_name if session.instructor else None,
+        instructor_name=(
+            session.instructor.user.full_name if session.instructor else None
+        ),
         location_name=session.location.name,
         location_address=session.location.address,
         session_date=session.session_date.isoformat(),
@@ -200,6 +293,7 @@ def _session_dto(session) -> ActiveSessionResponse:
         check_in_close_at=boundary(session.check_in_close),
         checkout_opens_at=boundary(session.expected_end),
         checkout_closes_at=boundary(session.check_out_close),
+        server_now=datetime.now(settings.campus_tz),
         late_threshold_minutes=session.late_threshold_minutes,
         status=session.status.value,
         permitted_radius_meters=float(session.permitted_radius_meters),
@@ -217,6 +311,21 @@ async def get_active_session(
     """Today's automatic campus attendance session."""
     session = await find_active_session(db)
     return _session_dto(session) if session else None
+
+
+@router.get("/server-time", response_model=None)
+async def get_server_time(
+    student: Student = Depends(get_current_student),
+):
+    """Authoritative server EAT time for client clock sync (no phone trust)."""
+    from datetime import timezone
+
+    now = datetime.now(settings.campus_tz)
+    return {
+        "serverNow": now.isoformat(),
+        "campusTimezone": settings.campus_timezone,
+        "nowUtc": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @router.post("/verify-location", response_model=LocationVerificationResponse)
@@ -245,8 +354,11 @@ async def verify_location_endpoint(
         distance_meters=record.distance_meters,
         allowed_radius_meters=record.allowed_radius_meters,
         accuracy_meters=record.accuracy_meters,
-        message=("You are inside the attendance area." if settings.gps_verification_enabled
-                 else "GPS verification is temporarily disabled."),
+        message=(
+            "You are inside the attendance area."
+            if settings.gps_verification_enabled
+            else "GPS verification is temporarily disabled."
+        ),
         location_verification_token=str(record.token),
         expires_at=record.expires_at,
     )
@@ -284,11 +396,16 @@ async def get_venue_qr(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ) -> VenueQrResponse:
-    from app.core.config import settings as _s
     from datetime import datetime, timezone
+
+    from app.core.config import settings as _s
+
     if not _s.venue_static_code_hash:
         from app.core.errors import ApiError, ErrorCode
-        raise ApiError(ErrorCode.VENUE_NOT_CONFIGURED, "Venue code not configured.", 503)
+
+        raise ApiError(
+            ErrorCode.VENUE_NOT_CONFIGURED, "Venue code not configured.", 503
+        )
     # Derive hint without leaking full code — keep for display if admin shares code separately
     # Frontend will show codeHint; QR data is revealed only after venue verification flow?
     # For static code, we return hint only; actual QR data is physical in room.
@@ -385,7 +502,9 @@ async def student_history(
     period: str = Query(default="weekly"),
     anchor: date | None = Query(default=None),
 ):
-    from app.services.report_service import build_attendance_report, parse_period
+    from app.services.report_service import (build_attendance_report,
+                                             parse_period)
+
     try:
         selected_period = parse_period(period)
     except ValueError as exc:
@@ -393,16 +512,38 @@ async def student_history(
     selected_date = anchor or datetime.now(settings.campus_tz).date()
     report = await build_attendance_report(db, selected_period, selected_date)
     # Personal filtered view - without altering global report, build personal subset
-    student_rows = [r for r in report.get("rows", []) if r.get("registrationNumber") == student.registration_number]
-    personal = next((s for s in report.get("students", []) if s.get("registrationNumber") == student.registration_number), None)
+    student_rows = [
+        r
+        for r in report.get("rows", [])
+        if r.get("registrationNumber") == student.registration_number
+    ]
+    personal = next(
+        (
+            s
+            for s in report.get("students", [])
+            if s.get("registrationNumber") == student.registration_number
+        ),
+        None,
+    )
     if personal is None and student_rows:
         # Build minimal personal from rows if report had no student entry (edge)
         present = sum(1 for r in student_rows if r.get("status") != "LATE")
         late = sum(1 for r in student_rows if r.get("status") == "LATE")
-        personal = {"days": {k:"—" for k in ["Mon","Tue","Wed","Thu","Fri"]}, "daysPresent": present, "lateDays": late}
+        personal = {
+            "days": {k: "—" for k in ["Mon", "Tue", "Wed", "Thu", "Fri"]},
+            "daysPresent": present,
+            "lateDays": late,
+        }
     if personal is None:
-        personal = {"days": {k:"—" for k in ["Mon","Tue","Wed","Thu","Fri"]}, "daysPresent":0, "lateDays":0}
+        personal = {
+            "days": {k: "—" for k in ["Mon", "Tue", "Wed", "Thu", "Fri"]},
+            "daysPresent": 0,
+            "lateDays": 0,
+        }
     # Attach filtered rows for this student (frontend expects rows)
+    # Strip global aggregations to prevent campus-wide info disclosure to any student
+    for k in ("summary", "students", "totals"):
+        report.pop(k, None)
     report["personal"] = personal
     report["rows"] = student_rows[:30]
     report["studentRows"] = student_rows[:30]
@@ -417,14 +558,24 @@ async def student_calendar(
 ):
     """Habits-style calendar: one dot per day, last N days."""
     from datetime import timedelta
+
     from app.core.config import settings as _s
+
     anchor = datetime.now(_s.campus_tz).date()
-    start = anchor - timedelta(days=days-1)
-    rows = (await db.execute(
-        select(AttendanceRecord, AttendanceSession)
-        .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
-        .where(AttendanceRecord.student_id == student.id, AttendanceSession.session_date >= start, AttendanceSession.session_date <= anchor)
-    )).all()
+    start = anchor - timedelta(days=days - 1)
+    rows = (
+        await db.execute(
+            select(AttendanceRecord, AttendanceSession)
+            .join(
+                AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id
+            )
+            .where(
+                AttendanceRecord.student_id == student.id,
+                AttendanceSession.session_date >= start,
+                AttendanceSession.session_date <= anchor,
+            )
+        )
+    ).all()
     by_date: dict[str, dict] = {}
     for rec, sess in rows:
         key = sess.session_date.isoformat()
@@ -450,8 +601,21 @@ async def student_calendar(
             calendar.append(entry)
         else:
             # skip weekends? keep all but mark none
-            calendar.append({"date": iso, "status": None, "dot": "none", "checkInAt": None, "checkOutAt": None})
-    return {"days": days, "startDate": start.isoformat(), "endDate": anchor.isoformat(), "calendar": calendar}
+            calendar.append(
+                {
+                    "date": iso,
+                    "status": None,
+                    "dot": "none",
+                    "checkInAt": None,
+                    "checkOutAt": None,
+                }
+            )
+    return {
+        "days": days,
+        "startDate": start.isoformat(),
+        "endDate": anchor.isoformat(),
+        "calendar": calendar,
+    }
 
 
 @router.get("/streak", response_model=None)
@@ -459,12 +623,16 @@ async def student_streak(
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ):
-    rows = (await db.execute(
-        select(AttendanceRecord, AttendanceSession)
-        .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
-        .where(AttendanceRecord.student_id == student.id)
-        .order_by(AttendanceSession.session_date.desc())
-    )).all()
+    rows = (
+        await db.execute(
+            select(AttendanceRecord, AttendanceSession)
+            .join(
+                AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id
+            )
+            .where(AttendanceRecord.student_id == student.id)
+            .order_by(AttendanceSession.session_date.desc())
+        )
+    ).all()
     streak = 0
     for rec, _ in rows:
         status = rec.status.value if hasattr(rec.status, "value") else str(rec.status)
@@ -472,7 +640,22 @@ async def student_streak(
             streak += 1
         else:
             break
-    present = sum(1 for r,_ in rows if (r.status.value if hasattr(r.status, "value") else str(r.status))=="PRESENT")
-    late = sum(1 for r,_ in rows if (r.status.value if hasattr(r.status, "value") else str(r.status))=="LATE")
-    checked_out = sum(1 for r,_ in rows if r.check_out_at is not None)
-    return {"streak": streak, "present": present, "late": late, "checkedOut": checked_out, "total": len(rows)}
+    present = sum(
+        1
+        for r, _ in rows
+        if (r.status.value if hasattr(r.status, "value") else str(r.status))
+        == "PRESENT"
+    )
+    late = sum(
+        1
+        for r, _ in rows
+        if (r.status.value if hasattr(r.status, "value") else str(r.status)) == "LATE"
+    )
+    checked_out = sum(1 for r, _ in rows if r.check_out_at is not None)
+    return {
+        "streak": streak,
+        "present": present,
+        "late": late,
+        "checkedOut": checked_out,
+        "total": len(rows),
+    }

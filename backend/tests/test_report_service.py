@@ -1,18 +1,12 @@
 from datetime import date, datetime, time
-
-import pytest
 from zoneinfo import ZoneInfo
 
-from app.services.report_service import (
-    _public_student_id,
-    _registration_number,
-    arrival_was_late,
-    friday_of,
-    monday_of,
-    month_span,
-    parse_period,
-    render_attendance_pdf,
-)
+import pytest
+from app.services.report_service import (_public_student_id,
+                                         _registration_number,
+                                         arrival_was_late, friday_of,
+                                         monday_of, month_span, parse_period,
+                                         render_attendance_pdf)
 
 
 def test_week_bounds_are_monday_through_friday():
@@ -72,14 +66,22 @@ def test_weekly_pdf_includes_student_weekday_matrix():
         "late": 0,
         "checkedOut": 1,
     }
-    report["students"] = [{
-        "studentName": "Asha Kileo",
-        "membershipId": "CCD-2026-016",
-        "registrationNumber": "240002",
-        "daysPresent": 2,
-        "lateDays": 0,
-        "days": {"Mon": "Present", "Tue": "Present", "Wed": "—", "Thu": "—", "Fri": "—"},
-    }]
+    report["students"] = [
+        {
+            "studentName": "Asha Kileo",
+            "membershipId": "CCD-2026-016",
+            "registrationNumber": "240002",
+            "daysPresent": 2,
+            "lateDays": 0,
+            "days": {
+                "Mon": "Present",
+                "Tue": "Present",
+                "Wed": "—",
+                "Thu": "—",
+                "Fri": "—",
+            },
+        }
+    ]
     pdf = render_attendance_pdf(report)
     assert pdf.startswith(b"%PDF")
     assert len(pdf) > 1500

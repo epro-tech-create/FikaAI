@@ -17,7 +17,6 @@ from abc import ABC, abstractmethod
 from functools import lru_cache
 
 import numpy as np
-
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
 
@@ -26,15 +25,22 @@ logger = logging.getLogger("ccd.face")
 
 class NoFaceError(ApiError):
     def __init__(self, detail: str | None = None) -> None:
-        super().__init__(ErrorCode.NO_FACE, "No face detected. Please center your face and retry.", 422,
-                         {"sample": detail} if detail else None)
+        super().__init__(
+            ErrorCode.NO_FACE,
+            "No face detected. Please center your face and retry.",
+            422,
+            {"sample": detail} if detail else None,
+        )
 
 
 class MultipleFacesError(ApiError):
     def __init__(self, detail: str | None = None) -> None:
-        super().__init__(ErrorCode.MULTIPLE_FACES,
-                         "Multiple faces detected. Only one person may be visible.", 422,
-                         {"sample": detail} if detail else None)
+        super().__init__(
+            ErrorCode.MULTIPLE_FACES,
+            "Multiple faces detected. Only one person may be visible.",
+            422,
+            {"sample": detail} if detail else None,
+        )
 
 
 def cosine_similarity(first: np.ndarray, second: np.ndarray) -> float:
@@ -67,12 +73,21 @@ class BaseFaceRecognitionService(ABC):
         buf = np.frombuffer(encoded_image, dtype=np.uint8)
         img = cv2.imdecode(buf, cv2.IMREAD_COLOR)
         if img is None:
-            raise ApiError(ErrorCode.UNSUPPORTED_MEDIA_TYPE, "Frame could not be decoded as an image.", 422)
+            raise ApiError(
+                ErrorCode.UNSUPPORTED_MEDIA_TYPE,
+                "Frame could not be decoded as an image.",
+                422,
+            )
 
         from app.face_ai.quality import assess_quality
+
         quality = assess_quality(img)
         if not quality.ok:
-            code = ErrorCode.BLURRED_IMAGE if quality.reason_code == "BLURRED_IMAGE" else ErrorCode.TOO_DARK
+            code = (
+                ErrorCode.BLURRED_IMAGE
+                if quality.reason_code == "BLURRED_IMAGE"
+                else ErrorCode.TOO_DARK
+            )
             messages = {
                 ErrorCode.BLURRED_IMAGE: "Image is blurred. Hold the camera steady.",
                 ErrorCode.TOO_DARK: "Image is too dark or washed out. Improve lighting.",
@@ -127,20 +142,30 @@ class InsightFaceRecognitionService(BaseFaceRecognitionService):
         if len(faces) == 0:
             raise NoFaceError()
         if len(faces) > 1:
-            areas = [max(0.0, float(face.bbox[2] - face.bbox[0])) * max(0.0, float(face.bbox[3] - face.bbox[1])) for face in faces]
+            areas = [
+                max(0.0, float(face.bbox[2] - face.bbox[0]))
+                * max(0.0, float(face.bbox[3] - face.bbox[1]))
+                for face in faces
+            ]
             largest_area = max(areas)
             faces = [
-                face for face, area in zip(faces, areas)
-                if largest_area > 0 and area / largest_area >= settings.face_min_relative_area
+                face
+                for face, area in zip(faces, areas)
+                if largest_area > 0
+                and area / largest_area >= settings.face_min_relative_area
             ]
             if len(faces) > 1:
                 raise MultipleFacesError()
-            logger.info("Ignored %d small secondary face detection(s)", len(areas) - len(faces))
+            logger.info(
+                "Ignored %d small secondary face detection(s)", len(areas) - len(faces)
+            )
         embedding = np.asarray(faces[0].normed_embedding, dtype=np.float32)
         return EmbeddingNormalize(embedding)
 
 
-def EmbeddingNormalize(vector: np.ndarray) -> np.ndarray:  # noqa: N802 - kept explicit for clarity
+def EmbeddingNormalize(
+    vector: np.ndarray,
+) -> np.ndarray:  # noqa: N802 - kept explicit for clarity
     norm = np.linalg.norm(vector)
     if norm == 0:
         raise ValueError("Cannot normalize a zero embedding.")
@@ -160,8 +185,12 @@ class FakeRecognitionService(BaseFaceRecognitionService):
     embedding_dim = 128
 
     def __init__(self, always_match: bool | None = None) -> None:
-        self.always_match = settings.fake_face_always_match if always_match is None else always_match
-        self._constant = EmbeddingNormalize(np.ones(self.embedding_dim, dtype=np.float32))
+        self.always_match = (
+            settings.fake_face_always_match if always_match is None else always_match
+        )
+        self._constant = EmbeddingNormalize(
+            np.ones(self.embedding_dim, dtype=np.float32)
+        )
 
     def detect_and_embed(self, bgr: np.ndarray) -> np.ndarray:
         if self.always_match:
@@ -180,4 +209,6 @@ def get_face_recognition_service() -> BaseFaceRecognitionService:
         return FakeRecognitionService()
     if provider == "insightface":
         return InsightFaceRecognitionService()
-    raise RuntimeError(f"Unknown FACE_EMBEDDING_PROVIDER '{provider}'. Use 'insightface' or 'fake'.")
+    raise RuntimeError(
+        f"Unknown FACE_EMBEDDING_PROVIDER '{provider}'. Use 'insightface' or 'fake'."
+    )

@@ -32,5 +32,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_class_groups_default_location", "class_groups", type_="foreignkey")
+    op.drop_constraint(
+        "fk_class_groups_default_location", "class_groups", type_="foreignkey"
+    )
     op.drop_column("class_groups", "default_location_id")

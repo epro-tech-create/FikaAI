@@ -1,14 +1,18 @@
-import { Link } from 'react-router-dom'
-import ThemeToggle from '../components/ThemeToggle'
+import { Link } from "react-router-dom";
+import ThemeToggle from "../components/ThemeToggle";
 
-export default function LandingPage({ instructorLoginUrl }: { instructorLoginUrl: string }) {
+export default function LandingPage({
+  instructorLoginUrl,
+}: {
+  instructorLoginUrl: string;
+}) {
   return (
     <main className="landing-shell minimal">
       <header className="landing-header">
         <Link className="brand" to="/" aria-label="CCD-Attendance home">
           CCD-<span>Attendance</span>
         </Link>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <ThemeToggle />
           <span className="landing-status">
             <i aria-hidden="true" /> Live
@@ -26,10 +30,15 @@ export default function LandingPage({ instructorLoginUrl }: { instructorLoginUrl
             <span>made effortless.</span>
           </h1>
           <p className="landing-intro">
-            The minimal <strong>attendance system</strong> for DIT. Check in with <strong>GPS geofence</strong> + <strong>live Face ID</strong> in under 15 seconds — no sheets, no proxy, private by design.
+            The minimal <strong>attendance system</strong> for DIT. Check in
+            with <strong>GPS geofence</strong> + <strong>live Face ID</strong>{" "}
+            in under 15 seconds — no sheets, no proxy, private by design.
           </p>
 
-          <div className="role-entry-grid minimal-grid" aria-label="Choose portal">
+          <div
+            className="role-entry-grid minimal-grid"
+            aria-label="Choose portal"
+          >
             <Link className="role-entry role-student minimal-entry" to="/login">
               <span className="role-number">01</span>
               <div>
@@ -51,7 +60,8 @@ export default function LandingPage({ instructorLoginUrl }: { instructorLoginUrl
           </div>
 
           <p className="landing-register">
-            New student? <Link to="/signup">Create account</Link> <span>·</span> <a href={instructorLoginUrl}>Instructor portal</a>
+            New student? <Link to="/signup">Create account</Link> <span>·</span>{" "}
+            <a href={instructorLoginUrl}>Instructor portal</a>
           </p>
 
           <div className="landing-proof minimal-proof" aria-label="features">
@@ -85,9 +95,11 @@ export default function LandingPage({ instructorLoginUrl }: { instructorLoginUrl
       <footer className="landing-footer minimal-footer">
         <span>CCD-Attendance © 2026 · DIT Cyber Club</span>
         <span>
-          <Link to="/login">Student</Link> · <a href={instructorLoginUrl}>Instructor</a> · <Link to="/signup">Sign up</Link>
+          <Link to="/login">Student</Link> ·{" "}
+          <a href={instructorLoginUrl}>Instructor</a> ·{" "}
+          <Link to="/signup">Sign up</Link>
         </span>
       </footer>
     </main>
-  )
+  );
 }

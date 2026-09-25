@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, time
+from datetime import datetime, time, timedelta
 from typing import Literal
-
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import ApiError, ErrorCode
 from app.db.session import session_factory
-from app.models.entities import AttendanceSession, AttendanceStatus, LocationType, PracticalLocation, SessionStatus
+from app.models.entities import (AttendanceSession, AttendanceStatus,
+                                 LocationType, PracticalLocation,
+                                 SessionStatus)
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 AUTOMATIC_SESSION_LOCK_KEY = 742_006_815
 
@@ -44,13 +45,10 @@ async def find_active_session(
     if session_id is None:
         return await _ensure_daily_session(now_campus)
 
-    stmt = (
-        select(AttendanceSession)
-        .where(
-            AttendanceSession.id == session_id,
-            AttendanceSession.status == SessionStatus.ACTIVE,
-            AttendanceSession.session_date == now_campus.today,
-        )
+    stmt = select(AttendanceSession).where(
+        AttendanceSession.id == session_id,
+        AttendanceSession.status == SessionStatus.ACTIVE,
+        AttendanceSession.session_date == now_campus.today,
     )
     result = await db.execute(stmt.limit(1))
     return result.scalar_one_or_none()
@@ -152,8 +150,16 @@ async def get_active_session_or_error(
             found = await db.get(AttendanceSession, session_id)
             if found is None:
                 raise ApiError(ErrorCode.NOT_FOUND, "Session not found.", 404)
-            raise ApiError(ErrorCode.SESSION_INACTIVE, "This attendance session is no longer active today.", 409)
-        raise ApiError(ErrorCode.NO_ACTIVE_SESSION, "There is currently no active attendance session.", 404)
+            raise ApiError(
+                ErrorCode.SESSION_INACTIVE,
+                "This attendance session is no longer active today.",
+                409,
+            )
+        raise ApiError(
+            ErrorCode.NO_ACTIVE_SESSION,
+            "There is currently no active attendance session.",
+            404,
+        )
     return session
 
 
@@ -171,9 +177,17 @@ async def update_session_hours(
     if session is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Session not found.", 404)
     if check_in_open >= check_in_close:
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "Check-in open must be before check-in close.", 422)
+        raise ApiError(
+            ErrorCode.VALIDATION_ERROR,
+            "Check-in open must be before check-in close.",
+            422,
+        )
     if expected_end >= check_out_close:
-        raise ApiError(ErrorCode.VALIDATION_ERROR, "Checkout open must be before checkout close.", 422)
+        raise ApiError(
+            ErrorCode.VALIDATION_ERROR,
+            "Checkout open must be before checkout close.",
+            422,
+        )
     session.check_in_open = check_in_open
     session.official_start = official_start
     session.check_in_close = check_in_close
@@ -190,7 +204,11 @@ def validate_window(
 ) -> None:
     clock = now_campus or campus_now()
     if clock.today != session.session_date:
-        raise ApiError(ErrorCode.SESSION_INACTIVE, "This attendance session is not scheduled today.", 409)
+        raise ApiError(
+            ErrorCode.SESSION_INACTIVE,
+            "This attendance session is not scheduled today.",
+            409,
+        )
 
     if purpose == "check_in":
         if clock.now_time < session.check_in_open:
@@ -231,6 +249,8 @@ def classify_check_in(
     )
     deadline = official_start + timedelta(minutes=session.late_threshold_minutes)
     if clock.now_local >= deadline:
-        minutes_late = max(0, int((clock.now_local - official_start).total_seconds() // 60))
+        minutes_late = max(
+            0, int((clock.now_local - official_start).total_seconds() // 60)
+        )
         return AttendanceStatus.LATE, minutes_late
     return AttendanceStatus.PRESENT, 0
