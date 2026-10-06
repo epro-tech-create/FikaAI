@@ -262,16 +262,38 @@ export default function ReportsPage({
 
   function buildParams(date = reportDate, selectedPeriod = period) {
     const params: Record<string, string> = { period: selectedPeriod };
-    if (selectedPeriod === "monthly" && monthInput) {
-      params.date = `${monthInput}-15`;
-    } else if (date) {
-      params.date = date;
+    if (selectedPeriod === "monthly") {
+      // Two-day range wins: e.g. From 10th Aug To 21st Sept -> custom range grouped by month
+      if (startInput && endInput) {
+        params.period = "custom";
+        params.startDate = startInput;
+        params.endDate = endInput;
+      } else if (monthInput) {
+        params.date = `${monthInput}-15`;
+      } else if (date) {
+        params.date = date;
+      }
+    } else {
+      if (date) params.date = date;
     }
     if (selectedPeriod === "custom") {
       if (startInput) params.startDate = startInput;
       if (endInput) params.endDate = endInput;
     }
     return params;
+  }
+
+  function pickMonth(value: string) {
+    setMonthInput(value);
+    if (value) {
+      const [y, m] = value.split("-").map(Number);
+      if (y && m) {
+        const last = new Date(y, m, 0).getDate();
+        const mm = String(m).padStart(2, "0");
+        setStartInput(`${y}-${mm}-01`);
+        setEndInput(`${y}-${mm}-${String(last).padStart(2, "0")}`);
+      }
+    }
   }
 
   async function load(date = reportDate, selectedPeriod = period) {
@@ -526,14 +548,37 @@ export default function ReportsPage({
           ))}
         </div>
         {period === "monthly" ? (
-          <label>
-            Month
-            <input
-              type="month"
-              value={monthInput}
-              onChange={(e) => setMonthInput(e.target.value)}
-            />
-          </label>
+          <>
+            <label>
+              Month (fills the range)
+              <input
+                type="month"
+                value={monthInput}
+                onChange={(e) => pickMonth(e.target.value)}
+              />
+            </label>
+            <label>
+              From
+              <input
+                type="date"
+                value={startInput}
+                max={endInput || undefined}
+                onChange={(e) => setStartInput(e.target.value)}
+              />
+            </label>
+            <label>
+              To
+              <input
+                type="date"
+                value={endInput}
+                min={startInput || undefined}
+                onChange={(e) => setEndInput(e.target.value)}
+              />
+            </label>
+            <span style={{ fontSize: 12, opacity: 0.7, alignSelf: "center" }}>
+              Pick any range, e.g. 10th Aug to 21st Sept — days group by month.
+            </span>
+          </>
         ) : period === "custom" ? (
           <>
             <label>
@@ -573,7 +618,10 @@ export default function ReportsPage({
           disabled={
             loading ||
             (period === "custom" && (!startInput || !endInput)) ||
-            (period === "monthly" && !monthInput && !reportDate)
+            (period === "monthly" &&
+              !monthInput &&
+              !reportDate &&
+              !(startInput && endInput))
           }
           onClick={() => void load()}
         >
