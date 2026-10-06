@@ -500,16 +500,28 @@ export default function ReportsPage({
           role="tablist"
           aria-label="Report period"
         >
-          {(["daily", "weekly", "monthly", "custom"] as const).map((item) => (
+          {(
+            [
+              { key: "daily", label: "Daily" },
+              { key: "weekly", label: "Weekly" },
+              { key: "monthly", label: "Monthly" },
+              { key: "custom", label: "Days range" },
+            ] as const
+          ).map((item) => (
             <button
-              key={item}
+              key={item.key}
               type="button"
               role="tab"
-              aria-selected={period === item}
-              className={period === item ? "is-active" : ""}
-              onClick={() => changePeriod(item)}
+              aria-selected={period === item.key}
+              className={period === item.key ? "is-active" : ""}
+              onClick={() => changePeriod(item.key)}
+              title={
+                item.key === "custom"
+                  ? "Pick any From–To dates, e.g. 10th Aug to 21st Sept. Days are grouped by month."
+                  : undefined
+              }
             >
-              {item}
+              {item.label}
             </button>
           ))}
         </div>
@@ -525,21 +537,26 @@ export default function ReportsPage({
         ) : period === "custom" ? (
           <>
             <label>
-              From
+              From (e.g. 10th Aug)
               <input
                 type="date"
                 value={startInput}
+                max={endInput || undefined}
                 onChange={(e) => setStartInput(e.target.value)}
               />
             </label>
             <label>
-              To
+              To (e.g. 21st Sept)
               <input
                 type="date"
                 value={endInput}
+                min={startInput || undefined}
                 onChange={(e) => setEndInput(e.target.value)}
               />
             </label>
+            <span style={{ fontSize: 12, opacity: 0.7, alignSelf: "center" }}>
+              Days are arranged monthly with month names on top.
+            </span>
           </>
         ) : (
           <label>
@@ -636,8 +653,9 @@ export default function ReportsPage({
                         colSpan={g.span}
                         style={{
                           textAlign: "center",
-                          background: "#0b1520",
-                          color: "#fff",
+                          background: "#ffffff",
+                          color: "#0f172a",
+                          borderBottom: "1px solid var(--line)",
                         }}
                       >
                         {g.month}

@@ -40,6 +40,9 @@ MUTED = colors.HexColor("#475569")
 LINE = colors.HexColor("#dbe7f0")
 ROW_ALT = colors.HexColor("#f3f8fc")
 HEADER_BG = colors.HexColor("#0b1520")
+# White table headers (no black boxes) — header row is white with dark text
+TABLE_HEADER_BG = colors.white
+TABLE_HEADER_TEXT = INK
 
 
 def monday_of(day: date) -> date:
@@ -591,7 +594,7 @@ def render_student_pdf(report: dict[str, Any]) -> bytes:
         "CcdHeader",
         fontName="Helvetica-Bold",
         fontSize=8,
-        textColor=colors.white,
+        textColor=TABLE_HEADER_TEXT,
         leading=10,
     )
     header_center = ParagraphStyle(
@@ -600,15 +603,15 @@ def render_student_pdf(report: dict[str, Any]) -> bytes:
 
     def draw_chrome(canvas, doc) -> None:
         canvas.saveState()
-        canvas.setFillColor(HEADER_BG)
+        canvas.setFillColor(colors.white)
         canvas.rect(0, pagesize[1] - 28 * mm, pagesize[0], 28 * mm, fill=1, stroke=0)
         canvas.setFillColor(BLUE_SOFT)
         canvas.rect(0, pagesize[1] - 29.2 * mm, pagesize[0], 1.4 * mm, fill=1, stroke=0)
-        canvas.setFillColor(colors.white)
+        canvas.setFillColor(INK)
         canvas.setFont("Helvetica-Bold", 14)
         canvas.drawString(16 * mm, pagesize[1] - 14 * mm, "CCD-Attendance")
         canvas.setFont("Helvetica", 9)
-        canvas.setFillColor(colors.HexColor("#9ec9ea"))
+        canvas.setFillColor(MUTED)
         canvas.drawString(
             16 * mm,
             pagesize[1] - 20 * mm,
@@ -701,9 +704,9 @@ def render_student_pdf(report: dict[str, Any]) -> bytes:
     table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, ROW_ALT]),
+                ("BACKGROUND", (0, 0), (-1, 0), TABLE_HEADER_BG),
+                ("TEXTCOLOR", (0, 0), (-1, 0), TABLE_HEADER_TEXT),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.white]),
                 ("BOX", (0, 0), (-1, -1), 0.4, LINE),
                 ("INNERGRID", (0, 0), (-1, -1), 0.25, LINE),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -749,7 +752,7 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
         "CcdHeader",
         fontName="Helvetica-Bold",
         fontSize=8,
-        textColor=colors.white,
+        textColor=TABLE_HEADER_TEXT,
         leading=10,
     )
     header_center = ParagraphStyle(
@@ -758,15 +761,15 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
 
     def draw_chrome(canvas, doc) -> None:
         canvas.saveState()
-        canvas.setFillColor(HEADER_BG)
+        canvas.setFillColor(colors.white)
         canvas.rect(0, pagesize[1] - 28 * mm, pagesize[0], 28 * mm, fill=1, stroke=0)
         canvas.setFillColor(BLUE_SOFT)
         canvas.rect(0, pagesize[1] - 29.2 * mm, pagesize[0], 1.4 * mm, fill=1, stroke=0)
-        canvas.setFillColor(colors.white)
+        canvas.setFillColor(INK)
         canvas.setFont("Helvetica-Bold", 14)
         canvas.drawString(16 * mm, pagesize[1] - 14 * mm, "CCD-Attendance")
         canvas.setFont("Helvetica", 9)
-        canvas.setFillColor(colors.HexColor("#9ec9ea"))
+        canvas.setFillColor(MUTED)
         canvas.drawString(
             16 * mm,
             pagesize[1] - 20 * mm,
@@ -936,10 +939,10 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
             table.setStyle(
                 TableStyle(
                     [
-                        ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
-                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("BACKGROUND", (0, 0), (-1, 0), TABLE_HEADER_BG),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), TABLE_HEADER_TEXT),
                         ("BACKGROUND", (0, 1), (-1, -1), colors.white),
-                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, ROW_ALT]),
+                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.white]),
                         ("BOX", (0, 0), (-1, -1), 0.4, LINE),
                         ("INNERGRID", (0, 0), (-1, -1), 0.25, LINE),
                         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -1036,10 +1039,10 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
             widths = [name_w, id_w, *[day_w] * len(chunk), tot_w]
             table = Table(table_data, colWidths=widths, repeatRows=2)
             style_cmds: list[Any] = [
-                ("BACKGROUND", (0, 0), (-1, 1), HEADER_BG),
-                ("TEXTCOLOR", (0, 0), (-1, 1), colors.white),
+                ("BACKGROUND", (0, 0), (-1, 1), TABLE_HEADER_BG),
+                ("TEXTCOLOR", (0, 0), (-1, 1), TABLE_HEADER_TEXT),
                 ("BACKGROUND", (0, 2), (-1, -1), colors.white),
-                ("ROWBACKGROUNDS", (0, 2), (-1, -1), [colors.white, ROW_ALT]),
+                ("ROWBACKGROUNDS", (0, 2), (-1, -1), [colors.white, colors.white]),
                 ("BOX", (0, 0), (-1, -1), 0.4, LINE),
                 ("INNERGRID", (0, 0), (-1, -1), 0.25, LINE),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -1136,10 +1139,10 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
     table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("BACKGROUND", (0, 0), (-1, 0), TABLE_HEADER_BG),
+                ("TEXTCOLOR", (0, 0), (-1, 0), TABLE_HEADER_TEXT),
                 ("BACKGROUND", (0, 1), (-1, -1), colors.white),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, ROW_ALT]),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.white]),
                 ("BOX", (0, 0), (-1, -1), 0.4, LINE),
                 ("INNERGRID", (0, 0), (-1, -1), 0.25, LINE),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
