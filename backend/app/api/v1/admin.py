@@ -16,8 +16,10 @@ from app.schemas import (InstructorCreateRequest, InstructorUpdateRequest,
                          SessionHoursUpdate, SessionResponse,
                          StudentAdminCreateRequest, StudentAdminUpdateRequest,
                          VenueQrResponse)
-from app.services.report_service import (build_attendance_report, parse_period,
+from app.services.report_service import (build_attendance_report,
+                                         build_student_report, parse_period,
                                          render_attendance_pdf,
+                                         render_student_pdf,
                                          weekly_attendance_series)
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import func, select
@@ -1036,6 +1038,8 @@ async def reports_summary(db: AsyncSession = Depends(get_db)) -> dict:
 async def attendance_report(
     report_date: date | None = Query(default=None, alias="date"),
     period: str = Query(default="daily"),
+    start_date: date | None = Query(default=None, alias="startDate"),
+    end_date: date | None = Query(default=None, alias="endDate"),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     try:
@@ -1043,13 +1047,20 @@ async def attendance_report(
     except ValueError as error:
         raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
     selected_date = report_date or datetime.now(settings.campus_tz).date()
-    return await build_attendance_report(db, selected_period, selected_date)
+    try:
+        return await build_attendance_report(
+            db, selected_period, selected_date, start_date, end_date
+        )
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
 
 
 @router.get("/reports/attendance.pdf", response_model=None)
 async def attendance_report_pdf(
     report_date: date | None = Query(default=None, alias="date"),
     period: str = Query(default="daily"),
+    start_date: date | None = Query(default=None, alias="startDate"),
+    end_date: date | None = Query(default=None, alias="endDate"),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     try:
@@ -1057,10 +1068,69 @@ async def attendance_report_pdf(
     except ValueError as error:
         raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
     selected_date = report_date or datetime.now(settings.campus_tz).date()
-    report = await build_attendance_report(db, selected_period, selected_date)
-    filename = f"ccd-attendance-{period}-{report['startDate']}.pdf"
+    try:
+        report = await build_attendance_report(
+            db, selected_period, selected_date, start_date, end_date
+        )
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+    filename = (
+        f"ccd-attendance-{period}-{report['startDate']}-to-{report['endDate']}.pdf"
+    )
     return Response(
         content=render_attendance_pdf(report),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/reports/student/{student_id}", response_model=None)
+async def student_report(
+    student_id: uuid.UUID,
+    report_date: date | None = Query(default=None, alias="date"),
+    period: str = Query(default="monthly"),
+    start_date: date | None = Query(default=None, alias="startDate"),
+    end_date: date | None = Query(default=None, alias="endDate"),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    try:
+        selected_period = parse_period(period)
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+    selected_date = report_date or datetime.now(settings.campus_tz).date()
+    try:
+        return await build_student_report(
+            db, student_id, selected_period, selected_date, start_date, end_date
+        )
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+
+
+@router.get("/reports/student/{student_id}.pdf", response_model=None)
+async def student_report_pdf(
+    student_id: uuid.UUID,
+    report_date: date | None = Query(default=None, alias="date"),
+    period: str = Query(default="monthly"),
+    start_date: date | None = Query(default=None, alias="startDate"),
+    end_date: date | None = Query(default=None, alias="endDate"),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    try:
+        selected_period = parse_period(period)
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+    selected_date = report_date or datetime.now(settings.campus_tz).date()
+    try:
+        report = await build_student_report(
+            db, student_id, selected_period, selected_date, start_date, end_date
+        )
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+    filename = (
+        f"ccd-student-{student_id}-{report['startDate']}-to-{report['endDate']}.pdf"
+    )
+    return Response(
+        content=render_student_pdf(report),
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

@@ -25,7 +25,7 @@ describe("getLocation", () => {
         window.setTimeout(
           () =>
             success({
-              coords: { latitude: -6.81, longitude: 39.28, accuracy: 90 },
+              coords: { latitude: -6.81, longitude: 39.28, accuracy: 180 },
               timestamp: Date.now(),
             } as GeolocationPosition),
           1,
@@ -54,7 +54,7 @@ describe("getLocation", () => {
     expect(watchPosition).toHaveBeenCalledWith(
       expect.any(Function),
       expect.any(Function),
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 },
     );
     expect(clearWatch).toHaveBeenCalledWith(7);
   });
@@ -65,7 +65,7 @@ describe("getLocation", () => {
       .fn()
       .mockImplementation((success: PositionCallback) => {
         success({
-          coords: { latitude: -6.8138, longitude: 39.2801, accuracy: 120 },
+          coords: { latitude: -6.8138, longitude: 39.2801, accuracy: 180 },
           timestamp: Date.now(),
         } as GeolocationPosition);
         return 8;
@@ -75,11 +75,11 @@ describe("getLocation", () => {
     });
 
     const location = getLocation();
-    await vi.advanceTimersByTimeAsync(20_000);
-    await expect(location).resolves.toMatchObject({ accuracyMeters: 120 });
+    await vi.advanceTimersByTimeAsync(30_000);
+    await expect(location).resolves.toMatchObject({ accuracyMeters: 180 });
   });
 
-  it("retries without high accuracy after iPhone permission denial", async () => {
+  it("shows permission help immediately on denial (no blind retry)", async () => {
     const watchPosition = vi
       .fn()
       .mockImplementationOnce(
@@ -90,6 +90,29 @@ describe("getLocation", () => {
             POSITION_UNAVAILABLE: 2,
             TIMEOUT: 3,
             message: "denied",
+          } as GeolocationPositionError);
+          return 1;
+        },
+      );
+    vi.stubGlobal("navigator", {
+      geolocation: { watchPosition, clearWatch: vi.fn() },
+    });
+
+    await expect(getLocation()).rejects.toThrow(/blocked|denied|Location/i);
+    expect(watchPosition).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries without high accuracy after transient GPS error", async () => {
+    const watchPosition = vi
+      .fn()
+      .mockImplementationOnce(
+        (_success: PositionCallback, error: PositionErrorCallback) => {
+          error({
+            code: 2,
+            PERMISSION_DENIED: 1,
+            POSITION_UNAVAILABLE: 2,
+            TIMEOUT: 3,
+            message: "unavailable",
           } as GeolocationPositionError);
           return 1;
         },
