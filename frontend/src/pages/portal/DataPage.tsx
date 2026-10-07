@@ -149,7 +149,7 @@ export default function DataPage({ config }: { config: DataPageConfig }) {
             <button className="secondary-button" onClick={deleteAll}>
               Delete older than 30 days
             </button>
-            <small style={{ color: "#64748b" }}>
+            <small style={{ color: "var(--muted)" }}>
               Uses DELETE /admin/audit-logs?before=YYYY-MM-DD
             </small>
           </div>
@@ -201,7 +201,7 @@ export default function DataPage({ config }: { config: DataPageConfig }) {
               }
             />
             {isAuditLogs && (
-              <p style={{ marginTop: 8, fontSize: 12, color: "#94a3b8" }}>
+              <p style={{ marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
                 Tip: search then delete one by one, or bulk delete by date
                 above.
               </p>

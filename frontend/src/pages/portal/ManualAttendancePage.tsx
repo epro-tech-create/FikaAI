@@ -27,14 +27,13 @@ const fieldStyle: CSSProperties = {
   width: "100%",
   padding: "11px 10px",
   borderRadius: 8,
-  background: "#0f172a",
-  color: "#f1f5f9",
-  border: "1px solid #334155",
+  background: "var(--input)",
+  color: "var(--text)",
+  border: "1px solid var(--line)",
   minWidth: 0,
-  colorScheme: "dark",
 };
 const labelStyle: CSSProperties = {
-  color: "#cbd5e1",
+  color: "var(--muted)",
   fontSize: 13,
   display: "grid",
   gap: 6,
@@ -303,12 +302,14 @@ export default function ManualAttendancePage({
         className="content-card"
         style={{ marginBottom: 16, padding: 20, overflow: "visible" }}
       >
-        <h4 style={{ margin: "0 0 8px", color: "#f1f5f9", lineHeight: 1.4 }}>
+        <h4
+          style={{ margin: "0 0 8px", color: "var(--text)", lineHeight: 1.4 }}
+        >
           Session hours
         </h4>
         <p
           style={{
-            color: "#cbd5e1",
+            color: "var(--muted)",
             fontSize: 13,
             lineHeight: 1.6,
             margin: "0 0 14px",
@@ -400,7 +401,9 @@ export default function ManualAttendancePage({
         className="content-card"
         style={{ marginBottom: 16, padding: 20, overflow: "visible" }}
       >
-        <h4 style={{ margin: "0 0 14px", color: "#f1f5f9", lineHeight: 1.4 }}>
+        <h4
+          style={{ margin: "0 0 14px", color: "var(--text)", lineHeight: 1.4 }}
+        >
           One student — set times
         </h4>
         <div
@@ -499,7 +502,7 @@ export default function ManualAttendancePage({
         </div>
         <small
           style={{
-            color: "#94a3b8",
+            color: "var(--muted)",
             marginTop: 10,
             display: "block",
             lineHeight: 1.5,
@@ -514,12 +517,14 @@ export default function ManualAttendancePage({
         className="content-card"
         style={{ padding: 20, overflow: "visible" }}
       >
-        <h4 style={{ margin: "0 0 8px", color: "#f1f5f9", lineHeight: 1.4 }}>
+        <h4
+          style={{ margin: "0 0 8px", color: "var(--text)", lineHeight: 1.4 }}
+        >
           Excuse / acceptable reason
         </h4>
         <p
           style={{
-            color: "#cbd5e1",
+            color: "var(--muted)",
             fontSize: 13,
             lineHeight: 1.7,
             marginBottom: 14,

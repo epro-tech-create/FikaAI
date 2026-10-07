@@ -90,7 +90,9 @@ export default function LocationSettingsPage({
         className="content-card"
         style={{ padding: 20, overflow: "visible" }}
       >
-        <h4 style={{ margin: "0 0 10px", color: "#f1f5f9", lineHeight: 1.4 }}>
+        <h4
+          style={{ margin: "0 0 10px", color: "var(--text)", lineHeight: 1.4 }}
+        >
           Current:{" "}
           {mode === "strict"
             ? "Configured location (strict)"
@@ -98,7 +100,7 @@ export default function LocationSettingsPage({
         </h4>
         <p
           style={{
-            color: "#cbd5e1",
+            color: "var(--muted)",
             fontSize: 13,
             marginBottom: 16,
             lineHeight: 1.7,
@@ -109,28 +111,9 @@ export default function LocationSettingsPage({
           Strict = student must be inside RAFIC geofence (default). Any = skip
           GPS distance check, only venue/face needed. Toggle is live, resets on
           backend restart; set{" "}
-          <code
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              padding: "3px 6px",
-              borderRadius: 4,
-              wordBreak: "break-all",
-            }}
-          >
-            GPS_VERIFICATION_ENABLED
-          </code>{" "}
-          in{" "}
-          <code
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              padding: "3px 6px",
-              borderRadius: 4,
-              wordBreak: "break-all",
-            }}
-          >
-            .env.production
-          </code>{" "}
-          for persistent default.
+          <code className="inline-code">GPS_VERIFICATION_ENABLED</code> in{" "}
+          <code className="inline-code">.env.production</code> for persistent
+          default.
         </p>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button

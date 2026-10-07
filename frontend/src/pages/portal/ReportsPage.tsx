@@ -533,12 +533,8 @@ export default function ReportsPage({
                     <th
                       key={g.month}
                       colSpan={g.span}
-                      style={{
-                        textAlign: "center",
-                        background: "#ffffff",
-                        color: "#0f172a",
-                        borderBottom: "1px solid var(--line)",
-                      }}
+                      className="matrix-month"
+                      style={{ textAlign: "center" }}
                     >
                       {g.month}
                     </th>
