@@ -223,7 +223,7 @@ export default function ReportsPage({
           <div className="report-panel-heading">
             <span className="report-section-label">SELECTED PERIOD</span>
             <h2>Monthly report</h2>
-            <p>Choose a month, then download the complete report.</p>
+            <p>Choose your reporting month and download as Excel or PDF.</p>
           </div>
           <form className="report-controls" onSubmit={(event) => { event.preventDefault(); void load(); }}>
             <label>
@@ -245,7 +245,8 @@ export default function ReportsPage({
         <div className="content-card report-download-history">
           <span className="report-history-label">COMPLETE HISTORY</span>
           <h2>All days, one download</h2>
-          <p>Every month, student totals and detailed attendance records in one Excel workbook.</p>
+          <p>Download the complete attendance history in one Excel workbook.</p>
+          <ul className="report-includes" aria-label="Included in the full report"><li>All months</li><li>Student totals</li><li>Attendance %</li></ul>
           <button type="button" className="secondary-button" disabled={downloading} onClick={() => void downloadExcel(true)}>Export all days (Excel)</button>
         </div>
       </section>

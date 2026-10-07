@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Figtree:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
 
 :root {
   --bg: #070c10;
@@ -6126,4 +6126,125 @@ nav a:hover,
   .home-day-chips {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* Solid management portals: shared by admin and instructor. */
+.portal-shell {
+  --bg: #0b1017;
+  --panel: #131c27;
+  --panel-2: #192432;
+  --line: #2a394b;
+  --text: #edf2f7;
+  --muted: #a1b0c2;
+  --input: #101822;
+  --surface: #101822;
+  --card: #131c27;
+  --glass: var(--panel);
+  --glass-strong: var(--panel);
+  --glass-subtle: var(--panel-2);
+  --glass-highlight: none;
+  background: var(--bg);
+  color: var(--text);
+}
+[data-theme="light"] .portal-shell {
+  --bg: #f3f6fa;
+  --panel: #ffffff;
+  --panel-2: #f8fafc;
+  --line: #dce4ed;
+  --text: #172536;
+  --muted: #526378;
+  --input: #ffffff;
+  --surface: #f8fafc;
+  --card: #ffffff;
+}
+.portal-shell,
+.portal-shell * { font-family: "Figtree", sans-serif !important; }
+.portal-shell * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+.portal-shell :is(h1, h2, h3, h4, h5, h6),
+.portal-shell :is(h1, h2, h3, h4, h5, h6) *,
+.portal-shell .brand *,
+.portal-shell .portal-heading h1,
+.portal-shell .brand,
+.portal-shell .portal-topbar b,
+.portal-shell .card-toolbar b,
+.portal-shell .stat-card strong {
+  font-family: "Outfit", sans-serif !important;
+  letter-spacing: -0.02em;
+}
+.portal-shell :is(.panel, .content-card, .stat-card, .training-strip, .portal-sidebar, .portal-topbar, .portal-dialog, .face-id-shell, .glass) {
+  background: var(--panel) !important;
+  border-color: var(--line) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+.portal-shell :is(.panel, .content-card, .stat-card, .glass)::before,
+.portal-shell .stat-card::after { display: none; }
+.portal-shell .portal-dialog-backdrop {
+  background: #0009;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.portal-shell .portal-primary {
+  background: #1976d2 !important;
+  color: #fff !important;
+  box-shadow: none;
+}
+.portal-shell .portal-primary:hover { background: #1565b5 !important; }
+.portal-shell :is(.secondary-button, .toolbar-refresh) {
+  background: var(--panel-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+.portal-shell :is(.portal-heading > div > span, .report-controls label, .report-history-label) { color: var(--muted); }
+.portal-shell .reports-page { max-width: 1440px; }
+.portal-shell .reports-page .portal-heading { margin-bottom: 26px; }
+.portal-shell .reports-page .portal-heading h1 { font-weight: 600; }
+.portal-shell .report-download-panel { gap: 20px; align-items: stretch; }
+.portal-shell .report-download-main,
+.portal-shell .report-download-history { padding: 26px; border-radius: 14px; }
+.portal-shell .report-download-history { justify-content: flex-start; gap: 14px; }
+.portal-shell .report-download-history > button { margin-top: auto; width: 100%; }
+.portal-shell .report-download-history h2,
+.portal-shell .report-panel-heading h2 { font-size: 22px; font-weight: 600; }
+.portal-shell .report-includes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  margin: 2px 0 14px;
+  list-style: none;
+}
+.portal-shell .report-includes li {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 9px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.portal-shell .reports-page .report-controls { gap: 12px; margin: 22px 0; }
+.portal-shell .reports-page .report-controls label { flex: 1; max-width: 280px; font-size: 12px; }
+.portal-shell .reports-page .report-controls input {
+  background: var(--input);
+  border-color: var(--line);
+  color: var(--text);
+  font-size: 14px;
+  min-width: 0;
+  width: 100%;
+}
+.portal-shell .reports-page .report-download-footer { align-items: center; }
+.portal-shell .reports-page .report-download-footer > p { color: var(--text); font-weight: 500; }
+.portal-shell .report-range-label { color: var(--muted); font-weight: 400; }
+.portal-shell .reports-page .card-toolbar b { font-size: 18px; font-weight: 600; }
+.portal-shell .reports-page .table-search input { background: var(--input); color: var(--text); border-color: var(--line); }
+.portal-shell .reports-page .table-search input::placeholder { color: var(--muted); }
+.portal-shell .reports-page .portal-table th { background: var(--panel-2); color: var(--muted); font-size: 12px; }
+.portal-shell .reports-page .portal-table td { border-color: var(--line); font-size: 14px; }
+.portal-shell .reports-page .report-student-email { color: var(--muted); }
+.portal-shell .reports-page .report-student-table .secondary-button { min-height: 36px; font-size: 12px; }
+@media (max-width: 600px) {
+  .portal-shell .report-download-main,
+  .portal-shell .report-download-history { padding: 20px; }
+  .portal-shell .reports-page .report-controls label { max-width: none; }
+  .portal-shell .reports-page .report-download-footer { align-items: stretch; }
 }
