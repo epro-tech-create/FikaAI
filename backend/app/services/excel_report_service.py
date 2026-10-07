@@ -34,7 +34,7 @@ def render_attendance_excel(report: dict) -> bytes:
             ["Timezone", report["timezone"]],
             *[[key, value] for key, value in report["summary"].items()],
             ["Legend", "Present / Late / Excused / — = Absent"],
-            ["Attendance %", "Days present (including late arrivals) / calendar days in the report × 100"],
+            ["Attendance %", "Days present (including late arrivals) / weekdays (Monday–Friday) in the report × 100"],
         ]).set_column(1, 1, 65)
 
         students = report.get("students", [])

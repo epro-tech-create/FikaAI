@@ -192,7 +192,8 @@ def _enumerate_days(start: date, end: date) -> list[date]:
     days: list[date] = []
     cur = start
     while cur <= end:
-        days.append(cur)
+        if cur.weekday() < 5:
+            days.append(cur)
         cur += timedelta(days=1)
     return days
 
@@ -227,7 +228,8 @@ async def _records_between(
             Student.registration_number,
         )
     )
-    return list(result.all())
+    # Weekends are excluded from both detail rows and attendance totals.
+    return [row for row in result.all() if row[1].session_date.weekday() < 5]
 
 
 async def weekly_attendance_series(db: AsyncSession, week_of: date) -> dict[str, Any]:
@@ -272,6 +274,7 @@ async def _report_window(
         first, last = (await db.execute(
             select(func.min(AttendanceSession.session_date), func.max(AttendanceSession.session_date))
             .where(AttendanceSession.session_date <= anchor)
+            .where(func.extract("isodow", AttendanceSession.session_date) <= 5)
         )).one()
         start, end = first or anchor, last or anchor
         title = f"Full attendance · {start.isoformat()} – {end.isoformat()}"
@@ -684,7 +687,7 @@ def render_student_pdf(report: dict[str, Any]) -> bytes:
         )
     )
     story.append(t)
-    story.append(Paragraph("Attendance % = days present (including late arrivals) / all calendar days in the report × 100.", body_style))
+    story.append(Paragraph("Attendance % = days present (including late arrivals) / weekdays (Monday–Friday) in the report × 100.", body_style))
     story.append(Spacer(1, 6 * mm))
     story.append(Paragraph("Day-by-day attendance", heading_style))
     header = ["Date", "Month", "Status", "Arrival", "Checkout"]
@@ -853,7 +856,7 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
     story.append(stats_table)
     story.append(Spacer(1, 8 * mm))
 
-    story.append(Paragraph("Attendance % = days present (including late arrivals) / all calendar days in the report × 100.", body_style))
+    story.append(Paragraph("Attendance % = days present (including late arrivals) / weekdays (Monday–Friday) in the report × 100.", body_style))
     identity_cols = 3
     if period == "weekly":
         story.append(Paragraph("Student attendance by weekday", heading_style))

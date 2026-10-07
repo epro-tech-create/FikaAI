@@ -22,6 +22,30 @@ def test_month_span_covers_full_calendar_month():
     assert month_span(date(2024, 2, 29)) == (date(2024, 2, 1), date(2024, 2, 29))
 
 
+def test_report_dates_exclude_weekends_and_use_weekday_percentage():
+    from app.services.report_service import _enumerate_days, attendance_day_summary
+    days = _enumerate_days(date(2026, 9, 1), date(2026, 9, 30))
+    assert len(days) == 22
+    assert all(day.weekday() < 5 for day in days)
+    assert _enumerate_days(date(2026, 9, 5), date(2026, 9, 6)) == []
+    summary = attendance_day_summary(["Present"] * 11 + ["—"] * 11)
+    assert summary["attendanceRate"] == 50.0
+
+
+@pytest.mark.asyncio
+async def test_weekend_records_are_excluded_from_report_data():
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, Mock
+    from app.services.report_service import _records_between
+    rows = [(None, SimpleNamespace(session_date=date(2026, 9, day)), None, None)
+            for day in (4, 5, 6, 7)]
+    db = AsyncMock()
+    db.execute.return_value = Mock()
+    db.execute.return_value.all.return_value = rows
+    result = await _records_between(db, date(2026, 9, 4), date(2026, 9, 7))
+    assert [row[1].session_date.day for row in result] == [4, 7]
+
+
 def test_parse_period_accepts_known_ranges():
     assert parse_period("weekly") == "weekly"
     with pytest.raises(ValueError):
