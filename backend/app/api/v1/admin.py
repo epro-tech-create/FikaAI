@@ -1114,28 +1114,6 @@ async def attendance_report_excel(
     )
 
 
-@router.get("/reports/student/{student_id}", response_model=None)
-async def student_report(
-    student_id: uuid.UUID,
-    report_date: date | None = Query(default=None, alias="date"),
-    period: str = Query(default="monthly"),
-    start_date: date | None = Query(default=None, alias="startDate"),
-    end_date: date | None = Query(default=None, alias="endDate"),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    try:
-        selected_period = parse_period(period)
-    except ValueError as error:
-        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
-    selected_date = report_date or datetime.now(settings.campus_tz).date()
-    try:
-        return await build_student_report(
-            db, student_id, selected_period, selected_date, start_date, end_date
-        )
-    except ValueError as error:
-        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
-
-
 @router.get("/reports/student/{student_id}.pdf", response_model=None)
 async def student_report_pdf(
     student_id: uuid.UUID,
@@ -1164,3 +1142,25 @@ async def student_report_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/reports/student/{student_id}", response_model=None)
+async def student_report(
+    student_id: uuid.UUID,
+    report_date: date | None = Query(default=None, alias="date"),
+    period: str = Query(default="monthly"),
+    start_date: date | None = Query(default=None, alias="startDate"),
+    end_date: date | None = Query(default=None, alias="endDate"),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    try:
+        selected_period = parse_period(period)
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+    selected_date = report_date or datetime.now(settings.campus_tz).date()
+    try:
+        return await build_student_report(
+            db, student_id, selected_period, selected_date, start_date, end_date
+        )
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error

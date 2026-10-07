@@ -28,6 +28,25 @@ FORCED_EARLY_DATES = frozenset({date(2026, 8, 31)})
 MAX_CUSTOM_DAYS = 186
 
 
+def attendance_day_summary(statuses: list[str]) -> dict[str, int | float]:
+    """Count dates, including late arrivals, rather than attendance records."""
+    total = len(statuses)
+    present = sum(value in ("Present", "Late") for value in statuses)
+    excused = statuses.count("Excused")
+    return {
+        "totalDays": total,
+        "daysPresent": present,
+        "lateDays": statuses.count("Late"),
+        "excusedDays": excused,
+        "absentDays": total - present - excused,
+        "attendanceRate": round(present / total * 100, 1) if total else 0.0,
+    }
+
+
+def _day_priority(status: str) -> int:
+    return {"Present": 3, "Late": 2, "Excused": 1}.get(status, 0)
+
+
 def parse_period(value: str) -> Period:
     if value not in ("daily", "weekly", "monthly", "custom", "all"):
         raise ValueError("Period must be daily, weekly, monthly, custom, or all.")
@@ -392,14 +411,6 @@ async def build_attendance_report(
                     "daysByDate": {d.isoformat(): "—" for d in days},
                 },
             )
-        if status in ("ABSENT", "EXCUSED"):
-            if status == "EXCUSED":
-                card["excusedDays"] = card.get("excusedDays", 0) + 1
-            pass
-        else:
-            card["daysPresent"] += 1
-            if was_late:
-                card["lateDays"] += 1
         cell = (
             "—"
             if status == "ABSENT"
@@ -409,21 +420,15 @@ async def build_attendance_report(
                 else ("Late" if was_late else "Present")
             )
         )
-        if day_key in card["daysByDate"]:
+        if day_key in card["daysByDate"] and _day_priority(cell) >= _day_priority(card["daysByDate"][day_key]):
             card["daysByDate"][day_key] = cell
         if session.session_date.weekday() < 5 and period == "weekly":
-            card["days"][WEEKDAY_LABELS[session.session_date.weekday()]] = cell
+            card["days"][WEEKDAY_LABELS[session.session_date.weekday()]] = card["daysByDate"][day_key]
 
     # For monthly/custom: fill weekly-style days from first week + compute absentDays + rate
     student_list = list(students.values())
     for card in student_list:
-        present = int(card.get("daysPresent", 0) or 0)
-        excused_c = int(card.get("excusedDays", 0) or 0)
-        total_days = len(days)
-        card["absentDays"] = max(0, total_days - present - excused_c)
-        card["attendanceRate"] = round(
-            (present / total_days * 100) if total_days else 0, 1
-        )
+        card.update(attendance_day_summary(list(card["daysByDate"].values())))
         if period in ("monthly", "custom", "all"):
             # backfill Mon-Fri labels from first Mon-Fri in range for legacy weekly UI
             for d in days:
@@ -498,7 +503,6 @@ async def build_student_report(
         }
         for d in days
     }
-    present = late_c = excused_c = 0
     for record, session, s, _u in packed:
         if str(s.id) != str(student.id):
             continue
@@ -526,6 +530,8 @@ async def build_student_report(
                 else ("Late" if was_late else "Present")
             )
         )
+        if _day_priority(cell) < _day_priority(entries[key]["status"]):
+            continue
         entries[key] = {
             "date": key,
             "label": session.session_date.strftime("%a %d %b"),
@@ -537,13 +543,6 @@ async def build_student_report(
                 record.check_out_at.isoformat() if record.check_out_at else None
             ),
         }
-        if status == "EXCUSED":
-            excused_c += 1
-        elif status != "ABSENT":
-            present += 1
-            if was_late:
-                late_c += 1
-    total = len(days)
     return {
         "period": period,
         "title": f"{user.full_name} · {title}",
@@ -564,14 +563,7 @@ async def build_student_report(
                 else str(student.status)
             ),
         },
-        "summary": {
-            "totalDays": total,
-            "daysPresent": present,
-            "lateDays": late_c,
-            "excusedDays": excused_c,
-            "absentDays": max(0, total - present - excused_c),
-            "attendanceRate": round((present / total * 100) if total else 0, 1),
-        },
+        "summary": attendance_day_summary([entry["status"] for entry in entries.values()]),
         "days": list(entries.values()),
         "monthGroups": _month_groups(days),
     }
@@ -692,6 +684,7 @@ def render_student_pdf(report: dict[str, Any]) -> bytes:
         )
     )
     story.append(t)
+    story.append(Paragraph("Attendance % = days present (including late arrivals) / all calendar days in the report × 100.", body_style))
     story.append(Spacer(1, 6 * mm))
     story.append(Paragraph("Day-by-day attendance", heading_style))
     header = ["Date", "Month", "Status", "Arrival", "Checkout"]
@@ -745,7 +738,7 @@ def render_student_pdf(report: dict[str, Any]) -> bytes:
 
 def render_attendance_pdf(report: dict[str, Any]) -> bytes:
     period = report["period"]
-    pagesize = landscape(A4) if period in ("weekly", "monthly", "custom") else A4
+    pagesize = landscape(A4) if period in ("weekly", "monthly", "custom", "all") else A4
     buffer = BytesIO()
     heading_style = ParagraphStyle(
         "CcdHeading",
@@ -860,10 +853,11 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
     story.append(stats_table)
     story.append(Spacer(1, 8 * mm))
 
+    story.append(Paragraph("Attendance % = days present (including late arrivals) / all calendar days in the report × 100.", body_style))
     identity_cols = 3
     if period == "weekly":
         story.append(Paragraph("Student attendance by weekday", heading_style))
-        header = ["Student", "Student ID", "Registration", *WEEKDAY_LABELS, "Days"]
+        header = ["Student", "Student ID", "Registration", *WEEKDAY_LABELS, "Days", "Attendance %"]
         table_data = [
             [
                 Paragraph(
@@ -883,6 +877,7 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
                         for label in WEEKDAY_LABELS
                     ],
                     Paragraph(str(student["daysPresent"]), cell_center),
+                    Paragraph(f"{student.get('attendanceRate', 0):.1f}%", cell_center),
                 ]
             )
         if len(table_data) == 1:
@@ -892,14 +887,15 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
                         "No student attendance was recorded for this week.", body_style
                     )
                 ]
-                + [""] * 8
+                + [""] * 9
             )
         usable = pagesize[0] - 28 * mm
         widths = [
             usable * 0.22,
             usable * 0.14,
             usable * 0.14,
-            *[usable * 0.085] * 5,
+            *[usable * 0.075] * 5,
+            usable * 0.05,
             usable * 0.075,
         ]
     elif period in ("monthly", "custom", "all"):
@@ -912,6 +908,7 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
                 "Student ID",
                 "Registration",
                 "Days present",
+                "Attendance %",
                 "Late days",
             ]
             table_data = [
@@ -930,6 +927,7 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
                         Paragraph(_public_student_id(student), cell_style),
                         Paragraph(_registration_number(student), cell_style),
                         Paragraph(str(student["daysPresent"]), cell_center),
+                        Paragraph(f"{student.get('attendanceRate', 0):.1f}%", cell_center),
                         Paragraph(str(student["lateDays"]), cell_center),
                     ]
                 )
@@ -941,15 +939,17 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
                         "",
                         "",
                         "",
+                        "",
                     ]
                 )
             usable = pagesize[0] - 28 * mm
             widths = [
-                usable * 0.32,
-                usable * 0.18,
-                usable * 0.18,
-                usable * 0.16,
-                usable * 0.16,
+                usable * 0.28,
+                usable * 0.17,
+                usable * 0.17,
+                usable * 0.12,
+                usable * 0.14,
+                usable * 0.12,
             ]
             table = Table(table_data, colWidths=widths, repeatRows=1)
             table.setStyle(
@@ -1023,6 +1023,7 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
                     Paragraph(f"<b>{d['dayNum']}<br/>{d['label']}</b>", small_header)
                 )
             day_row.append(Paragraph("<b>Tot</b>", small_header))
+            day_row.append(Paragraph("<b>Attendance %</b>", small_header))
             table_data = [month_row, day_row]
             for student in report["students"]:
                 by_date = student.get("daysByDate", {}) or {}
@@ -1034,25 +1035,27 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
                 for d in chunk:
                     v = by_date.get(d["date"], "—")
                     row_cells.append(Paragraph(_short_cell(v), small_center))
-                    if v == "Present":
+                    if v in ("Present", "Late"):
                         present_count += 1
                 row_cells.append(
                     Paragraph(
                         str(student.get("daysPresent", present_count)), small_center
                     )
                 )
+                row_cells.append(Paragraph(f"{student.get('attendanceRate', 0):.1f}%", small_center))
                 table_data.append(row_cells)
             if len(table_data) == 2:
                 table_data.append(
                     [Paragraph("No attendance for this period.", body_style)]
-                    + [""] * (len(chunk) + 2)
+                    + [""] * (len(chunk) + 3)
                 )
             usable = pagesize[0] - 28 * mm
             name_w = usable * 0.20
             id_w = usable * 0.10
             tot_w = usable * 0.05
-            day_w = (usable - name_w - id_w - tot_w) / max(1, len(chunk))
-            widths = [name_w, id_w, *[day_w] * len(chunk), tot_w]
+            rate_w = usable * 0.08
+            day_w = (usable - name_w - id_w - tot_w - rate_w) / max(1, len(chunk))
+            widths = [name_w, id_w, *[day_w] * len(chunk), tot_w, rate_w]
             table = Table(table_data, colWidths=widths, repeatRows=2)
             style_cmds: list[Any] = [
                 ("BACKGROUND", (0, 0), (-1, 1), TABLE_HEADER_BG),
@@ -1099,6 +1102,7 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
             "Arrival",
             "Checkout",
             "Status",
+            "Attendance %",
         ]
         table_data = [
             [
@@ -1126,6 +1130,7 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
                     Paragraph(_format_time(arrived), cell_center),
                     Paragraph(_format_time(departed), cell_center),
                     Paragraph(status_label(row["status"]), cell_style),
+                    Paragraph("0.0%" if row["status"] in ("ABSENT", "EXCUSED") else "100.0%", cell_center),
                 ]
             )
         if len(table_data) == 1:
@@ -1143,12 +1148,13 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
             )
         usable = pagesize[0] - 28 * mm
         widths = [
-            usable * 0.24,
-            usable * 0.16,
+            usable * 0.22,
+            usable * 0.14,
+            usable * 0.14,
+            usable * 0.11,
+            usable * 0.11,
             usable * 0.16,
             usable * 0.12,
-            usable * 0.12,
-            usable * 0.20,
         ]
 
     table = Table(table_data, colWidths=widths, repeatRows=1)

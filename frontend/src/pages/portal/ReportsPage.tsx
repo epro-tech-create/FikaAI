@@ -200,7 +200,7 @@ export function matrixCsv(students: StudentSummary[], days: DayMeta[]) {
     "Days present",
     "Late",
     "Absent",
-    "Rate %",
+    "Attendance %",
   ];
   const lines = [header];
   for (const s of students) {
@@ -385,7 +385,7 @@ export default function ReportsPage({
 
   function downloadPersonalCsv() {
     const data = personal?.days || [];
-    const header = ["Date", "Month", "Status", "Arrival", "Checkout"];
+    const header = ["Date", "Month", "Status", "Arrival", "Checkout", "Attendance % (report)"];
     const lines = [header];
     for (const d of data) {
       lines.push([
@@ -394,6 +394,7 @@ export default function ReportsPage({
         d.status,
         d.arrivedAt ? attendanceTime(d.arrivedAt) : "",
         d.checkedOutAt ? attendanceTime(d.checkedOutAt) : "",
+        String(personal?.summary?.attendanceRate ?? selected?.attendanceRate ?? 0),
       ]);
     }
     const csv = lines.map((l) => l.map(csvCell).join(",")).join("\n");
@@ -580,7 +581,8 @@ export default function ReportsPage({
                       {g.month}
                     </th>
                   ))}
-                  <th rowSpan={2}>Tot</th>
+                  <th rowSpan={2}>Days present</th>
+                  <th rowSpan={2}>Attendance %</th>
                 </tr>
                 <tr>
                   {days.map((d) => (
@@ -642,13 +644,16 @@ export default function ReportsPage({
                     <td style={{ textAlign: "center", fontWeight: 700 }}>
                       {s.daysPresent}
                     </td>
+                    <td style={{ textAlign: "center", fontWeight: 700 }}>
+                      {(s.attendanceRate ?? 0).toFixed(1)}%
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <p style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
               Legend: P = Present, L = Late, E = Excused, — = Absent. Click any
-              row for full personal report.
+              row for full personal report. Attendance % = days present (including late arrivals) ÷ all calendar days in the report × 100.
             </p>
           </div>
         ) : (

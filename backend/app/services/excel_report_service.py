@@ -12,6 +12,7 @@ def render_attendance_excel(report: dict) -> bytes:
     output = BytesIO()
     with Workbook(output, {"in_memory": True, "strings_to_formulas": False,
                            "strings_to_urls": False}) as workbook:
+        percentage = workbook.add_format({"num_format": '0.0"%"'})
         header = workbook.add_format({"bold": True, "bg_color": "#DBEAFE", "text_wrap": True})
 
         def sheet(name, columns, rows, freeze_columns=0):
@@ -33,6 +34,7 @@ def render_attendance_excel(report: dict) -> bytes:
             ["Timezone", report["timezone"]],
             *[[key, value] for key, value in report["summary"].items()],
             ["Legend", "Present / Late / Excused / — = Absent"],
+            ["Attendance %", "Days present (including late arrivals) / calendar days in the report × 100"],
         ]).set_column(1, 1, 65)
 
         students = report.get("students", [])
@@ -42,16 +44,18 @@ def render_attendance_excel(report: dict) -> bytes:
         for day in days:
             months.setdefault(day["date"][:7], []).append(day["date"])
         for month, dates in months.items():
-            sheet(month, ["Student name", "Student ID", "Registration number", "Email", *dates], [
+            sheet(month, ["Student name", "Student ID", "Registration number", "Email", *dates, "Days present (month)", "Attendance % (month)"], [
                 [s["studentName"], s.get("membershipId") or "", s["registrationNumber"],
-                 s.get("email") or "", *[s.get("daysByDate", {}).get(d, "—") for d in dates]]
+                 s.get("email") or "", *[s.get("daysByDate", {}).get(d, "—") for d in dates],
+                 sum(s.get("daysByDate", {}).get(d) in ("Present", "Late") for d in dates),
+                 round(sum(s.get("daysByDate", {}).get(d) in ("Present", "Late") for d in dates) / len(dates) * 100, 1)]
                 for s in students
-            ], 4)
+            ], 4).set_column(5 + len(dates), 5 + len(dates), 20, percentage)
         sheet("Student totals", ["Student name", "Student ID", "Registration number", "Days present", "Late days", "Excused days", "Absent days", "Attendance rate %"], [
             [s["studentName"], s.get("membershipId") or "", s["registrationNumber"],
              *[s.get(key, 0) for key in ("daysPresent", "lateDays", "excusedDays", "absentDays", "attendanceRate")]]
             for s in students
-        ], 3)
+        ], 3).set_column(7, 7, 20, percentage)
 
         def local_time(value):
             return _format_time(datetime.fromisoformat(value)) if value else ""

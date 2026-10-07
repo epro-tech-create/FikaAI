@@ -16,6 +16,7 @@ it.each(["admin", "instructor"] as const)("exports all days without month filter
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   vi.mocked(api.get).mockResolvedValueOnce({ data: {
     date: "2026-09-15", startDate: "2026-09-01", endDate: "2026-09-30",
+    students: [{ studentName: "Asha", registrationNumber: "001", daysPresent: 15, lateDays: 2, attendanceRate: 50 }],
   } }).mockResolvedValue({ data: new Blob(["workbook"]) });
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:test") });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
@@ -24,6 +25,7 @@ it.each(["admin", "instructor"] as const)("exports all days without month filter
   const root = createRoot(container);
   try {
     await act(async () => root.render(<ReportsPage role={role} />));
+    expect(container.textContent).toContain("50.0%");
     const buttons = Array.from(container.querySelectorAll("button"));
     await act(async () => buttons.find(b => b.textContent === "Export all days (Excel)")!.click());
     expect(api.get).toHaveBeenLastCalledWith(`/${role}/reports/attendance.xlsx`, {

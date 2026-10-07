@@ -28,6 +28,67 @@ def test_parse_period_accepts_known_ranges():
         parse_period("yearly")
 
 
+@pytest.mark.parametrize("statuses, rate", [
+    ([], 0), (["Present"], 100), (["Late"], 100),
+    (["Excused", "—"], 0), (["Present", "Late", "Excused", "—"], 50),
+    (["Present", "—", "—"], 33.3),
+])
+def test_attendance_percentage_counts_present_and_late_dates(statuses, rate):
+    from app.services.report_service import attendance_day_summary
+    summary = attendance_day_summary(statuses)
+    assert summary["attendanceRate"] == rate
+    assert summary["totalDays"] == len(statuses)
+
+
+@pytest.mark.parametrize("period", ["daily", "weekly", "monthly", "custom", "all"])
+def test_populated_pdf_includes_attendance_percentage(period, monkeypatch):
+    from app.services import report_service
+    original_table = report_service.Table
+    cell_text = []
+
+    def capture_table(data, *args, **kwargs):
+        cell_text.extend(getattr(cell, "text", "") for row in data for cell in row)
+        return original_table(data, *args, **kwargs)
+
+    monkeypatch.setattr(report_service, "Table", capture_table)
+    report = _empty_report(period)
+    report["days"] = [{"date": "2026-09-01", "dayNum": "1", "label": "Tue", "month": "September 2026"}]
+    report["students"] = [{
+        "studentName": "Asha", "registrationNumber": "001", "daysPresent": 1,
+        "lateDays": 0, "attendanceRate": 100.0,
+        "days": {day: "Present" for day in ("Mon", "Tue", "Wed", "Thu", "Fri")},
+        "daysByDate": {"2026-09-01": "Present"},
+    }]
+    report["rows"] = [{"studentName": "Asha", "registrationNumber": "001",
+                       "arrivedAt": None, "checkedOutAt": None, "status": "PRESENT"}]
+    assert render_attendance_pdf(report).startswith(b"%PDF")
+    assert any("Attendance %" in text for text in cell_text)
+    assert "100.0%" in cell_text
+
+
+@pytest.mark.asyncio
+async def test_multiple_records_on_one_date_count_as_one_attended_day(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, Mock
+    from app.services import report_service
+
+    student = SimpleNamespace(id="student", membership_id="CCD-1", registration_number="001", year_of_study=1, status="ACTIVE")
+    user = SimpleNamespace(full_name="Asha", email="asha@example.com")
+    session = SimpleNamespace(session_date=date(2026, 9, 1), official_start=time(9, 30), late_threshold_minutes=0)
+    packed = [(SimpleNamespace(id=str(i), status=status, check_in_at=None, check_out_at=None), session, student, user)
+              for i, status in enumerate(["PRESENT", "LATE", "ABSENT"])]
+    monkeypatch.setattr(report_service, "_records_between", AsyncMock(return_value=packed))
+    db = AsyncMock()
+    result = Mock()
+    result.all.return_value = [(student, user)]
+    result.one_or_none.return_value = (student, user)
+    db.execute.return_value = result
+    report = await report_service.build_attendance_report(db, "custom", date(2026, 9, 1), date(2026, 9, 1), date(2026, 9, 2))
+    personal = await report_service.build_student_report(db, "student", "custom", date(2026, 9, 1), date(2026, 9, 1), date(2026, 9, 2))
+    assert report["students"][0]["daysPresent"] == personal["summary"]["daysPresent"] == 1
+    assert report["students"][0]["attendanceRate"] == personal["summary"]["attendanceRate"] == 50.0
+
+
 def _empty_report(period: str) -> dict:
     return {
         "period": period,
