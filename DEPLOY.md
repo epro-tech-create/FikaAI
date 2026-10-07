@@ -126,6 +126,22 @@ Warm up the model once before the first real class (first face request loads wei
 
 # Legacy single-VPS deployment
 
+To deploy the Excel report exports to an existing VPS checkout, rebuild the backend
+and both management frontends. The backend build installs the Excel dependency.
+
+```bash
+cd /opt/fikaai &&
+git stash push -m "vps-local" -- backend/app/services/report_service.py &&
+git pull --ff-only origin main &&
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build backend frontend-admin frontend-instructor &&
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+```
+
+The stash preserves local report-service edits; leave it stashed unless those edits
+have been reviewed against the new version. After the services are healthy, refresh
+the admin or instructor Reports page and try **Export Excel** and **Export all days
+(Excel)**. The full export includes monthly sheets, student totals, and records.
+
 ```bash
 cp .env.vps.example .env.production
 # Set DOMAIN, ADMIN_DOMAIN, INSTRUCTOR_DOMAIN, ACME_EMAIL, all secrets, and the production coordinates.

@@ -17,10 +17,10 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer, Table,
                                 TableStyle)
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-Period = Literal["daily", "weekly", "monthly", "custom"]
+Period = Literal["daily", "weekly", "monthly", "custom", "all"]
 WEEKDAY_LABELS = ("Mon", "Tue", "Wed", "Thu", "Fri")
 # One-off: 31 Aug 2026 is treated as arrived early. From 2 Sep scoring is live again.
 FORCED_EARLY_DATES = frozenset({date(2026, 8, 31)})
@@ -29,8 +29,8 @@ MAX_CUSTOM_DAYS = 186
 
 
 def parse_period(value: str) -> Period:
-    if value not in ("daily", "weekly", "monthly", "custom"):
-        raise ValueError("Period must be daily, weekly, monthly, or custom.")
+    if value not in ("daily", "weekly", "monthly", "custom", "all"):
+        raise ValueError("Period must be daily, weekly, monthly, custom, or all.")
     return value  # type: ignore[return-value]
 
 
@@ -245,6 +245,22 @@ async def weekly_attendance_series(db: AsyncSession, week_of: date) -> dict[str,
     }
 
 
+async def _report_window(
+    db: AsyncSession, period: Period, anchor: date,
+    start_override: date | None = None, end_override: date | None = None,
+) -> tuple[date, date, str]:
+    if period == "all":
+        first, last = (await db.execute(
+            select(func.min(AttendanceSession.session_date), func.max(AttendanceSession.session_date))
+            .where(AttendanceSession.session_date <= anchor)
+        )).one()
+        start, end = first or anchor, last or anchor
+        title = f"Full attendance · {start.isoformat()} – {end.isoformat()}"
+    else:
+        return _period_window(period, anchor, start_override, end_override)
+    return start, end, title
+
+
 async def build_attendance_report(
     db: AsyncSession,
     period: Period,
@@ -252,7 +268,7 @@ async def build_attendance_report(
     start_override: date | None = None,
     end_override: date | None = None,
 ) -> dict[str, Any]:
-    start, end, title = _period_window(period, anchor, start_override, end_override)
+    start, end, title = await _report_window(db, period, anchor, start_override, end_override)
     packed = await _records_between(db, start, end)
     days = _enumerate_days(start, end)
     month_groups = _month_groups(days)
@@ -408,7 +424,7 @@ async def build_attendance_report(
         card["attendanceRate"] = round(
             (present / total_days * 100) if total_days else 0, 1
         )
-        if period in ("monthly", "custom"):
+        if period in ("monthly", "custom", "all"):
             # backfill Mon-Fri labels from first Mon-Fri in range for legacy weekly UI
             for d in days:
                 if d.weekday() < 5:
@@ -457,7 +473,7 @@ async def build_student_report(
     start_override: date | None = None,
     end_override: date | None = None,
 ) -> dict[str, Any]:
-    start, end, title = _period_window(period, anchor, start_override, end_override)
+    start, end, title = await _report_window(db, period, anchor, start_override, end_override)
     days = _enumerate_days(start, end)
     result = await db.execute(
         select(Student, User)
@@ -886,7 +902,7 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
             *[usable * 0.085] * 5,
             usable * 0.075,
         ]
-    elif period in ("monthly", "custom"):
+    elif period in ("monthly", "custom", "all"):
         day_metas: list[dict[str, Any]] = report.get("days", [])  # type: ignore[assignment]
         month_groups: list[dict[str, Any]] = report.get("monthGroups", [])  # type: ignore[assignment]
         if not day_metas:

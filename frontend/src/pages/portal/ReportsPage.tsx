@@ -288,6 +288,31 @@ export default function ReportsPage({
     URL.revokeObjectURL(url);
   }
 
+  async function downloadExcel(allDays = false) {
+    setDownloading(true);
+    setError("");
+    try {
+      const response = await api.get(`/${role}/reports/attendance.xlsx`, {
+        params: allDays ? { period: "all" } : { period: "monthly", date: report.date || reportDate },
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(response.data);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = allDays
+        ? "ccd-attendance-all-days.xlsx"
+        : `ccd-attendance-${report.startDate}-to-${report.endDate}.xlsx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (requestError) {
+      setError(message(requestError));
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   async function downloadPdf() {
     setDownloading(true);
     setError("");
@@ -416,6 +441,22 @@ export default function ReportsPage({
             <button
               type="button"
               className="secondary-button"
+              disabled={downloading || loading || !report.date}
+              onClick={() => void downloadExcel()}
+            >
+              Export Excel
+            </button>
+            <button
+              type="button"
+              className="portal-primary"
+              disabled={downloading}
+              onClick={() => void downloadExcel(true)}
+            >
+              {downloading ? "Preparing export..." : "Export all days (Excel)"}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
               disabled={!(rows.length || students.length)}
               onClick={downloadCsv}
             >
@@ -427,7 +468,7 @@ export default function ReportsPage({
               disabled={downloading}
               onClick={() => void downloadPdf()}
             >
-              {downloading ? "Preparing PDF..." : "Download PDF"}
+              {downloading ? "Preparing export..." : "Download PDF"}
             </button>
           </div>
         }

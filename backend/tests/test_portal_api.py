@@ -29,11 +29,13 @@ def test_management_portal_routes_are_mounted():
         "/api/admin/reports/summary",
         "/api/admin/reports/attendance",
         "/api/admin/reports/attendance.pdf",
+        "/api/admin/reports/attendance.xlsx",
         "/api/instructor/dashboard",
         "/api/instructor/sessions",
         "/api/instructor/attendance",
         "/api/instructor/reports/attendance",
         "/api/instructor/reports/attendance.pdf",
+        "/api/instructor/reports/attendance.xlsx",
     } <= paths
     assert "post" in openapi_paths["/api/admin/instructors"]
     assert {"get", "post"} <= set(openapi_paths["/api/admin/students"])

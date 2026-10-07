@@ -22,6 +22,7 @@ dependencies = [
     "onnxruntime==1.19.2",
     "insightface==0.7.3",
     "mediapipe==0.10.14",
+    "xlsxwriter>=3.2,<4",
 ]
 
 [project.optional-dependencies]

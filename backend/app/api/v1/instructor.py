@@ -13,6 +13,7 @@ from app.models.entities import (AttendanceRecord, AttendanceSession,
                                  Instructor, PracticalLocation, Student, User)
 from app.schemas import SessionHoursUpdate, SessionResponse, VenueQrResponse
 from app.services.audit_service import audit_detached
+from app.services.excel_report_service import render_attendance_excel
 from app.services.report_service import (build_attendance_report,
                                          build_student_report, parse_period,
                                          render_attendance_pdf,
@@ -493,6 +494,45 @@ async def attendance_report_pdf(
     return Response(
         content=render_attendance_pdf(report),
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/reports/attendance.xlsx", response_model=None)
+async def attendance_report_excel(
+    request: Request,
+    instructor: Instructor = Depends(get_current_instructor),
+    report_date: date | None = Query(default=None, alias="date"),
+    period: str = Query(default="daily"),
+    start_date: date | None = Query(default=None, alias="startDate"),
+    end_date: date | None = Query(default=None, alias="endDate"),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    try:
+        selected_period = parse_period(period)
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+    selected_date = report_date or datetime.now(settings.campus_tz).date()
+    try:
+        report = await build_attendance_report(
+            db, selected_period, selected_date, start_date, end_date
+        )
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+    await audit_detached(
+        action="instructor_report_excel_downloaded",
+        actor_user_id=instructor.user_id,
+        entity_type="instructor",
+        entity_id=instructor.id,
+        details={"period": selected_period, "date": selected_date.isoformat()},
+        ip_address=_instructor_ip(request),
+    )
+    filename = (
+        f"ccd-attendance-{period}-{report['startDate']}-to-{report['endDate']}.xlsx"
+    )
+    return Response(
+        content=render_attendance_excel(report),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
