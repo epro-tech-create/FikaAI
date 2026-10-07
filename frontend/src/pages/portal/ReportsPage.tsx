@@ -145,19 +145,19 @@ export default function ReportsPage({
     }
   }
 
-  async function downloadPdf() {
+  async function downloadPdf(allDays = false) {
     setDownloading(true);
     setError("");
     try {
       const response = await api.get(`/${role}/reports/attendance.pdf`, {
-        params: { period: "monthly", date: report.date || reportDate },
+        params: allDays ? { period: "all" } : { period: "monthly", date: report.date || reportDate },
         responseType: "blob",
       });
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `ccd-attendance-${period}-${report.startDate || reportDate}-to-${report.endDate || ""}.pdf`;
+      anchor.download = allDays ? "ccd-attendance-all-days.pdf" : `ccd-attendance-${period}-${report.startDate || reportDate}-to-${report.endDate || ""}.pdf`;
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (requestError) {
@@ -245,9 +245,12 @@ export default function ReportsPage({
         <div className="content-card report-download-history">
           <span className="report-history-label">COMPLETE HISTORY</span>
           <h2>All days, one download</h2>
-          <p>Download the complete attendance history in one Excel workbook.</p>
+          <p>Download all weekdays, organized by month, as Excel or PDF.</p>
           <ul className="report-includes" aria-label="Included in the full report"><li>All months</li><li>Student totals</li><li>Attendance %</li></ul>
+          <div className="report-actions report-history-actions">
           <button type="button" className="secondary-button" disabled={downloading} onClick={() => void downloadExcel(true)}>Export all days (Excel)</button>
+          <button type="button" className="secondary-button" disabled={downloading} onClick={() => void downloadPdf(true)}>Export all days (PDF)</button>
+          </div>
         </div>
       </section>
       {downloading && <p className="report-download-status" role="status">Preparing your download…</p>}

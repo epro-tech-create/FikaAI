@@ -6248,3 +6248,41 @@ nav a:hover,
   .portal-shell .reports-page .report-controls label { max-width: none; }
   .portal-shell .reports-page .report-download-footer { align-items: stretch; }
 }
+
+/* Keep report filtering and download actions on separate, roomy rows. */
+.portal-shell .reports-page .card-toolbar {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+  padding: 24px;
+}
+.portal-shell .reports-page .card-toolbar-actions { justify-content: flex-start; width: 100%; }
+.portal-shell .reports-page .table-search { flex: 1; max-width: 600px; min-width: 0; }
+.portal-shell .reports-page .table-search input { min-width: 0; width: 100%; }
+.portal-shell .reports-page .report-download-footer { align-items: flex-start; flex-direction: column; gap: 16px; }
+.portal-shell .reports-page .report-actions { gap: 10px; }
+.portal-shell .reports-page .report-history-actions { margin-top: auto; width: 100%; }
+.portal-shell .reports-page .report-history-actions button { flex: 1; min-height: 42px; }
+[data-theme="light"] .portal-shell :is(.row-actions button, .secondary-button, .toolbar-refresh, .form-actions > button:first-child) {
+  background: #edf5ff;
+  color: #24527c;
+  border-color: #c5d9ed;
+  box-shadow: none;
+}
+[data-theme="light"] .portal-shell :is(.row-actions button, .secondary-button, .toolbar-refresh):hover {
+  background: #deedff;
+  color: #163d62;
+  border-color: #95bada;
+}
+[data-theme="light"] .portal-shell .row-actions .danger-button,
+[data-theme="light"] .portal-shell .danger-button {
+  background: #fff0f2;
+  color: #a62343;
+  border-color: #f2c6d0;
+}
+[data-theme="light"] .portal-shell .danger-button:hover { background: #ffe0e7; color: #8d1835; }
+@media (max-width: 600px) {
+  .portal-shell .reports-page .card-toolbar { padding: 18px; }
+  .portal-shell .reports-page .card-toolbar-actions { flex-wrap: wrap; }
+  .portal-shell .reports-page .table-search { flex-basis: 100%; max-width: none; }
+}

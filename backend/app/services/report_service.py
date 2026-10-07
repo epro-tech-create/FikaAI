@@ -12,10 +12,10 @@ from app.models.entities import (AttendanceRecord, AttendanceSession, Student,
                                  User)
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A3, A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer, Table,
+from reportlab.platypus import (PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table,
                                 TableStyle)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -741,7 +741,7 @@ def render_student_pdf(report: dict[str, Any]) -> bytes:
 
 def render_attendance_pdf(report: dict[str, Any]) -> bytes:
     period = report["period"]
-    pagesize = landscape(A4) if period in ("weekly", "monthly", "custom", "all") else A4
+    pagesize = landscape(A3) if period in ("monthly", "custom", "all") else (landscape(A4) if period == "weekly" else A4)
     buffer = BytesIO()
     heading_style = ParagraphStyle(
         "CcdHeading",
@@ -987,8 +987,10 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
                 heading_style,
             )
         )
-        # Chunk days so wide ranges fit landscape (max ~14 day cols per table)
-        CHUNK = 14
+        # Keep every weekday of each month in a single horizontal table.
+        months: dict[str, list[dict[str, Any]]] = {}
+        for day in day_metas:
+            months.setdefault(day["date"][:7], []).append(day)
         small_cell = ParagraphStyle(
             "CcdSmall", parent=cell_style, fontSize=7, leading=9
         )
@@ -998,8 +1000,9 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
         small_header = ParagraphStyle(
             "CcdSmallH", parent=header_style, fontSize=7, leading=9, alignment=TA_CENTER
         )
-        for chunk_start in range(0, len(day_metas), CHUNK):
-            chunk = day_metas[chunk_start : chunk_start + CHUNK]
+        for month_index, chunk in enumerate(months.values()):
+            if month_index:
+                story.append(PageBreak())
             # Month grouping row on top of day columns
             month_row: list[Any] = [
                 Paragraph("", header_style),
@@ -1042,10 +1045,10 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
                         present_count += 1
                 row_cells.append(
                     Paragraph(
-                        str(student.get("daysPresent", present_count)), small_center
+                        str(present_count), small_center
                     )
                 )
-                row_cells.append(Paragraph(f"{student.get('attendanceRate', 0):.1f}%", small_center))
+                row_cells.append(Paragraph(f"{present_count / len(chunk) * 100:.1f}%", small_center))
                 table_data.append(row_cells)
             if len(table_data) == 2:
                 table_data.append(

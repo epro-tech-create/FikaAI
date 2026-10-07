@@ -36,6 +36,10 @@ it.each(["admin", "instructor"] as const)("exports all days without month filter
       params: { period: "all" }, responseType: "blob",
     });
     expect(click).toHaveBeenCalled();
+    await act(async () => buttons.find(b => b.textContent === "Export all days (PDF)")!.click());
+    expect(api.get).toHaveBeenLastCalledWith(`/${role}/reports/attendance.pdf`, {
+      params: { period: "all" }, responseType: "blob",
+    });
     await act(async () => buttons.find(b => b.textContent === "Export Excel")!.click());
     expect(api.get).toHaveBeenLastCalledWith(`/${role}/reports/attendance.xlsx`, {
       params: { period: "monthly", date: "2026-09-15" }, responseType: "blob",

@@ -90,6 +90,31 @@ def test_populated_pdf_includes_attendance_percentage(period, monkeypatch):
     assert "100.0%" in cell_text
 
 
+@pytest.mark.parametrize("period", ["monthly", "all"])
+def test_pdf_keeps_all_month_weekdays_in_one_table(period, monkeypatch):
+    from app.services import report_service
+    original_table = report_service.Table
+    matrices = []
+
+    def capture_table(data, *args, **kwargs):
+        if kwargs.get("repeatRows") == 2:
+            matrices.append(data)
+        return original_table(data, *args, **kwargs)
+
+    monkeypatch.setattr(report_service, "Table", capture_table)
+    report = _empty_report(period)
+    end = date(2026, 10, 30) if period == "all" else date(2026, 9, 30)
+    dates = report_service._enumerate_days(date(2026, 9, 1), end)
+    report["days"] = [{"date": d.isoformat(), "dayNum": str(d.day), "label": d.strftime("%a"), "month": d.strftime("%B %Y")} for d in dates]
+    assert render_attendance_pdf(report).startswith(b"%PDF")
+    assert len(matrices) == (2 if period == "all" else 1)
+    # Two identity columns, all 22 September weekdays, total and percentage.
+    assert len(matrices[0][1]) == 26
+    headers = [getattr(cell, "text", "") for cell in matrices[0][1]]
+    assert "<b>1<br/>Tue</b>" in headers
+    assert "<b>30<br/>Wed</b>" in headers
+
+
 @pytest.mark.asyncio
 async def test_multiple_records_on_one_date_count_as_one_attended_day(monkeypatch):
     from types import SimpleNamespace
