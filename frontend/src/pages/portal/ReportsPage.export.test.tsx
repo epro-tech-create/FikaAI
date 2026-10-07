@@ -25,7 +25,11 @@ it.each(["admin", "instructor"] as const)("exports all days without month filter
   const root = createRoot(container);
   try {
     await act(async () => root.render(<ReportsPage role={role} />));
-    expect(container.textContent).toContain("50.0%");
+    expect(container.textContent).toContain("Student preview");
+    expect(container.textContent).toContain("Asha");
+    expect(container.textContent).not.toContain("50.0%");
+    expect(container.querySelectorAll("thead th")).toHaveLength(4);
+    expect(container.querySelector('input[type="date"]')).toBeNull();
     const buttons = Array.from(container.querySelectorAll("button"));
     await act(async () => buttons.find(b => b.textContent === "Export all days (Excel)")!.click());
     expect(api.get).toHaveBeenLastCalledWith(`/${role}/reports/attendance.xlsx`, {

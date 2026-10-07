@@ -3,7 +3,6 @@ import {
   CardToolbar,
   PageHeading,
   StatePanel,
-  StatCard,
 } from "../../components/PortalUI";
 import { matchesSearch } from "../../lib/tableSearch";
 import type { Role } from "../../lib/auth";
@@ -72,40 +71,6 @@ type ReportPayload = {
   students?: StudentSummary[];
 };
 
-type PersonalDay = {
-  date: string;
-  label: string;
-  month: string;
-  status: string;
-  arrivedAt: string | null;
-  checkedOutAt: string | null;
-};
-
-type PersonalReport = {
-  title?: string;
-  startDate?: string;
-  endDate?: string;
-  student?: {
-    studentId: string;
-    studentName: string;
-    email?: string;
-    membershipId?: string | null;
-    registrationNumber: string;
-    yearOfStudy?: number | null;
-    status?: string;
-  };
-  summary?: {
-    totalDays: number;
-    daysPresent: number;
-    lateDays: number;
-    excusedDays: number;
-    absentDays: number;
-    attendanceRate: number;
-  };
-  days?: PersonalDay[];
-  monthGroups?: MonthGroup[];
-};
-
 function csvCell(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -129,23 +94,6 @@ export function attendanceStatusLabel(status: string) {
   if (status === "LATE") return "Late";
   if (status === "CHECKED_OUT") return "Checked out";
   return status.replace(/_/g, " ");
-}
-
-function cellShort(v: string) {
-  if (v === "Present") return "P";
-  if (v === "Late") return "L";
-  if (v === "Excused") return "E";
-  return "—";
-}
-
-function cellStyle(v: string): React.CSSProperties {
-  if (v === "Present")
-    return { background: "#dcfce7", color: "#166534", fontWeight: 700 };
-  if (v === "Late")
-    return { background: "#fef9c3", color: "#854d0e", fontWeight: 700 };
-  if (v === "Excused")
-    return { background: "#e0e7ff", color: "#3730a3", fontWeight: 700 };
-  return { color: "#94a3b8" };
 }
 
 export function attendanceCsv(
@@ -233,17 +181,8 @@ export default function ReportsPage({
   const [error, setError] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selected, setSelected] = useState<StudentSummary | null>(null);
-  const [personal, setPersonal] = useState<PersonalReport | null>(null);
-  const [personalLoading, setPersonalLoading] = useState(false);
-
-  const rows = Array.isArray(report.rows) ? report.rows : [];
   const students = Array.isArray(report.students) ? report.students : [];
   const days = Array.isArray(report.days) ? report.days : [];
-  const monthGroups = Array.isArray(report.monthGroups)
-    ? report.monthGroups
-    : [];
-
   function buildParams(date = reportDate) {
     const params: Record<string, string> = { period: "monthly" };
     if (monthInput) {
@@ -263,7 +202,10 @@ export default function ReportsPage({
       });
       const payload = (response.data || {}) as ReportPayload;
       setReport(payload);
-      if (payload.date) setReportDate(String(payload.date));
+      if (payload.date) {
+        setReportDate(String(payload.date));
+        setMonthInput(String(payload.date).slice(0, 7));
+      }
     } catch (requestError) {
       setError(message(requestError));
     } finally {
@@ -276,7 +218,7 @@ export default function ReportsPage({
   }, [role]);
 
   function downloadCsv() {
-    const content = matrixCsv(filteredStudents, days);
+    const content = matrixCsv(students, days);
     const blob = new Blob([`\uFEFF${content}`], {
       type: "text/csv;charset=utf-8",
     });
@@ -318,7 +260,7 @@ export default function ReportsPage({
     setError("");
     try {
       const response = await api.get(`/${role}/reports/attendance.pdf`, {
-        params: buildParams(),
+        params: { period: "monthly", date: report.date || reportDate },
         responseType: "blob",
       });
       const blob = new Blob([response.data], { type: "application/pdf" });
@@ -335,76 +277,26 @@ export default function ReportsPage({
     }
   }
 
-  async function openPersonal(student: StudentSummary) {
-    setSelected(student);
-    setPersonal(null);
-    if (!student.studentId) {
-      // fallback: build from matrix data already loaded
-      return;
-    }
-    setPersonalLoading(true);
-    try {
-      const res = await api.get(
-        `/${role}/reports/student/${student.studentId}`,
-        {
-          params: buildParams(),
-        },
-      );
-      setPersonal(res.data as PersonalReport);
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setPersonalLoading(false);
-    }
-  }
-
-  async function downloadPersonalPdf() {
-    if (!selected?.studentId) return;
+  async function downloadStudentPdf(student: StudentSummary) {
+    if (!student.studentId) return;
     setDownloading(true);
+    setError("");
     try {
-      const res = await api.get(
-        `/${role}/reports/student/${selected.studentId}.pdf`,
-        {
-          params: buildParams(),
-          responseType: "blob",
-        },
-      );
-      const blob = new Blob([res.data], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `ccd-student-${selected.registrationNumber}-${report.startDate}-to-${report.endDate}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      setError(message(e));
+      const response = await api.get(`/${role}/reports/student/${student.studentId}.pdf`, {
+        params: { period: "monthly", date: report.date || reportDate },
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(response.data);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `ccd-student-${student.registrationNumber}-${report.startDate}-to-${report.endDate}.pdf`;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (requestError) {
+      setError(message(requestError));
     } finally {
       setDownloading(false);
     }
-  }
-
-  function downloadPersonalCsv() {
-    const data = personal?.days || [];
-    const header = ["Date", "Month", "Status", "Arrival", "Checkout", "Attendance % (report)"];
-    const lines = [header];
-    for (const d of data) {
-      lines.push([
-        d.date,
-        d.month,
-        d.status,
-        d.arrivedAt ? attendanceTime(d.arrivedAt) : "",
-        d.checkedOutAt ? attendanceTime(d.checkedOutAt) : "",
-        String(personal?.summary?.attendanceRate ?? selected?.attendanceRate ?? 0),
-      ]);
-    }
-    const csv = lines.map((l) => l.map(csvCell).join(",")).join("\n");
-    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `ccd-student-${selected?.registrationNumber || "report"}-${report.startDate}-to-${report.endDate}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   function applySearch(event?: FormEvent) {
@@ -427,115 +319,51 @@ export default function ReportsPage({
     ]),
   );
 
-  const emptyCopy =
-    "No attendance in this month. All students show Absent (—).";
-  const heading = "Monthly attendance";
+  const emptyCopy = "No students available for this report.";
 
   return (
-    <main className="portal-content">
+    <main className="portal-content reports-page">
       <PageHeading
         eyebrow="ATTENDANCE RECORDS"
         title="Reports"
-        description="Monthly report. Pick a month or any date in it — every day shows P/L/E/— with month names on top. Click a student for personal report."
-        action={
-          <div className="report-actions">
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={downloading || loading || !report.date}
-              onClick={() => void downloadExcel()}
-            >
-              Export Excel
-            </button>
-            <button
-              type="button"
-              className="portal-primary"
-              disabled={downloading}
-              onClick={() => void downloadExcel(true)}
-            >
-              {downloading ? "Preparing export..." : "Export all days (Excel)"}
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={!(rows.length || students.length)}
-              onClick={downloadCsv}
-            >
-              Download CSV
-            </button>
-            <button
-              type="button"
-              className="portal-primary"
-              disabled={downloading}
-              onClick={() => void downloadPdf()}
-            >
-              {downloading ? "Preparing export..." : "Download PDF"}
-            </button>
-          </div>
-        }
+        description="Preview your students below. Download a report for daily attendance, arrival times and attendance percentages."
       />
-      <section className="content-card report-controls">
-        <label>
-          Month
-          <input
-            type="month"
-            value={monthInput}
-            onChange={(e) => {
-              setMonthInput(e.target.value);
-              if (e.target.value) setReportDate("");
-            }}
-          />
-        </label>
-        <label>
-          Any day in the month
-          <input
-            type="date"
-            value={reportDate}
-            onChange={(event) => {
-              setReportDate(event.target.value);
-              if (event.target.value) setMonthInput("");
-            }}
-          />
-        </label>
-        <button
-          className="secondary-button"
-          disabled={loading || (!monthInput && !reportDate)}
-          onClick={() => void load()}
-        >
-          {loading ? "Loading..." : "View report"}
-        </button>
+      <section className="content-card report-download-panel" aria-label="Report downloads">
+        <div className="report-download-main">
+          <div className="report-panel-heading">
+            <h2>Monthly report</h2>
+            <p>Choose a month, then download the complete report.</p>
+          </div>
+          <form className="report-controls" onSubmit={(event) => { event.preventDefault(); void load(); }}>
+            <label>
+              Report month
+              <input type="month" value={monthInput} onChange={(event) => setMonthInput(event.target.value)} />
+            </label>
+            <button type="submit" className="secondary-button" disabled={loading || !monthInput}>
+              {loading ? "Loading..." : "Apply month"}
+            </button>
+          </form>
+          <div className="report-download-footer">
+            <p>{report.startDate ? rangeLabel : "Loading report…"}</p>
+            <div className="report-actions" aria-label="Monthly downloads">
+              <button type="button" className="portal-primary" disabled={downloading || loading || !report.date} onClick={() => void downloadExcel()}>Export Excel</button>
+              <button type="button" className="secondary-button" disabled={downloading || loading || !report.date} onClick={() => void downloadPdf()}>Download PDF</button>
+              <button type="button" className="secondary-button" disabled={downloading || loading || !students.length} onClick={downloadCsv}>Download CSV</button>
+            </div>
+          </div>
+        </div>
+        <div className="report-download-history">
+          <span className="report-history-label">COMPLETE HISTORY</span>
+          <h2>All days, one download</h2>
+          <p>Every month, student totals and detailed attendance records in one Excel workbook.</p>
+          <button type="button" className="secondary-button" disabled={downloading} onClick={() => void downloadExcel(true)}>Export all days (Excel)</button>
+        </div>
       </section>
+      {downloading && <p className="report-download-status" role="status">Preparing your download…</p>}
       {error && <StatePanel kind="error">{error}</StatePanel>}
-      {report.summary && (
-        <section
-          className="stat-grid report-summary"
-          aria-label="Report summary"
-        >
-          <StatCard
-            label="Students"
-            value={`${report.summary.studentsPresent}/${report.summary.totalStudents ?? report.summary.studentsPresent}`}
-            note={rangeLabel}
-          />
-          <StatCard
-            label="Arrived early"
-            value={report.summary.arrivedEarly}
-            note="All arrivals before 09:30"
-          />
-          <StatCard
-            label="Late"
-            value={report.summary.late}
-            note="All arrivals from 09:30"
-          />
-          <StatCard
-            label="Checked out"
-            value={report.summary.checkedOut}
-            note="Recorded departures"
-          />
-        </section>
-      )}
       <section className="content-card">
         <CardToolbar
-          title={heading}
+          title="Student preview"
           meta={`${searchQuery ? `${filteredStudents.length} of ${students.length} students` : `${students.length} students`} · ${rangeLabel}`}
           search={{
             value: searchInput,
@@ -549,112 +377,23 @@ export default function ReportsPage({
         {loading ? (
           <StatePanel kind="loading" />
         ) : filteredStudents.length ? (
-          <div style={{ overflowX: "auto" }}>
-            <table
-              className="portal-table matrix-table"
-              style={{ minWidth: Math.max(700, 220 + days.length * 52) }}
-            >
+          <div className="report-student-list">
+            <table className="portal-table report-student-table">
               <thead>
-                <tr>
-                  <th
-                    rowSpan={2}
-                    style={{
-                      minWidth: 170,
-                      position: "sticky",
-                      left: 0,
-                      background: "var(--panel)",
-                      zIndex: 2,
-                    }}
-                  >
-                    Student
-                  </th>
-                  <th rowSpan={2} style={{ minWidth: 110 }}>
-                    Student ID
-                  </th>
-                  {monthGroups.map((g) => (
-                    <th
-                      key={g.month}
-                      colSpan={g.span}
-                      className="matrix-month"
-                      style={{ textAlign: "center" }}
-                    >
-                      {g.month}
-                    </th>
-                  ))}
-                  <th rowSpan={2}>Days present</th>
-                  <th rowSpan={2}>Attendance %</th>
-                </tr>
-                <tr>
-                  {days.map((d) => (
-                    <th
-                      key={d.date}
-                      title={`${d.date} · ${d.month}`}
-                      style={{ minWidth: 48, textAlign: "center" }}
-                    >
-                      <div style={{ fontSize: 11, fontWeight: 800 }}>
-                        {d.dayNum}
-                      </div>
-                      <div style={{ fontSize: 10, opacity: 0.7 }}>
-                        {d.label}
-                      </div>
-                    </th>
-                  ))}
-                </tr>
+                <tr><th>Student</th><th>Student ID</th><th>Registration number</th><th>Report</th></tr>
               </thead>
               <tbody>
-                {filteredStudents.map((s) => (
-                  <tr
-                    key={(s.studentId as string) || s.registrationNumber}
-                    onClick={() => void openPersonal(s)}
-                    style={{ cursor: "pointer" }}
-                    title="Click for personal report"
-                  >
-                    <td
-                      style={{
-                        position: "sticky",
-                        left: 0,
-                        background: "var(--panel)",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {s.studentName}
-                      <div
-                        style={{
-                          fontSize: 11,
-                          opacity: 0.65,
-                          fontWeight: 400,
-                        }}
-                      >
-                        {(s.email as string) || ""}
-                      </div>
-                    </td>
-                    <td>{s.membershipId || "—"}</td>
-                    {days.map((d) => {
-                      const v = s.daysByDate?.[d.date] || "—";
-                      return (
-                        <td
-                          key={d.date}
-                          title={`${d.date}: ${v}`}
-                          style={{ textAlign: "center", ...cellStyle(v) }}
-                        >
-                          {cellShort(v)}
-                        </td>
-                      );
-                    })}
-                    <td style={{ textAlign: "center", fontWeight: 700 }}>
-                      {s.daysPresent}
-                    </td>
-                    <td style={{ textAlign: "center", fontWeight: 700 }}>
-                      {(s.attendanceRate ?? 0).toFixed(1)}%
-                    </td>
+                {filteredStudents.map((student) => (
+                  <tr key={student.studentId || student.registrationNumber}>
+                    <td><span className="report-student-name">{student.studentName}</span><span className="report-student-email">{student.email || "—"}</span></td>
+                    <td>{student.membershipId || "—"}</td>
+                    <td>{student.registrationNumber}</td>
+                    <td><button type="button" className="secondary-button" disabled={downloading || !student.studentId} aria-label={`Download PDF for ${student.studentName}`} onClick={() => void downloadStudentPdf(student)}>Download PDF</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
-              Legend: P = Present, L = Late, E = Excused, — = Absent. Click any
-              row for full personal report. Attendance % = days present (including late arrivals) ÷ all calendar days in the report × 100.
-            </p>
+            <p className="report-preview-note">Student list preview only. Downloads include the full attendance details and percentages for the selected period.</p>
           </div>
         ) : (
           !error && (
@@ -667,188 +406,6 @@ export default function ReportsPage({
         )}
       </section>
 
-      {selected && (
-        <div
-          className="portal-dialog-backdrop"
-          onClick={() => {
-            setSelected(null);
-            setPersonal(null);
-          }}
-        >
-          <div
-            className="portal-dialog"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              maxWidth: 720,
-              width: "92vw",
-              maxHeight: "86vh",
-              overflowY: "auto",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "14px 18px 0",
-              }}
-            >
-              <h3 style={{ margin: 0 }}>
-                Personal report — {selected.studentName}
-              </h3>
-              <button
-                onClick={() => {
-                  setSelected(null);
-                  setPersonal(null);
-                }}
-                style={{
-                  border: "1px solid var(--line)",
-                  background: "var(--panel)",
-                  borderRadius: 8,
-                  padding: "6px 10px",
-                  cursor: "pointer",
-                }}
-              >
-                Close
-              </button>
-            </div>
-            <div style={{ padding: 18 }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 8,
-                  fontSize: 13,
-                  marginBottom: 12,
-                }}
-              >
-                <div>
-                  <b>Student ID:</b> {selected.membershipId || "—"}
-                </div>
-                <div>
-                  <b>Registration:</b> {selected.registrationNumber}
-                </div>
-                <div>
-                  <b>Email:</b>{" "}
-                  {(selected.email as string) ||
-                    (personal?.student?.email ?? "—")}
-                </div>
-                <div>
-                  <b>Year:</b>{" "}
-                  {String(
-                    selected.yearOfStudy ??
-                      personal?.student?.yearOfStudy ??
-                      "—",
-                  )}
-                </div>
-                <div>
-                  <b>Range:</b> {report.startDate} → {report.endDate}
-                </div>
-                <div>
-                  <b>Rate:</b>{" "}
-                  {String(
-                    selected.attendanceRate ??
-                      personal?.summary?.attendanceRate ??
-                      "—",
-                  )}
-                  %
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                <span className="stat-chip">
-                  Present:{" "}
-                  {personal?.summary?.daysPresent ?? selected.daysPresent}
-                </span>
-                <span className="stat-chip">
-                  Late: {personal?.summary?.lateDays ?? selected.lateDays}
-                </span>
-                <span className="stat-chip">
-                  Absent:{" "}
-                  {personal?.summary?.absentDays ?? selected.absentDays ?? "—"}
-                </span>
-                <span className="stat-chip">
-                  Excused:{" "}
-                  {personal?.summary?.excusedDays ?? selected.excusedDays ?? 0}
-                </span>
-              </div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                <button
-                  className="secondary-button"
-                  onClick={downloadPersonalCsv}
-                  disabled={!personal?.days?.length}
-                >
-                  Download CSV
-                </button>
-                <button
-                  className="portal-primary"
-                  onClick={() => void downloadPersonalPdf()}
-                  disabled={downloading || !selected.studentId}
-                >
-                  {downloading ? "Preparing…" : "Download PDF"}
-                </button>
-              </div>
-              {personalLoading ? (
-                <StatePanel kind="loading" />
-              ) : personal?.days ? (
-                <div style={{ overflowX: "auto" }}>
-                  <table className="portal-table" style={{ minWidth: 560 }}>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Month</th>
-                        <th>Status</th>
-                        <th>Arrival</th>
-                        <th>Checkout</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {personal.days.map((d) => (
-                        <tr key={d.date}>
-                          <td>{d.label}</td>
-                          <td style={{ opacity: 0.7, fontSize: 12 }}>
-                            {d.month}
-                          </td>
-                          <td>
-                            <span
-                              style={{
-                                padding: "2px 8px",
-                                borderRadius: 999,
-                                ...cellStyle(
-                                  d.status === "Present"
-                                    ? "Present"
-                                    : d.status === "Late"
-                                      ? "Late"
-                                      : d.status === "Excused"
-                                        ? "Excused"
-                                        : "—",
-                                ),
-                              }}
-                            >
-                              {d.status}
-                            </span>
-                          </td>
-                          <td>
-                            {d.arrivedAt ? attendanceTime(d.arrivedAt) : "—"}
-                          </td>
-                          <td>
-                            {d.checkedOutAt
-                              ? attendanceTime(d.checkedOutAt)
-                              : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p style={{ fontSize: 13, opacity: 0.7 }}>
-                  Loading day-by-day breakdown…
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

@@ -2472,6 +2472,74 @@ nav a:hover,
 .report-summary {
   margin-bottom: 16px;
 }
+.report-download-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr);
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+.report-download-main,
+.report-download-history {
+  padding: 24px;
+}
+.report-panel-heading h2,
+.report-download-history h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.report-panel-heading p,
+.report-download-history p,
+.report-download-footer p,
+.report-preview-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.reports-page .report-controls {
+  padding: 0;
+  margin: 22px 0;
+}
+.report-download-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.report-download-history {
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(59, 156, 255, 0.05);
+}
+.report-history-label {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.report-download-history h2 { margin: 0; }
+.report-download-history button { margin-top: 6px; }
+.report-student-list { overflow-x: auto; }
+.report-student-table { min-width: 620px; width: 100%; }
+.report-student-name { display: block; font-weight: 600; }
+.report-student-email { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.report-preview-note { padding: 16px 20px; border-top: 1px solid var(--line); }
+.report-download-status { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+@media (max-width: 900px) {
+  .report-download-panel { grid-template-columns: 1fr; }
+  .report-download-history { border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 600px) {
+  .report-download-main, .report-download-history { padding: 18px; }
+  .reports-page .report-actions button { flex: 1; }
+}
 .sidebar-scrim {
   display: none;
 }
