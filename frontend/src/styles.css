@@ -1548,7 +1548,7 @@ nav a:hover,
   position: relative;
   z-index: 2;
   min-height: 100vh;
-  background: #080d11;
+  background: var(--bg);
   display: grid;
   grid-template-columns: 258px minmax(0, 1fr);
 }
@@ -2474,7 +2474,8 @@ nav a:hover,
 }
 .report-download-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+  gap: 20px;
   margin-bottom: 24px;
   overflow: hidden;
 }
@@ -2510,7 +2511,6 @@ nav a:hover,
   padding-top: 18px;
 }
 .report-download-history {
-  border-left: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2524,6 +2524,52 @@ nav a:hover,
   font-weight: 700;
   color: var(--muted);
 }
+.report-section-label {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--blue);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+.report-range-label { display: block; font-size: 11px; margin-bottom: 3px; }
+.reports-page .content-card {
+  background: var(--panel) !important;
+  border-color: var(--line) !important;
+  box-shadow: 0 4px 16px #00000008 !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.reports-page .content-card::before { display: none; }
+.reports-page .report-download-history { background: var(--panel-2) !important; }
+.reports-page .report-actions button,
+.reports-page .report-download-history > button { min-height: 42px; font-size: 12px; }
+.reports-page .card-toolbar { padding: 20px 24px; }
+.reports-page .portal-table td { padding: 16px 24px; color: var(--text); }
+.reports-page .portal-table th { padding: 13px 24px; }
+.reports-page .report-student-table td:last-child { text-align: right; }
+.reports-page .report-student-table th:last-child { text-align: right; }
+.reports-page .report-student-table tbody tr:hover { background: var(--panel-2); }
+[data-theme="light"] .portal-sidebar,
+[data-theme="light"] .portal-topbar {
+  background: #fff !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+[data-theme="light"] .reports-page { color: #0f172a; }
+[data-theme="light"] .reports-page h2 { color: #0f172a; }
+[data-theme="light"] .reports-page .portal-primary,
+[data-theme="light"] .reports-page .table-search button {
+  background: #0369a1 !important;
+  color: #fff !important;
+  box-shadow: none;
+}
+[data-theme="light"] .reports-page .portal-primary:hover,
+[data-theme="light"] .reports-page .table-search button:hover { background: #075985 !important; }
+[data-theme="light"] .reports-page .report-history-label { color: #0369a1; }
+[data-theme="light"] .reports-page .report-student-email { color: #475569; }
+[data-theme="light"] .reports-page .card-toolbar { background: #fff; }
+[data-theme="light"] .reports-page .report-download-history { background: #f0f9ff !important; border-color: #bae6fd !important; }
 .report-download-history h2 { margin: 0; }
 .report-download-history button { margin-top: 6px; }
 .report-student-list { overflow-x: auto; }

@@ -71,102 +71,6 @@ type ReportPayload = {
   students?: StudentSummary[];
 };
 
-function csvCell(value: unknown) {
-  const text = value === null || value === undefined ? "" : String(value);
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
-export function attendanceTime(value: string | null) {
-  if (!value) return "Not checked out";
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Africa/Dar_es_Salaam",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(new Date(value));
-}
-
-export function attendanceStatusLabel(status: string) {
-  if (status === "ABSENT") return "—";
-  if (status === "EXCUSED") return "Excused";
-  if (status === "PRESENT") return "Arrived early";
-  if (status === "LATE") return "Late";
-  if (status === "CHECKED_OUT") return "Checked out";
-  return status.replace(/_/g, " ");
-}
-
-export function attendanceCsv(
-  rows: AttendanceRow[],
-  period: ReportPeriod = "daily",
-) {
-  const includeDay = period !== "daily";
-  const header = includeDay
-    ? [
-        "Student name",
-        "Student ID",
-        "Registration number",
-        "Day",
-        "Date",
-        "Arrival time",
-        "Checkout time",
-        "Status",
-      ]
-    : [
-        "Student name",
-        "Student ID",
-        "Registration number",
-        "Arrival time",
-        "Checkout time",
-      ];
-  return [
-    header,
-    ...rows.map((row) => {
-      const cells = [
-        row.studentName,
-        row.membershipId || "",
-        row.registrationNumber,
-        ...(includeDay ? [row.day || "", row.date || ""] : []),
-        attendanceTime(row.arrivedAt),
-        row.checkedOutAt ? attendanceTime(row.checkedOutAt) : "",
-        ...(includeDay ? [attendanceStatusLabel(row.status)] : []),
-      ];
-      return cells;
-    }),
-  ]
-    .map((line) => line.map(csvCell).join(","))
-    .join("\n");
-}
-
-export function matrixCsv(students: StudentSummary[], days: DayMeta[]) {
-  const header = [
-    "Student name",
-    "Student ID",
-    "Registration number",
-    "Email",
-    ...days.map((d) => d.date),
-    "Days present",
-    "Late",
-    "Absent",
-    "Attendance %",
-  ];
-  const lines = [header];
-  for (const s of students) {
-    lines.push([
-      s.studentName,
-      s.membershipId || "",
-      s.registrationNumber,
-      (s.email as string) || "",
-      ...days.map((d) => s.daysByDate?.[d.date] || "—"),
-      String(s.daysPresent),
-      String(s.lateDays),
-      String(s.absentDays ?? ""),
-      String(s.attendanceRate ?? ""),
-    ]);
-  }
-  return lines.map((l) => l.map(csvCell).join(",")).join("\n");
-}
-
 export default function ReportsPage({
   role,
 }: {
@@ -182,7 +86,6 @@ export default function ReportsPage({
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const students = Array.isArray(report.students) ? report.students : [];
-  const days = Array.isArray(report.days) ? report.days : [];
   function buildParams(date = reportDate) {
     const params: Record<string, string> = { period: "monthly" };
     if (monthInput) {
@@ -216,19 +119,6 @@ export default function ReportsPage({
   useEffect(() => {
     void load("");
   }, [role]);
-
-  function downloadCsv() {
-    const content = matrixCsv(students, days);
-    const blob = new Blob([`\uFEFF${content}`], {
-      type: "text/csv;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `ccd-attendance-${period}-${report.startDate || reportDate}-to-${report.endDate || ""}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }
 
   async function downloadExcel(allDays = false) {
     setDownloading(true);
@@ -328,9 +218,10 @@ export default function ReportsPage({
         title="Reports"
         description="Preview your students below. Download a report for daily attendance, arrival times and attendance percentages."
       />
-      <section className="content-card report-download-panel" aria-label="Report downloads">
-        <div className="report-download-main">
+      <section className="report-download-panel" aria-label="Report downloads">
+        <div className="content-card report-download-main">
           <div className="report-panel-heading">
+            <span className="report-section-label">SELECTED PERIOD</span>
             <h2>Monthly report</h2>
             <p>Choose a month, then download the complete report.</p>
           </div>
@@ -344,15 +235,14 @@ export default function ReportsPage({
             </button>
           </form>
           <div className="report-download-footer">
-            <p>{report.startDate ? rangeLabel : "Loading report…"}</p>
+            <p><span className="report-range-label">Report covers</span>{report.startDate ? rangeLabel : "Loading report…"}</p>
             <div className="report-actions" aria-label="Monthly downloads">
               <button type="button" className="portal-primary" disabled={downloading || loading || !report.date} onClick={() => void downloadExcel()}>Export Excel</button>
               <button type="button" className="secondary-button" disabled={downloading || loading || !report.date} onClick={() => void downloadPdf()}>Download PDF</button>
-              <button type="button" className="secondary-button" disabled={downloading || loading || !students.length} onClick={downloadCsv}>Download CSV</button>
             </div>
           </div>
         </div>
-        <div className="report-download-history">
+        <div className="content-card report-download-history">
           <span className="report-history-label">COMPLETE HISTORY</span>
           <h2>All days, one download</h2>
           <p>Every month, student totals and detailed attendance records in one Excel workbook.</p>
@@ -369,7 +259,7 @@ export default function ReportsPage({
             value: searchInput,
             onChange: setSearchInput,
             onSubmit: () => applySearch(),
-            placeholder: "Name, student ID, registration, email…",
+            placeholder: "Search students…",
             label: "Search attendance report",
           }}
           onRefresh={() => void load()}
