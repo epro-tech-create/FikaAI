@@ -1,11 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   CardToolbar,
-  DataTable,
   PageHeading,
   StatePanel,
   StatCard,
-  type TableColumn,
 } from "../../components/PortalUI";
 import { matchesSearch } from "../../lib/tableSearch";
 import type { Role } from "../../lib/auth";
@@ -107,18 +105,6 @@ type PersonalReport = {
   days?: PersonalDay[];
   monthGroups?: MonthGroup[];
 };
-
-const WEEKDAY_COLUMNS: TableColumn[] = [
-  { key: "studentName", label: "Student" },
-  { key: "membershipId", label: "Student ID" },
-  { key: "registrationNumber", label: "Registration no." },
-  { key: "days.Mon", label: "Mon" },
-  { key: "days.Tue", label: "Tue" },
-  { key: "days.Wed", label: "Wed" },
-  { key: "days.Thu", label: "Thu" },
-  { key: "days.Fri", label: "Fri" },
-  { key: "daysPresent", label: "Days" },
-];
 
 function csvCell(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
@@ -238,11 +224,9 @@ export default function ReportsPage({
 }: {
   role: Extract<Role, "admin" | "instructor">;
 }) {
-  const [period, setPeriod] = useState<ReportPeriod>("daily");
+  const period: ReportPeriod = "monthly";
   const [reportDate, setReportDate] = useState("");
   const [monthInput, setMonthInput] = useState(""); // yyyy-mm
-  const [startInput, setStartInput] = useState("");
-  const [endInput, setEndInput] = useState("");
   const [report, setReport] = useState<ReportPayload>({});
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -260,48 +244,22 @@ export default function ReportsPage({
     ? report.monthGroups
     : [];
 
-  function buildParams(date = reportDate, selectedPeriod = period) {
-    const params: Record<string, string> = { period: selectedPeriod };
-    if (selectedPeriod === "monthly") {
-      // Two-day range wins: e.g. From 10th Aug To 21st Sept -> custom range grouped by month
-      if (startInput && endInput) {
-        params.period = "custom";
-        params.startDate = startInput;
-        params.endDate = endInput;
-      } else if (monthInput) {
-        params.date = `${monthInput}-15`;
-      } else if (date) {
-        params.date = date;
-      }
-    } else {
-      if (date) params.date = date;
-    }
-    if (selectedPeriod === "custom") {
-      if (startInput) params.startDate = startInput;
-      if (endInput) params.endDate = endInput;
+  function buildParams(date = reportDate) {
+    const params: Record<string, string> = { period: "monthly" };
+    if (monthInput) {
+      params.date = `${monthInput}-15`;
+    } else if (date) {
+      params.date = date;
     }
     return params;
   }
 
-  function pickMonth(value: string) {
-    setMonthInput(value);
-    if (value) {
-      const [y, m] = value.split("-").map(Number);
-      if (y && m) {
-        const last = new Date(y, m, 0).getDate();
-        const mm = String(m).padStart(2, "0");
-        setStartInput(`${y}-${mm}-01`);
-        setEndInput(`${y}-${mm}-${String(last).padStart(2, "0")}`);
-      }
-    }
-  }
-
-  async function load(date = reportDate, selectedPeriod = period) {
+  async function load(date = reportDate) {
     setLoading(true);
     setError("");
     try {
       const response = await api.get(`/${role}/reports/attendance`, {
-        params: buildParams(date, selectedPeriod),
+        params: buildParams(date),
       });
       const payload = (response.data || {}) as ReportPayload;
       setReport(payload);
@@ -318,10 +276,7 @@ export default function ReportsPage({
   }, [role]);
 
   function downloadCsv() {
-    const content =
-      period === "monthly" || period === "custom"
-        ? matrixCsv(filteredStudents, days)
-        : attendanceCsv(rows, period);
+    const content = matrixCsv(filteredStudents, days);
     const blob = new Blob([`\uFEFF${content}`], {
       type: "text/csv;charset=utf-8",
     });
@@ -431,29 +386,11 @@ export default function ReportsPage({
     setSearchQuery(searchInput);
   }
 
-  function changePeriod(next: ReportPeriod) {
-    setPeriod(next);
-    setSelected(null);
-    setPersonal(null);
-    void load(reportDate, next);
-  }
-
   const rangeLabel =
     report.startDate && report.endDate && report.startDate !== report.endDate
       ? `${report.startDate} – ${report.endDate}`
       : reportDate || "Today";
 
-  const tableSource: (AttendanceRow | StudentSummary)[] =
-    period === "daily" ? rows : students;
-  const visibleItems = tableSource.filter((item) =>
-    matchesSearch(item, searchQuery, [
-      "studentName",
-      "membershipId",
-      "registrationNumber",
-      "email",
-      "status",
-    ]),
-  );
   const filteredStudents = students.filter((item) =>
     matchesSearch(item, searchQuery, [
       "studentName",
@@ -464,37 +401,16 @@ export default function ReportsPage({
     ]),
   );
 
-  const dailyRows = (visibleItems as AttendanceRow[]).map((row) => ({
-    ...row,
-    arrivedAt: attendanceTime(String(row.arrivedAt || "")),
-    checkedOutAt: row.checkedOutAt
-      ? attendanceTime(row.checkedOutAt as string)
-      : "—",
-    status: attendanceStatusLabel(String(row.status || "")),
-  }));
-
-  const showMatrix = period === "monthly" || period === "custom";
   const emptyCopy =
-    period === "weekly"
-      ? "No student attendance was recorded for this week."
-      : showMatrix
-        ? "No attendance in this range. All students show Absent (—)."
-        : "No student attendance was recorded for this date.";
-  const heading =
-    period === "weekly"
-      ? "Weekly attendance"
-      : period === "monthly"
-        ? "Monthly attendance"
-        : period === "custom"
-          ? "Custom period attendance"
-          : "Daily attendance";
+    "No attendance in this month. All students show Absent (—).";
+  const heading = "Monthly attendance";
 
   return (
     <main className="portal-content">
       <PageHeading
         eyebrow="ATTENDANCE RECORDS"
         title="Reports"
-        description="Daily, weekly, monthly or custom-range reports. Monthly/custom show every day (P/L/E/—) with month names on top. Click a student for personal report."
+        description="Monthly report. Pick a month or any date in it — every day shows P/L/E/— with month names on top. Click a student for personal report."
         action={
           <div className="report-actions">
             <button
@@ -517,112 +433,31 @@ export default function ReportsPage({
         }
       />
       <section className="content-card report-controls">
-        <div
-          className="report-period"
-          role="tablist"
-          aria-label="Report period"
-        >
-          {(
-            [
-              { key: "daily", label: "Daily" },
-              { key: "weekly", label: "Weekly" },
-              { key: "monthly", label: "Monthly" },
-              { key: "custom", label: "Days range" },
-            ] as const
-          ).map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              role="tab"
-              aria-selected={period === item.key}
-              className={period === item.key ? "is-active" : ""}
-              onClick={() => changePeriod(item.key)}
-              title={
-                item.key === "custom"
-                  ? "Pick any From–To dates, e.g. 10th Aug to 21st Sept. Days are grouped by month."
-                  : undefined
-              }
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        {period === "monthly" ? (
-          <>
-            <label>
-              Month (fills the range)
-              <input
-                type="month"
-                value={monthInput}
-                onChange={(e) => pickMonth(e.target.value)}
-              />
-            </label>
-            <label>
-              From
-              <input
-                type="date"
-                value={startInput}
-                max={endInput || undefined}
-                onChange={(e) => setStartInput(e.target.value)}
-              />
-            </label>
-            <label>
-              To
-              <input
-                type="date"
-                value={endInput}
-                min={startInput || undefined}
-                onChange={(e) => setEndInput(e.target.value)}
-              />
-            </label>
-            <span style={{ fontSize: 12, opacity: 0.7, alignSelf: "center" }}>
-              Pick any range, e.g. 10th Aug to 21st Sept — days group by month.
-            </span>
-          </>
-        ) : period === "custom" ? (
-          <>
-            <label>
-              From (e.g. 10th Aug)
-              <input
-                type="date"
-                value={startInput}
-                max={endInput || undefined}
-                onChange={(e) => setStartInput(e.target.value)}
-              />
-            </label>
-            <label>
-              To (e.g. 21st Sept)
-              <input
-                type="date"
-                value={endInput}
-                min={startInput || undefined}
-                onChange={(e) => setEndInput(e.target.value)}
-              />
-            </label>
-            <span style={{ fontSize: 12, opacity: 0.7, alignSelf: "center" }}>
-              Days are arranged monthly with month names on top.
-            </span>
-          </>
-        ) : (
-          <label>
-            {period === "weekly" ? "Any day in the week" : "Attendance date"}
-            <input
-              type="date"
-              value={reportDate}
-              onChange={(event) => setReportDate(event.target.value)}
-            />
-          </label>
-        )}
+        <label>
+          Month
+          <input
+            type="month"
+            value={monthInput}
+            onChange={(e) => {
+              setMonthInput(e.target.value);
+              if (e.target.value) setReportDate("");
+            }}
+          />
+        </label>
+        <label>
+          Any day in the month
+          <input
+            type="date"
+            value={reportDate}
+            onChange={(event) => {
+              setReportDate(event.target.value);
+              if (event.target.value) setMonthInput("");
+            }}
+          />
+        </label>
         <button
           className="secondary-button"
-          disabled={
-            loading ||
-            (period === "custom" && (!startInput || !endInput)) ||
-            (period === "monthly" &&
-              !monthInput &&
-              !reportDate &&
-              !(startInput && endInput))
-          }
+          disabled={loading || (!monthInput && !reportDate)}
           onClick={() => void load()}
         >
           {loading ? "Loading..." : "View report"}
@@ -659,7 +494,7 @@ export default function ReportsPage({
       <section className="content-card">
         <CardToolbar
           title={heading}
-          meta={`${searchQuery ? `${visibleItems.length} of ${tableSource.length} students` : `${tableSource.length} students`} · ${rangeLabel}`}
+          meta={`${searchQuery ? `${filteredStudents.length} of ${students.length} students` : `${students.length} students`} · ${rangeLabel}`}
           search={{
             value: searchInput,
             onChange: setSearchInput,
@@ -671,153 +506,122 @@ export default function ReportsPage({
         />
         {loading ? (
           <StatePanel kind="loading" />
-        ) : showMatrix ? (
-          filteredStudents.length ? (
-            <div style={{ overflowX: "auto" }}>
-              <table
-                className="portal-table matrix-table"
-                style={{ minWidth: Math.max(700, 220 + days.length * 52) }}
-              >
-                <thead>
-                  <tr>
+        ) : filteredStudents.length ? (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              className="portal-table matrix-table"
+              style={{ minWidth: Math.max(700, 220 + days.length * 52) }}
+            >
+              <thead>
+                <tr>
+                  <th
+                    rowSpan={2}
+                    style={{
+                      minWidth: 170,
+                      position: "sticky",
+                      left: 0,
+                      background: "var(--panel)",
+                      zIndex: 2,
+                    }}
+                  >
+                    Student
+                  </th>
+                  <th rowSpan={2} style={{ minWidth: 110 }}>
+                    Student ID
+                  </th>
+                  {monthGroups.map((g) => (
                     <th
-                      rowSpan={2}
+                      key={g.month}
+                      colSpan={g.span}
                       style={{
-                        minWidth: 170,
+                        textAlign: "center",
+                        background: "#ffffff",
+                        color: "#0f172a",
+                        borderBottom: "1px solid var(--line)",
+                      }}
+                    >
+                      {g.month}
+                    </th>
+                  ))}
+                  <th rowSpan={2}>Tot</th>
+                </tr>
+                <tr>
+                  {days.map((d) => (
+                    <th
+                      key={d.date}
+                      title={`${d.date} · ${d.month}`}
+                      style={{ minWidth: 48, textAlign: "center" }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 800 }}>
+                        {d.dayNum}
+                      </div>
+                      <div style={{ fontSize: 10, opacity: 0.7 }}>
+                        {d.label}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStudents.map((s) => (
+                  <tr
+                    key={(s.studentId as string) || s.registrationNumber}
+                    onClick={() => void openPersonal(s)}
+                    style={{ cursor: "pointer" }}
+                    title="Click for personal report"
+                  >
+                    <td
+                      style={{
                         position: "sticky",
                         left: 0,
                         background: "var(--panel)",
-                        zIndex: 2,
+                        fontWeight: 600,
                       }}
                     >
-                      Student
-                    </th>
-                    <th rowSpan={2} style={{ minWidth: 110 }}>
-                      Student ID
-                    </th>
-                    {monthGroups.map((g) => (
-                      <th
-                        key={g.month}
-                        colSpan={g.span}
+                      {s.studentName}
+                      <div
                         style={{
-                          textAlign: "center",
-                          background: "#ffffff",
-                          color: "#0f172a",
-                          borderBottom: "1px solid var(--line)",
+                          fontSize: 11,
+                          opacity: 0.65,
+                          fontWeight: 400,
                         }}
                       >
-                        {g.month}
-                      </th>
-                    ))}
-                    <th rowSpan={2}>Tot</th>
-                  </tr>
-                  <tr>
-                    {days.map((d) => (
-                      <th
-                        key={d.date}
-                        title={`${d.date} · ${d.month}`}
-                        style={{ minWidth: 48, textAlign: "center" }}
-                      >
-                        <div style={{ fontSize: 11, fontWeight: 800 }}>
-                          {d.dayNum}
-                        </div>
-                        <div style={{ fontSize: 10, opacity: 0.7 }}>
-                          {d.label}
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredStudents.map((s) => (
-                    <tr
-                      key={(s.studentId as string) || s.registrationNumber}
-                      onClick={() => void openPersonal(s)}
-                      style={{ cursor: "pointer" }}
-                      title="Click for personal report"
-                    >
-                      <td
-                        style={{
-                          position: "sticky",
-                          left: 0,
-                          background: "var(--panel)",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {s.studentName}
-                        <div
-                          style={{
-                            fontSize: 11,
-                            opacity: 0.65,
-                            fontWeight: 400,
-                          }}
+                        {(s.email as string) || ""}
+                      </div>
+                    </td>
+                    <td>{s.membershipId || "—"}</td>
+                    {days.map((d) => {
+                      const v = s.daysByDate?.[d.date] || "—";
+                      return (
+                        <td
+                          key={d.date}
+                          title={`${d.date}: ${v}`}
+                          style={{ textAlign: "center", ...cellStyle(v) }}
                         >
-                          {(s.email as string) || ""}
-                        </div>
-                      </td>
-                      <td>{s.membershipId || "—"}</td>
-                      {days.map((d) => {
-                        const v = s.daysByDate?.[d.date] || "—";
-                        return (
-                          <td
-                            key={d.date}
-                            title={`${d.date}: ${v}`}
-                            style={{ textAlign: "center", ...cellStyle(v) }}
-                          >
-                            {cellShort(v)}
-                          </td>
-                        );
-                      })}
-                      <td style={{ textAlign: "center", fontWeight: 700 }}>
-                        {s.daysPresent}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
-                Legend: P = Present, L = Late, E = Excused, — = Absent. Click
-                any row for full personal report.
-              </p>
-            </div>
-          ) : (
-            !error && (
-              <StatePanel kind="empty">
-                {tableSource.length
-                  ? "No attendance records match this search."
-                  : emptyCopy}
-              </StatePanel>
-            )
-          )
-        ) : visibleItems.length ? (
-          <DataTable
-            columns={
-              period === "weekly"
-                ? WEEKDAY_COLUMNS
-                : [
-                    { key: "studentName", label: "Student" },
-                    { key: "membershipId", label: "Student ID" },
-                    { key: "registrationNumber", label: "Registration no." },
-                    { key: "arrivedAt", label: "Arrival time" },
-                    { key: "checkedOutAt", label: "Checkout time" },
-                    { key: "status", label: "Status" },
-                  ]
-            }
-            items={period === "daily" ? dailyRows : visibleItems}
-          />
+                          {cellShort(v)}
+                        </td>
+                      );
+                    })}
+                    <td style={{ textAlign: "center", fontWeight: 700 }}>
+                      {s.daysPresent}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
+              Legend: P = Present, L = Late, E = Excused, — = Absent. Click any
+              row for full personal report.
+            </p>
+          </div>
         ) : (
           !error && (
             <StatePanel kind="empty">
-              {tableSource.length
+              {students.length
                 ? "No attendance records match this search."
                 : emptyCopy}
             </StatePanel>
           )
-        )}
-        {period === "weekly" && visibleItems.length > 0 && (
-          <p style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
-            Click a student row to open personal report (same as monthly view).
-          </p>
         )}
       </section>
 
