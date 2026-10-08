@@ -15,7 +15,7 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A3, A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.platypus import (PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table,
+from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer, Table,
                                 TableStyle)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -742,6 +742,11 @@ def render_student_pdf(report: dict[str, Any]) -> bytes:
 def render_attendance_pdf(report: dict[str, Any]) -> bytes:
     period = report["period"]
     pagesize = landscape(A3) if period in ("monthly", "custom", "all") else (landscape(A4) if period == "weekly" else A4)
+    if period in ("monthly", "custom", "all"):
+        # Fixed identity columns leave the remaining width to dates. Extend the
+        # PDF canvas for long histories instead of splitting months horizontally.
+        minimum_width = 28 * mm + 44 * mm + 28 * mm + 12 * mm + 22 * mm + len(report.get("days", [])) * 9 * mm
+        pagesize = (max(pagesize[0], minimum_width), pagesize[1])
     buffer = BytesIO()
     heading_style = ParagraphStyle(
         "CcdHeading",
@@ -987,10 +992,7 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
                 heading_style,
             )
         )
-        # Keep every weekday of each month in a single horizontal table.
-        months: dict[str, list[dict[str, Any]]] = {}
-        for day in day_metas:
-            months.setdefault(day["date"][:7], []).append(day)
+        # One matrix for the entire period, with grouped month headers.
         small_cell = ParagraphStyle(
             "CcdSmall", parent=cell_style, fontSize=7, leading=9
         )
@@ -1000,97 +1002,95 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
         small_header = ParagraphStyle(
             "CcdSmallH", parent=header_style, fontSize=7, leading=9, alignment=TA_CENTER
         )
-        for month_index, chunk in enumerate(months.values()):
-            if month_index:
-                story.append(PageBreak())
-            # Month grouping row on top of day columns
-            month_row: list[Any] = [
-                Paragraph("", header_style),
-                Paragraph("", header_style),
+        chunk = day_metas
+        # Month grouping row on top of day columns
+        month_row: list[Any] = [
+            Paragraph("", header_style),
+            Paragraph("", header_style),
+        ]
+        day_row: list[Any] = [
+            Paragraph("<b>Student</b>", header_style),
+            Paragraph("<b>ID</b>", header_style),
+        ]
+        # Build month spans within this chunk
+        ci = 0
+        while ci < len(chunk):
+            m = chunk[ci]["month"]
+            span = 0
+            while ci + span < len(chunk) and chunk[ci + span]["month"] == m:
+                span += 1
+            month_row.append(Paragraph(f"<b>{m}</b>", small_header))
+            # span handled via SPAN style below; fill placeholders
+            for _ in range(span - 1):
+                month_row.append(Paragraph("", small_header))
+            ci += span
+        for d in chunk:
+            day_row.append(
+                Paragraph(f"<b>{d['dayNum']}<br/>{d['label']}</b>", small_header)
+            )
+        day_row.append(Paragraph("<b>Tot</b>", small_header))
+        day_row.append(Paragraph("<b>Attendance %</b>", small_header))
+        table_data = [month_row, day_row]
+        for student in report["students"]:
+            by_date = student.get("daysByDate", {}) or {}
+            row_cells: list[Any] = [
+                Paragraph(student["studentName"], small_cell),
+                Paragraph(_public_student_id(student), small_cell),
             ]
-            day_row: list[Any] = [
-                Paragraph("<b>Student</b>", header_style),
-                Paragraph("<b>ID</b>", header_style),
-            ]
-            # Build month spans within this chunk
-            ci = 0
-            while ci < len(chunk):
-                m = chunk[ci]["month"]
-                span = 0
-                while ci + span < len(chunk) and chunk[ci + span]["month"] == m:
-                    span += 1
-                month_row.append(Paragraph(f"<b>{m}</b>", small_header))
-                # span handled via SPAN style below; fill placeholders
-                for _ in range(span - 1):
-                    month_row.append(Paragraph("", small_header))
-                ci += span
+            present_count = 0
             for d in chunk:
-                day_row.append(
-                    Paragraph(f"<b>{d['dayNum']}<br/>{d['label']}</b>", small_header)
+                v = by_date.get(d["date"], "—")
+                row_cells.append(Paragraph(_short_cell(v), small_center))
+                if v in ("Present", "Late"):
+                    present_count += 1
+            row_cells.append(
+                Paragraph(
+                    str(present_count), small_center
                 )
-            day_row.append(Paragraph("<b>Tot</b>", small_header))
-            day_row.append(Paragraph("<b>Attendance %</b>", small_header))
-            table_data = [month_row, day_row]
-            for student in report["students"]:
-                by_date = student.get("daysByDate", {}) or {}
-                row_cells: list[Any] = [
-                    Paragraph(student["studentName"], small_cell),
-                    Paragraph(_public_student_id(student), small_cell),
-                ]
-                present_count = 0
-                for d in chunk:
-                    v = by_date.get(d["date"], "—")
-                    row_cells.append(Paragraph(_short_cell(v), small_center))
-                    if v in ("Present", "Late"):
-                        present_count += 1
-                row_cells.append(
-                    Paragraph(
-                        str(present_count), small_center
-                    )
-                )
-                row_cells.append(Paragraph(f"{present_count / len(chunk) * 100:.1f}%", small_center))
-                table_data.append(row_cells)
-            if len(table_data) == 2:
-                table_data.append(
-                    [Paragraph("No attendance for this period.", body_style)]
-                    + [""] * (len(chunk) + 3)
-                )
-            usable = pagesize[0] - 28 * mm
-            name_w = usable * 0.20
-            id_w = usable * 0.10
-            tot_w = usable * 0.05
-            rate_w = usable * 0.08
-            day_w = (usable - name_w - id_w - tot_w - rate_w) / max(1, len(chunk))
-            widths = [name_w, id_w, *[day_w] * len(chunk), tot_w, rate_w]
-            table = Table(table_data, colWidths=widths, repeatRows=2)
-            style_cmds: list[Any] = [
-                ("BACKGROUND", (0, 0), (-1, 1), TABLE_HEADER_BG),
-                ("TEXTCOLOR", (0, 0), (-1, 1), TABLE_HEADER_TEXT),
-                ("BACKGROUND", (0, 2), (-1, -1), colors.white),
-                ("ROWBACKGROUNDS", (0, 2), (-1, -1), [colors.white, colors.white]),
-                ("BOX", (0, 0), (-1, -1), 0.4, LINE),
-                ("INNERGRID", (0, 0), (-1, -1), 0.25, LINE),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("LEFTPADDING", (0, 0), (-1, -1), 4),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ]
-            # Span month cells
-            col = 2
-            ci = 0
-            while ci < len(chunk):
-                m = chunk[ci]["month"]
-                span = 0
-                while ci + span < len(chunk) and chunk[ci + span]["month"] == m:
-                    span += 1
-                if span > 1:
-                    style_cmds.append(("SPAN", (col, 0), (col + span - 1, 0)))
-                col += span
-                ci += span
-            table.setStyle(TableStyle(style_cmds))
-            story.append(table)
-            story.append(Spacer(1, 5 * mm))
+            )
+            row_cells.append(Paragraph(f"{present_count / len(chunk) * 100:.1f}%", small_center))
+            table_data.append(row_cells)
+        if len(table_data) == 2:
+            table_data.append(
+                [Paragraph("No attendance for this period.", body_style)]
+                + [""] * (len(chunk) + 3)
+            )
+        usable = pagesize[0] - 28 * mm
+        name_w = 44 * mm
+        id_w = 28 * mm
+        tot_w = 12 * mm
+        rate_w = 22 * mm
+        day_w = (usable - name_w - id_w - tot_w - rate_w) / max(1, len(chunk))
+        widths = [name_w, id_w, *[day_w] * len(chunk), tot_w, rate_w]
+        table = Table(table_data, colWidths=widths, repeatRows=2)
+        style_cmds: list[Any] = [
+            ("BACKGROUND", (0, 0), (-1, 1), TABLE_HEADER_BG),
+            ("TEXTCOLOR", (0, 0), (-1, 1), TABLE_HEADER_TEXT),
+            ("BACKGROUND", (0, 2), (-1, -1), colors.white),
+            ("ROWBACKGROUNDS", (0, 2), (-1, -1), [colors.white, colors.white]),
+            ("BOX", (0, 0), (-1, -1), 0.4, LINE),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, LINE),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ]
+        # Span month cells
+        col = 2
+        ci = 0
+        while ci < len(chunk):
+            m = chunk[ci]["month"]
+            span = 0
+            while ci + span < len(chunk) and chunk[ci + span]["month"] == m:
+                span += 1
+            if span > 1:
+                style_cmds.append(("SPAN", (col, 0), (col + span - 1, 0)))
+            col += span
+            ci += span
+        table.setStyle(TableStyle(style_cmds))
+        story.append(table)
+        story.append(Spacer(1, 5 * mm))
         story.append(
             Paragraph(
                 "Legend: P = Present (arrived early), L = Late, E = Excused, — = Absent",

@@ -106,13 +106,24 @@ def test_pdf_keeps_all_month_weekdays_in_one_table(period, monkeypatch):
     end = date(2026, 10, 30) if period == "all" else date(2026, 9, 30)
     dates = report_service._enumerate_days(date(2026, 9, 1), end)
     report["days"] = [{"date": d.isoformat(), "dayNum": str(d.day), "label": d.strftime("%a"), "month": d.strftime("%B %Y")} for d in dates]
+    report["students"] = [{
+        "studentName": "Asha with a longer name", "membershipId": "CCD-2026-001",
+        "daysByDate": {d.isoformat(): "Late" if d.month == 9 else "—" for d in dates},
+    }]
     assert render_attendance_pdf(report).startswith(b"%PDF")
-    assert len(matrices) == (2 if period == "all" else 1)
+    assert len(matrices) == 1
+    assert len(matrices[0]) == 3  # Two headers and exactly one student row.
+    assert matrices[0][2][-2].text == "22"
+    assert matrices[0][2][-1].text == ("50.0%" if period == "all" else "100.0%")
     # Two identity columns, all 22 September weekdays, total and percentage.
-    assert len(matrices[0][1]) == 26
+    assert len(matrices[0][1]) == len(dates) + 4
     headers = [getattr(cell, "text", "") for cell in matrices[0][1]]
     assert "<b>1<br/>Tue</b>" in headers
     assert "<b>30<br/>Wed</b>" in headers
+    if period == "all":
+        months = [getattr(cell, "text", "") for cell in matrices[0][0]]
+        assert "<b>September 2026</b>" in months
+        assert "<b>October 2026</b>" in months
 
 
 @pytest.mark.asyncio
