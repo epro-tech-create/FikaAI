@@ -113,10 +113,12 @@ def test_pdf_keeps_all_month_weekdays_in_one_table(period, monkeypatch):
     assert render_attendance_pdf(report).startswith(b"%PDF")
     assert len(matrices) == 1
     assert len(matrices[0]) == 3  # Two headers and exactly one student row.
+    assert matrices[0][2][0].text == "1"
+    assert matrices[0][2][1].text == "Asha with a longer name"
     assert matrices[0][2][-2].text == "22"
     assert matrices[0][2][-1].text == ("50.0%" if period == "all" else "100.0%")
     # Two identity columns, all 22 September weekdays, total and percentage.
-    assert len(matrices[0][1]) == len(dates) + 4
+    assert len(matrices[0][1]) == len(dates) + 5
     headers = [getattr(cell, "text", "") for cell in matrices[0][1]]
     assert "<b>1<br/>Tue</b>" in headers
     assert "<b>30<br/>Wed</b>" in headers

@@ -745,7 +745,7 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
     if period in ("monthly", "custom", "all"):
         # Fixed identity columns leave the remaining width to dates. Extend the
         # PDF canvas for long histories instead of splitting months horizontally.
-        minimum_width = 28 * mm + 44 * mm + 28 * mm + 12 * mm + 22 * mm + len(report.get("days", [])) * 9 * mm
+        minimum_width = 28 * mm + 10 * mm + 44 * mm + 28 * mm + 12 * mm + 22 * mm + len(report.get("days", [])) * 9 * mm
         pagesize = (max(pagesize[0], minimum_width), pagesize[1])
     buffer = BytesIO()
     heading_style = ParagraphStyle(
@@ -1007,8 +1007,10 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
         month_row: list[Any] = [
             Paragraph("", header_style),
             Paragraph("", header_style),
+            Paragraph("", header_style),
         ]
         day_row: list[Any] = [
+            Paragraph("<b>No.</b>", small_header),
             Paragraph("<b>Student</b>", header_style),
             Paragraph("<b>ID</b>", header_style),
         ]
@@ -1031,9 +1033,10 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
         day_row.append(Paragraph("<b>Tot</b>", small_header))
         day_row.append(Paragraph("<b>Attendance %</b>", small_header))
         table_data = [month_row, day_row]
-        for student in report["students"]:
+        for serial, student in enumerate(report["students"], 1):
             by_date = student.get("daysByDate", {}) or {}
             row_cells: list[Any] = [
+                Paragraph(str(serial), small_center),
                 Paragraph(student["studentName"], small_cell),
                 Paragraph(_public_student_id(student), small_cell),
             ]
@@ -1053,15 +1056,16 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
         if len(table_data) == 2:
             table_data.append(
                 [Paragraph("No attendance for this period.", body_style)]
-                + [""] * (len(chunk) + 3)
+                + [""] * (len(chunk) + 4)
             )
         usable = pagesize[0] - 28 * mm
+        serial_w = 10 * mm
         name_w = 44 * mm
         id_w = 28 * mm
         tot_w = 12 * mm
         rate_w = 22 * mm
-        day_w = (usable - name_w - id_w - tot_w - rate_w) / max(1, len(chunk))
-        widths = [name_w, id_w, *[day_w] * len(chunk), tot_w, rate_w]
+        day_w = (usable - serial_w - name_w - id_w - tot_w - rate_w) / max(1, len(chunk))
+        widths = [serial_w, name_w, id_w, *[day_w] * len(chunk), tot_w, rate_w]
         table = Table(table_data, colWidths=widths, repeatRows=2)
         style_cmds: list[Any] = [
             ("BACKGROUND", (0, 0), (-1, 1), TABLE_HEADER_BG),
@@ -1077,7 +1081,7 @@ def render_attendance_pdf(report: dict[str, Any]) -> bytes:
             ("RIGHTPADDING", (0, 0), (-1, -1), 4),
         ]
         # Span month cells
-        col = 2
+        col = 3
         ci = 0
         while ci < len(chunk):
             m = chunk[ci]["month"]

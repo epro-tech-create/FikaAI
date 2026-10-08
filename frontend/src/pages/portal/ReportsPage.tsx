@@ -120,31 +120,6 @@ export default function ReportsPage({
     void load("");
   }, [role]);
 
-  async function downloadExcel(allDays = false) {
-    setDownloading(true);
-    setError("");
-    try {
-      const response = await api.get(`/${role}/reports/attendance.xlsx`, {
-        params: allDays ? { period: "all" } : { period: "monthly", date: report.date || reportDate },
-        responseType: "blob",
-      });
-      const url = URL.createObjectURL(response.data);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = allDays
-        ? "ccd-attendance-all-days.xlsx"
-        : `ccd-attendance-${report.startDate}-to-${report.endDate}.xlsx`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (requestError) {
-      setError(message(requestError));
-    } finally {
-      setDownloading(false);
-    }
-  }
-
   async function downloadPdf(allDays = false) {
     setDownloading(true);
     setError("");
@@ -173,13 +148,13 @@ export default function ReportsPage({
     setError("");
     try {
       const response = await api.get(`/${role}/reports/student/${student.studentId}.pdf`, {
-        params: { period: "monthly", date: report.date || reportDate },
+        params: { period: "all" },
         responseType: "blob",
       });
       const url = URL.createObjectURL(response.data);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `ccd-student-${student.registrationNumber}-${report.startDate}-to-${report.endDate}.pdf`;
+      anchor.download = `ccd-student-${student.registrationNumber}-all-days.pdf`;
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (requestError) {
@@ -223,7 +198,7 @@ export default function ReportsPage({
           <div className="report-panel-heading">
             <span className="report-section-label">SELECTED PERIOD</span>
             <h2>Monthly report</h2>
-            <p>Choose your reporting month and download as Excel or PDF.</p>
+            <p>Choose your reporting month and download as PDF.</p>
           </div>
           <form className="report-controls" onSubmit={(event) => { event.preventDefault(); void load(); }}>
             <label>
@@ -237,7 +212,6 @@ export default function ReportsPage({
           <div className="report-download-footer">
             <p><span className="report-range-label">Report covers</span>{report.startDate ? rangeLabel : "Loading report…"}</p>
             <div className="report-actions" aria-label="Monthly downloads">
-              <button type="button" className="portal-primary" disabled={downloading || loading || !report.date} onClick={() => void downloadExcel()}>Export Excel</button>
               <button type="button" className="secondary-button" disabled={downloading || loading || !report.date} onClick={() => void downloadPdf()}>Download PDF</button>
             </div>
           </div>
@@ -245,10 +219,9 @@ export default function ReportsPage({
         <div className="content-card report-download-history">
           <span className="report-history-label">COMPLETE HISTORY</span>
           <h2>All days, one download</h2>
-          <p>Download all weekdays, organized by month, as Excel or PDF.</p>
+          <p>Download all weekdays, organized by month, as PDF.</p>
           <ul className="report-includes" aria-label="Included in the full report"><li>All months</li><li>Student totals</li><li>Attendance %</li></ul>
           <div className="report-actions report-history-actions">
-          <button type="button" className="secondary-button" disabled={downloading} onClick={() => void downloadExcel(true)}>Export all days (Excel)</button>
           <button type="button" className="secondary-button" disabled={downloading} onClick={() => void downloadPdf(true)}>Export all days (PDF)</button>
           </div>
         </div>
@@ -274,20 +247,21 @@ export default function ReportsPage({
           <div className="report-student-list">
             <table className="portal-table report-student-table">
               <thead>
-                <tr><th>Student</th><th>Student ID</th><th>Registration number</th><th>Report</th></tr>
+                <tr><th>No.</th><th>Student</th><th>Student ID</th><th>Registration number</th><th>Report</th></tr>
               </thead>
               <tbody>
-                {filteredStudents.map((student) => (
+                {filteredStudents.map((student, index) => (
                   <tr key={student.studentId || student.registrationNumber}>
+                    <td>{index + 1}</td>
                     <td><span className="report-student-name">{student.studentName}</span><span className="report-student-email">{student.email || "—"}</span></td>
                     <td>{student.membershipId || "—"}</td>
                     <td>{student.registrationNumber}</td>
-                    <td><button type="button" className="secondary-button" disabled={downloading || !student.studentId} aria-label={`Download PDF for ${student.studentName}`} onClick={() => void downloadStudentPdf(student)}>Download PDF</button></td>
+                    <td><button type="button" className="secondary-button" disabled={downloading || !student.studentId} aria-label={`Download full-history PDF for ${student.studentName}`} onClick={() => void downloadStudentPdf(student)}>All-days PDF</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p className="report-preview-note">Student list preview only. Downloads include the full attendance details and percentages for the selected period.</p>
+            <p className="report-preview-note">Student list preview only. Monthly and full reports include attendance details and percentages. Student PDF buttons download all days.</p>
           </div>
         ) : (
           !error && (
