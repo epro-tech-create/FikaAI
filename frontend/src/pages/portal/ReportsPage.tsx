@@ -120,19 +120,28 @@ export default function ReportsPage({
     void load("");
   }, [role]);
 
-  async function downloadPdf(allDays = false) {
+  async function downloadFile(kind: "pdf" | "xlsx", allDays = false) {
     setDownloading(true);
     setError("");
     try {
-      const response = await api.get(`/${role}/reports/attendance.pdf`, {
-        params: allDays ? { period: "all" } : { period: "monthly", date: report.date || reportDate },
+      const ext = kind;
+      const mime =
+        kind === "pdf"
+          ? "application/pdf"
+          : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      const response = await api.get(`/${role}/reports/attendance.${ext}`, {
+        params: allDays
+          ? { period: "all" }
+          : { period: "monthly", date: report.date || reportDate },
         responseType: "blob",
       });
-      const blob = new Blob([response.data], { type: "application/pdf" });
+      const blob = new Blob([response.data], { type: mime });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = allDays ? "ccd-attendance-all-days.pdf" : `ccd-attendance-${period}-${report.startDate || reportDate}-to-${report.endDate || ""}.pdf`;
+      anchor.download = allDays
+        ? `ccd-attendance-all-days.${ext}`
+        : `ccd-attendance-${period}-${report.startDate || reportDate}-to-${report.endDate || ""}.${ext}`;
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (requestError) {
@@ -142,19 +151,28 @@ export default function ReportsPage({
     }
   }
 
-  async function downloadStudentPdf(student: StudentSummary) {
+  const downloadPdf = (allDays = false) => downloadFile("pdf", allDays);
+  const downloadExcel = (allDays = false) => downloadFile("xlsx", allDays);
+
+  async function downloadStudentFile(
+    student: StudentSummary,
+    kind: "pdf" | "xlsx",
+  ) {
     if (!student.studentId) return;
     setDownloading(true);
     setError("");
     try {
-      const response = await api.get(`/${role}/reports/student/${student.studentId}.pdf`, {
-        params: { period: "all" },
-        responseType: "blob",
-      });
+      const response = await api.get(
+        `/${role}/reports/student/${student.studentId}.${kind}`,
+        {
+          params: { period: "all" },
+          responseType: "blob",
+        },
+      );
       const url = URL.createObjectURL(response.data);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `ccd-student-${student.registrationNumber}-all-days.pdf`;
+      anchor.download = `ccd-student-${student.registrationNumber}-all-days.${kind}`;
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (requestError) {
@@ -163,6 +181,11 @@ export default function ReportsPage({
       setDownloading(false);
     }
   }
+
+  const downloadStudentPdf = (student: StudentSummary) =>
+    downloadStudentFile(student, "pdf");
+  const downloadStudentExcel = (student: StudentSummary) =>
+    downloadStudentFile(student, "xlsx");
 
   function applySearch(event?: FormEvent) {
     event?.preventDefault();
@@ -198,35 +221,93 @@ export default function ReportsPage({
           <div className="report-panel-heading">
             <span className="report-section-label">SELECTED PERIOD</span>
             <h2>Monthly report</h2>
-            <p>Choose your reporting month and download as PDF.</p>
+            <p>Choose your reporting month and download as PDF or Excel.</p>
           </div>
-          <form className="report-controls" onSubmit={(event) => { event.preventDefault(); void load(); }}>
+          <form
+            className="report-controls"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void load();
+            }}
+          >
             <label>
               Report month
-              <input type="month" value={monthInput} onChange={(event) => setMonthInput(event.target.value)} />
+              <input
+                type="month"
+                value={monthInput}
+                onChange={(event) => setMonthInput(event.target.value)}
+              />
             </label>
-            <button type="submit" className="secondary-button" disabled={loading || !monthInput}>
+            <button
+              type="submit"
+              className="secondary-button"
+              disabled={loading || !monthInput}
+            >
               {loading ? "Loading..." : "Apply month"}
             </button>
           </form>
           <div className="report-download-footer">
-            <p><span className="report-range-label">Report covers</span>{report.startDate ? rangeLabel : "Loading report…"}</p>
+            <p>
+              <span className="report-range-label">Report covers</span>
+              {report.startDate ? rangeLabel : "Loading report…"}
+            </p>
             <div className="report-actions" aria-label="Monthly downloads">
-              <button type="button" className="secondary-button" disabled={downloading || loading || !report.date} onClick={() => void downloadPdf()}>Download PDF</button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={downloading || loading || !report.date}
+                onClick={() => void downloadPdf()}
+              >
+                Download PDF
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={downloading || loading || !report.date}
+                onClick={() => void downloadExcel()}
+              >
+                Download Excel
+              </button>
             </div>
           </div>
         </div>
         <div className="content-card report-download-history">
           <span className="report-history-label">COMPLETE HISTORY</span>
           <h2>All days, one download</h2>
-          <p>Download all weekdays, organized by month, as PDF.</p>
-          <ul className="report-includes" aria-label="Included in the full report"><li>All months</li><li>Student totals</li><li>Attendance %</li></ul>
+          <p>Download all weekdays, organized by month, as PDF or Excel.</p>
+          <ul
+            className="report-includes"
+            aria-label="Included in the full report"
+          >
+            <li>All months</li>
+            <li>Student totals</li>
+            <li>Attendance %</li>
+          </ul>
           <div className="report-actions report-history-actions">
-          <button type="button" className="secondary-button" disabled={downloading} onClick={() => void downloadPdf(true)}>Export all days (PDF)</button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={downloading}
+              onClick={() => void downloadPdf(true)}
+            >
+              Export all days (PDF)
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={downloading}
+              onClick={() => void downloadExcel(true)}
+            >
+              Export all days (Excel)
+            </button>
           </div>
         </div>
       </section>
-      {downloading && <p className="report-download-status" role="status">Preparing your download…</p>}
+      {downloading && (
+        <p className="report-download-status" role="status">
+          Preparing your download…
+        </p>
+      )}
       {error && <StatePanel kind="error">{error}</StatePanel>}
       <section className="content-card">
         <CardToolbar
@@ -247,21 +328,59 @@ export default function ReportsPage({
           <div className="report-student-list">
             <table className="portal-table report-student-table">
               <thead>
-                <tr><th>No.</th><th>Student</th><th>Student ID</th><th>Registration number</th><th>Report</th></tr>
+                <tr>
+                  <th>No.</th>
+                  <th>Student</th>
+                  <th>Student ID</th>
+                  <th>Registration number</th>
+                  <th>Report</th>
+                </tr>
               </thead>
               <tbody>
                 {filteredStudents.map((student, index) => (
                   <tr key={student.studentId || student.registrationNumber}>
                     <td>{index + 1}</td>
-                    <td><span className="report-student-name">{student.studentName}</span><span className="report-student-email">{student.email || "—"}</span></td>
+                    <td>
+                      <span className="report-student-name">
+                        {student.studentName}
+                      </span>
+                      <span className="report-student-email">
+                        {student.email || "—"}
+                      </span>
+                    </td>
                     <td>{student.membershipId || "—"}</td>
                     <td>{student.registrationNumber}</td>
-                    <td><button type="button" className="secondary-button" disabled={downloading || !student.studentId} aria-label={`Download full-history PDF for ${student.studentName}`} onClick={() => void downloadStudentPdf(student)}>All-days PDF</button></td>
+                    <td>
+                      <span className="report-row-actions">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={downloading || !student.studentId}
+                          aria-label={`Download full-history PDF for ${student.studentName}`}
+                          onClick={() => void downloadStudentPdf(student)}
+                        >
+                          All-days PDF
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={downloading || !student.studentId}
+                          aria-label={`Download full-history Excel for ${student.studentName}`}
+                          onClick={() => void downloadStudentExcel(student)}
+                        >
+                          All-days Excel
+                        </button>
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p className="report-preview-note">Student list preview only. Monthly and full reports include attendance details and percentages. Student PDF buttons download all days.</p>
+            <p className="report-preview-note">
+              Student list preview only. Monthly and full reports include
+              attendance details and percentages. Student PDF buttons download
+              all days.
+            </p>
           </div>
         ) : (
           !error && (
@@ -273,7 +392,6 @@ export default function ReportsPage({
           )
         )}
       </section>
-
     </main>
   );
 }

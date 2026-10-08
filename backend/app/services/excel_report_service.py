@@ -71,3 +71,48 @@ def render_attendance_excel(report: dict) -> bytes:
                       for r in records[offset:offset + 1_048_575]
                   ], 3)
     return output.getvalue()
+
+
+def render_student_excel(report: dict) -> bytes:
+    """Per-student day-by-day Excel download (Summary + Days sheets)."""
+    output = BytesIO()
+    with Workbook(output, {"in_memory": True, "strings_to_formulas": False,
+                           "strings_to_urls": False}) as workbook:
+        student = report.get("student", {})
+        header = workbook.add_format({"bold": True, "bg_color": "#DBEAFE", "text_wrap": True})
+
+        def sheet(name, columns, rows, freeze_columns=0):
+            page = workbook.add_worksheet(name)
+            page.write_row(0, 0, columns, header)
+            for index, row in enumerate(rows, 1):
+                page.write_row(index, 0, row)
+            page.freeze_panes(1, freeze_columns)
+            page.autofilter(0, 0, len(rows), len(columns) - 1)
+            page.set_column(0, len(columns) - 1, 18)
+            page.set_column(0, 0, 30)
+            page.set_row(0, 32)
+            return page
+
+        sheet("Summary", ["Field", "Value"], [
+            ["Student name", student.get("studentName", "")],
+            ["Student ID", student.get("membershipId") or ""],
+            ["Registration number", student.get("registrationNumber", "")],
+            ["Email", student.get("email") or ""],
+            ["Report", report.get("title", "")],
+            ["Start date", report.get("startDate", "")],
+            ["End date", report.get("endDate", "")],
+            ["Timezone", report.get("timezone", "")],
+            *[[key, value] for key, value in report.get("summary", {}).items()],
+            ["Legend", "Present / Late / Excused / Absent"],
+        ]).set_column(1, 1, 65)
+
+        def local_time(value):
+            return _format_time(datetime.fromisoformat(value)) if value else ""
+
+        sheet("Days", ["Date", "Day", "Month", "Status", "Arrival time", "Checkout time"], [
+            [d.get("date", ""), d.get("label", ""), d.get("month", ""),
+             d.get("status", ""), local_time(d.get("arrivedAt")),
+             local_time(d.get("checkedOutAt"))]
+            for d in report.get("days", [])
+        ], 1)
+    return output.getvalue()

@@ -102,6 +102,7 @@ export default function ManualAttendancePage({
   const [busy, setBusy] = useState(false);
   const [excuseRecordId, setExcuseRecordId] = useState("");
   const [excuseReason, setExcuseReason] = useState("");
+  const [foundRecord, setFoundRecord] = useState<any | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -262,6 +263,72 @@ export default function ManualAttendancePage({
         `/${role}/attendance/${excuseRecordId.trim()}/excuse`,
       );
       setOk(`Cleared: now ${res.data?.status}`);
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function findRecord() {
+    if (!studentId || !sessionId)
+      return setError("Pick student and session first");
+    setBusy(true);
+    setError("");
+    setOk("");
+    setFoundRecord(null);
+    try {
+      const res = await api.get(`/admin/attendance/records`, {
+        params: { student_id: studentId, session_id: sessionId },
+      });
+      setFoundRecord(res.data);
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function removeCheckout() {
+    if (!foundRecord?.id) return setError("Find the record first");
+    if (
+      !window.confirm(
+        `Remove check-out (${formatSaved(foundRecord.checkOutAt) || "—"})? The check-in stays.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError("");
+    setOk("");
+    try {
+      const res = await api.post(
+        `/admin/attendance/records/${foundRecord.id}/clear-checkout`,
+      );
+      setFoundRecord({
+        ...foundRecord,
+        checkOutAt: null,
+        status: res.data?.status,
+      });
+      setOk(`Check-out removed. Record is now ${res.data?.status}.`);
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function removeCheckin() {
+    if (!foundRecord?.id) return setError("Find the record first");
+    if (
+      !window.confirm(
+        `Delete the whole record (check-in ${formatSaved(foundRecord.checkInAt) || "—"})? This cannot be undone.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError("");
+    setOk("");
+    try {
+      await api.delete(`/admin/attendance/records/${foundRecord.id}`);
+      setFoundRecord(null);
+      setOk("Check-in removed (record deleted).");
     } catch (e) {
       setError(message(e));
     } finally {
@@ -566,6 +633,71 @@ export default function ManualAttendancePage({
           </button>
         </div>
       </section>
+      {role === "admin" && (
+        <section
+          className="content-card"
+          style={{ padding: 20, overflow: "visible" }}
+        >
+          <h4
+            style={{ margin: "0 0 8px", color: "var(--text)", lineHeight: 1.4 }}
+          >
+            Remove check-in / check-out
+          </h4>
+          <p
+            style={{
+              color: "var(--muted)",
+              fontSize: 13,
+              lineHeight: 1.7,
+              marginBottom: 14,
+            }}
+          >
+            Uses the student + session picked above. Removing the check-out
+            keeps the check-in; removing the check-in deletes the whole record.
+          </p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              disabled={busy || !studentId || !sessionId}
+              onClick={findRecord}
+              className="secondary-button"
+            >
+              Find record
+            </button>
+          </div>
+          {foundRecord && (
+            <div style={{ marginTop: 14 }}>
+              <p style={{ fontSize: 13, color: "var(--muted)" }}>
+                Check-in: <b>{formatSaved(foundRecord.checkInAt) || "—"}</b>
+                {" · "}Check-out:{" "}
+                <b>{formatSaved(foundRecord.checkOutAt) || "—"}</b>
+                {" · "}Status: <b>{foundRecord.status}</b>
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  marginTop: 10,
+                }}
+              >
+                <button
+                  disabled={busy || !foundRecord.checkOutAt}
+                  onClick={removeCheckout}
+                  className="secondary-button"
+                >
+                  Remove check-out
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={removeCheckin}
+                  className="danger-button"
+                >
+                  Remove check-in (delete record)
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
     </main>
   );
 }

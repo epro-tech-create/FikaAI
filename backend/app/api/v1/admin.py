@@ -16,7 +16,10 @@ from app.schemas import (InstructorCreateRequest, InstructorUpdateRequest,
                          SessionHoursUpdate, SessionResponse,
                          StudentAdminCreateRequest, StudentAdminUpdateRequest,
                          VenueQrResponse)
-from app.services.excel_report_service import render_attendance_excel
+from app.services.excel_report_service import (
+    render_attendance_excel,
+    render_student_excel,
+)
 from app.services.report_service import (build_attendance_report,
                                          build_student_report, parse_period,
                                          render_attendance_pdf,
@@ -976,6 +979,85 @@ async def admin_clear_excuse(
     return {"id": str(rec.id), "status": rec.status.value}
 
 
+@router.get("/attendance/records", response_model=None)
+async def admin_find_attendance_record(
+    student_id: uuid.UUID,
+    session_id: uuid.UUID,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Find one student's record for a session (for check-in/out removal)."""
+    from sqlalchemy import select as _select
+
+    from app.models.entities import AttendanceRecord as _Record
+
+    record = (
+        await db.execute(
+            _select(_Record).where(
+                _Record.student_id == student_id, _Record.session_id == session_id
+            )
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        raise ApiError(
+            ErrorCode.NOT_FOUND,
+            "No attendance record for this student and session.",
+            404,
+        )
+    return {
+        "id": str(record.id),
+        "sessionId": str(record.session_id),
+        "studentId": str(record.student_id),
+        "checkInAt": record.check_in_at.isoformat() if record.check_in_at else None,
+        "checkOutAt": (
+            record.check_out_at.isoformat() if record.check_out_at else None
+        ),
+        "minutesLate": record.minutes_late,
+        "timeSpentMinutes": record.time_spent_minutes,
+        "status": record.status.value
+        if hasattr(record.status, "value")
+        else str(record.status),
+    }
+
+
+@router.post("/attendance/records/{record_id}/clear-checkout", response_model=None)
+async def admin_clear_checkout(
+    record_id: uuid.UUID,
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Remove a check-out, keeping the check-in."""
+    from app.services.attendance_service import clear_check_out
+
+    rec = await clear_check_out(
+        db,
+        record_id=record_id,
+        actor_user_id=admin.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return {"id": str(rec.id), "status": rec.status.value, "checkOutAt": None}
+
+
+@router.delete("/attendance/records/{record_id}", response_model=None)
+async def admin_delete_attendance_record(
+    record_id: uuid.UUID,
+    request: Request,
+    admin: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Delete a whole attendance record (removes check-in and check-out)."""
+    from app.services.attendance_service import delete_attendance_record
+
+    info = await delete_attendance_record(
+        db,
+        record_id=record_id,
+        actor_user_id=admin.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return {"deleted": True, **info}
+
+
 @router.get("/settings/location-mode", response_model=None)
 async def get_location_mode(db: AsyncSession = Depends(get_db)) -> dict:
     return {
@@ -1140,6 +1222,36 @@ async def student_report_pdf(
     return Response(
         content=render_student_pdf(report),
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/reports/student/{student_id}.xlsx", response_model=None)
+async def student_report_excel(
+    student_id: uuid.UUID,
+    report_date: date | None = Query(default=None, alias="date"),
+    period: str = Query(default="monthly"),
+    start_date: date | None = Query(default=None, alias="startDate"),
+    end_date: date | None = Query(default=None, alias="endDate"),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    try:
+        selected_period = parse_period(period)
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+    selected_date = report_date or datetime.now(settings.campus_tz).date()
+    try:
+        report = await build_student_report(
+            db, student_id, selected_period, selected_date, start_date, end_date
+        )
+    except ValueError as error:
+        raise ApiError(ErrorCode.VALIDATION_ERROR, str(error), 422) from error
+    filename = (
+        f"ccd-student-{student_id}-{report['startDate']}-to-{report['endDate']}.xlsx"
+    )
+    return Response(
+        content=render_student_excel(report),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

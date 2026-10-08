@@ -2532,7 +2532,11 @@ nav a:hover,
   font-weight: 700;
   letter-spacing: 1.5px;
 }
-.report-range-label { display: block; font-size: 11px; margin-bottom: 3px; }
+.report-range-label {
+  display: block;
+  font-size: 11px;
+  margin-bottom: 3px;
+}
 .reports-page .content-card {
   background: var(--panel) !important;
   border-color: var(--line) !important;
@@ -2540,24 +2544,54 @@ nav a:hover,
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
-.reports-page .content-card::before { display: none; }
-.reports-page .report-download-history { background: var(--panel-2) !important; }
+.reports-page .content-card::before {
+  display: none;
+}
+.reports-page .report-download-history {
+  background: var(--panel-2) !important;
+}
 .reports-page .report-actions button,
-.reports-page .report-download-history > button { min-height: 42px; font-size: 12px; }
-.reports-page .card-toolbar { padding: 20px 24px; }
-.reports-page .portal-table td { padding: 16px 24px; color: var(--text); }
-.reports-page .portal-table th { padding: 13px 24px; }
-.reports-page .report-student-table td:last-child { text-align: right; }
-.reports-page .report-student-table th:last-child { text-align: right; }
-.reports-page .report-student-table tbody tr:hover { background: var(--panel-2); }
+.reports-page .report-download-history > button {
+  min-height: 42px;
+  font-size: 12px;
+}
+.reports-page .card-toolbar {
+  padding: 20px 24px;
+}
+.reports-page .portal-table td {
+  padding: 16px 24px;
+  color: var(--text);
+}
+.reports-page .portal-table th {
+  padding: 13px 24px;
+}
+.reports-page .report-student-table td:last-child {
+  text-align: right;
+}
+.reports-page .report-student-table th:last-child {
+  text-align: right;
+}
+.reports-page .report-student-table tbody tr:hover {
+  background: var(--panel-2);
+}
+.report-row-actions {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 [data-theme="light"] .portal-sidebar,
 [data-theme="light"] .portal-topbar {
   background: #fff !important;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
-[data-theme="light"] .reports-page { color: #0f172a; }
-[data-theme="light"] .reports-page h2 { color: #0f172a; }
+[data-theme="light"] .reports-page {
+  color: #0f172a;
+}
+[data-theme="light"] .reports-page h2 {
+  color: #0f172a;
+}
 [data-theme="light"] .reports-page .portal-primary,
 [data-theme="light"] .reports-page .table-search button {
   background: #0369a1 !important;
@@ -2565,26 +2599,72 @@ nav a:hover,
   box-shadow: none;
 }
 [data-theme="light"] .reports-page .portal-primary:hover,
-[data-theme="light"] .reports-page .table-search button:hover { background: #075985 !important; }
-[data-theme="light"] .reports-page .report-history-label { color: #0369a1; }
-[data-theme="light"] .reports-page .report-student-email { color: #475569; }
-[data-theme="light"] .reports-page .card-toolbar { background: #fff; }
-[data-theme="light"] .reports-page .report-download-history { background: #f0f9ff !important; border-color: #bae6fd !important; }
-.report-download-history h2 { margin: 0; }
-.report-download-history button { margin-top: 6px; }
-.report-student-list { overflow-x: auto; }
-.report-student-table { min-width: 620px; width: 100%; }
-.report-student-name { display: block; font-weight: 600; }
-.report-student-email { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.report-preview-note { padding: 16px 20px; border-top: 1px solid var(--line); }
-.report-download-status { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+[data-theme="light"] .reports-page .table-search button:hover {
+  background: #075985 !important;
+}
+[data-theme="light"] .reports-page .report-history-label {
+  color: #0369a1;
+}
+[data-theme="light"] .reports-page .report-student-email {
+  color: #475569;
+}
+[data-theme="light"] .reports-page .card-toolbar {
+  background: #fff;
+}
+[data-theme="light"] .reports-page .report-download-history {
+  background: #f0f9ff !important;
+  border-color: #bae6fd !important;
+}
+.report-download-history h2 {
+  margin: 0;
+}
+.report-download-history button {
+  margin-top: 6px;
+}
+.report-student-list {
+  overflow-x: auto;
+}
+.report-student-table {
+  min-width: 620px;
+  width: 100%;
+}
+.report-student-name {
+  display: block;
+  font-weight: 600;
+}
+.report-student-email {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.report-preview-note {
+  padding: 16px 20px;
+  border-top: 1px solid var(--line);
+}
+.report-download-status {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
 @media (max-width: 900px) {
-  .report-download-panel { grid-template-columns: 1fr; }
-  .report-download-history { border-left: 0; border-top: 1px solid var(--line); }
+  .report-download-panel {
+    grid-template-columns: 1fr;
+  }
+  .report-download-history {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
 }
 @media (max-width: 600px) {
-  .report-download-main, .report-download-history { padding: 18px; }
-  .reports-page .report-actions button { flex: 1; }
+  .report-download-main,
+  .report-download-history {
+    padding: 18px;
+  }
+  .reports-page .report-actions button {
+    flex: 1;
+  }
 }
 .sidebar-scrim {
   display: none;
@@ -6158,8 +6238,13 @@ nav a:hover,
   --card: #ffffff;
 }
 .portal-shell,
-.portal-shell * { font-family: "Figtree", sans-serif !important; }
-.portal-shell * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+.portal-shell * {
+  font-family: "Figtree", sans-serif !important;
+}
+.portal-shell * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 .portal-shell :is(h1, h2, h3, h4, h5, h6),
 .portal-shell :is(h1, h2, h3, h4, h5, h6) *,
 .portal-shell .brand *,
@@ -6171,7 +6256,18 @@ nav a:hover,
   font-family: "Outfit", sans-serif !important;
   letter-spacing: -0.02em;
 }
-.portal-shell :is(.panel, .content-card, .stat-card, .training-strip, .portal-sidebar, .portal-topbar, .portal-dialog, .face-id-shell, .glass) {
+.portal-shell
+  :is(
+    .panel,
+    .content-card,
+    .stat-card,
+    .training-strip,
+    .portal-sidebar,
+    .portal-topbar,
+    .portal-dialog,
+    .face-id-shell,
+    .glass
+  ) {
   background: var(--panel) !important;
   border-color: var(--line) !important;
   backdrop-filter: none !important;
@@ -6179,7 +6275,9 @@ nav a:hover,
   box-shadow: none !important;
 }
 .portal-shell :is(.panel, .content-card, .stat-card, .glass)::before,
-.portal-shell .stat-card::after { display: none; }
+.portal-shell .stat-card::after {
+  display: none;
+}
 .portal-shell .portal-dialog-backdrop {
   background: #0009;
   backdrop-filter: none;
@@ -6190,23 +6288,53 @@ nav a:hover,
   color: #fff !important;
   box-shadow: none;
 }
-.portal-shell .portal-primary:hover { background: #1565b5 !important; }
+.portal-shell .portal-primary:hover {
+  background: #1565b5 !important;
+}
 .portal-shell :is(.secondary-button, .toolbar-refresh) {
   background: var(--panel-2);
   border-color: var(--line);
   color: var(--text);
 }
-.portal-shell :is(.portal-heading > div > span, .report-controls label, .report-history-label) { color: var(--muted); }
-.portal-shell .reports-page { max-width: 1440px; }
-.portal-shell .reports-page .portal-heading { margin-bottom: 26px; }
-.portal-shell .reports-page .portal-heading h1 { font-weight: 600; }
-.portal-shell .report-download-panel { gap: 20px; align-items: stretch; }
+.portal-shell
+  :is(
+    .portal-heading > div > span,
+    .report-controls label,
+    .report-history-label
+  ) {
+  color: var(--muted);
+}
+.portal-shell .reports-page {
+  max-width: 1440px;
+}
+.portal-shell .reports-page .portal-heading {
+  margin-bottom: 26px;
+}
+.portal-shell .reports-page .portal-heading h1 {
+  font-weight: 600;
+}
+.portal-shell .report-download-panel {
+  gap: 20px;
+  align-items: stretch;
+}
 .portal-shell .report-download-main,
-.portal-shell .report-download-history { padding: 26px; border-radius: 14px; }
-.portal-shell .report-download-history { justify-content: flex-start; gap: 14px; }
-.portal-shell .report-download-history > button { margin-top: auto; width: 100%; }
+.portal-shell .report-download-history {
+  padding: 26px;
+  border-radius: 14px;
+}
+.portal-shell .report-download-history {
+  justify-content: flex-start;
+  gap: 14px;
+}
+.portal-shell .report-download-history > button {
+  margin-top: auto;
+  width: 100%;
+}
 .portal-shell .report-download-history h2,
-.portal-shell .report-panel-heading h2 { font-size: 22px; font-weight: 600; }
+.portal-shell .report-panel-heading h2 {
+  font-size: 22px;
+  font-weight: 600;
+}
 .portal-shell .report-includes {
   display: flex;
   flex-wrap: wrap;
@@ -6222,8 +6350,15 @@ nav a:hover,
   color: var(--muted);
   font-size: 12px;
 }
-.portal-shell .reports-page .report-controls { gap: 12px; margin: 22px 0; }
-.portal-shell .reports-page .report-controls label { flex: 1; max-width: 280px; font-size: 12px; }
+.portal-shell .reports-page .report-controls {
+  gap: 12px;
+  margin: 22px 0;
+}
+.portal-shell .reports-page .report-controls label {
+  flex: 1;
+  max-width: 280px;
+  font-size: 12px;
+}
 .portal-shell .reports-page .report-controls input {
   background: var(--input);
   border-color: var(--line);
@@ -6232,21 +6367,56 @@ nav a:hover,
   min-width: 0;
   width: 100%;
 }
-.portal-shell .reports-page .report-download-footer { align-items: center; }
-.portal-shell .reports-page .report-download-footer > p { color: var(--text); font-weight: 500; }
-.portal-shell .report-range-label { color: var(--muted); font-weight: 400; }
-.portal-shell .reports-page .card-toolbar b { font-size: 18px; font-weight: 600; }
-.portal-shell .reports-page .table-search input { background: var(--input); color: var(--text); border-color: var(--line); }
-.portal-shell .reports-page .table-search input::placeholder { color: var(--muted); }
-.portal-shell .reports-page .portal-table th { background: var(--panel-2); color: var(--muted); font-size: 12px; }
-.portal-shell .reports-page .portal-table td { border-color: var(--line); font-size: 14px; }
-.portal-shell .reports-page .report-student-email { color: var(--muted); }
-.portal-shell .reports-page .report-student-table .secondary-button { min-height: 36px; font-size: 12px; }
+.portal-shell .reports-page .report-download-footer {
+  align-items: center;
+}
+.portal-shell .reports-page .report-download-footer > p {
+  color: var(--text);
+  font-weight: 500;
+}
+.portal-shell .report-range-label {
+  color: var(--muted);
+  font-weight: 400;
+}
+.portal-shell .reports-page .card-toolbar b {
+  font-size: 18px;
+  font-weight: 600;
+}
+.portal-shell .reports-page .table-search input {
+  background: var(--input);
+  color: var(--text);
+  border-color: var(--line);
+}
+.portal-shell .reports-page .table-search input::placeholder {
+  color: var(--muted);
+}
+.portal-shell .reports-page .portal-table th {
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+}
+.portal-shell .reports-page .portal-table td {
+  border-color: var(--line);
+  font-size: 14px;
+}
+.portal-shell .reports-page .report-student-email {
+  color: var(--muted);
+}
+.portal-shell .reports-page .report-student-table .secondary-button {
+  min-height: 36px;
+  font-size: 12px;
+}
 @media (max-width: 600px) {
   .portal-shell .report-download-main,
-  .portal-shell .report-download-history { padding: 20px; }
-  .portal-shell .reports-page .report-controls label { max-width: none; }
-  .portal-shell .reports-page .report-download-footer { align-items: stretch; }
+  .portal-shell .report-download-history {
+    padding: 20px;
+  }
+  .portal-shell .reports-page .report-controls label {
+    max-width: none;
+  }
+  .portal-shell .reports-page .report-download-footer {
+    align-items: stretch;
+  }
 }
 
 /* Keep report filtering and download actions on separate, roomy rows. */
@@ -6256,20 +6426,51 @@ nav a:hover,
   gap: 18px;
   padding: 24px;
 }
-.portal-shell .reports-page .card-toolbar-actions { justify-content: flex-start; width: 100%; }
-.portal-shell .reports-page .table-search { flex: 1; max-width: 600px; min-width: 0; }
-.portal-shell .reports-page .table-search input { min-width: 0; width: 100%; }
-.portal-shell .reports-page .report-download-footer { align-items: flex-start; flex-direction: column; gap: 16px; }
-.portal-shell .reports-page .report-actions { gap: 10px; }
-.portal-shell .reports-page .report-history-actions { margin-top: auto; width: 100%; }
-.portal-shell .reports-page .report-history-actions button { flex: 1; min-height: 42px; }
-[data-theme="light"] .portal-shell :is(.row-actions button, .secondary-button, .toolbar-refresh, .form-actions > button:first-child) {
+.portal-shell .reports-page .card-toolbar-actions {
+  justify-content: flex-start;
+  width: 100%;
+}
+.portal-shell .reports-page .table-search {
+  flex: 1;
+  max-width: 600px;
+  min-width: 0;
+}
+.portal-shell .reports-page .table-search input {
+  min-width: 0;
+  width: 100%;
+}
+.portal-shell .reports-page .report-download-footer {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 16px;
+}
+.portal-shell .reports-page .report-actions {
+  gap: 10px;
+}
+.portal-shell .reports-page .report-history-actions {
+  margin-top: auto;
+  width: 100%;
+}
+.portal-shell .reports-page .report-history-actions button {
+  flex: 1;
+  min-height: 42px;
+}
+[data-theme="light"]
+  .portal-shell
+  :is(
+    .row-actions button,
+    .secondary-button,
+    .toolbar-refresh,
+    .form-actions > button:first-child
+  ) {
   background: #edf5ff;
   color: #24527c;
   border-color: #c5d9ed;
   box-shadow: none;
 }
-[data-theme="light"] .portal-shell :is(.row-actions button, .secondary-button, .toolbar-refresh):hover {
+[data-theme="light"]
+  .portal-shell
+  :is(.row-actions button, .secondary-button, .toolbar-refresh):hover {
   background: #deedff;
   color: #163d62;
   border-color: #95bada;
@@ -6280,9 +6481,19 @@ nav a:hover,
   color: #a62343;
   border-color: #f2c6d0;
 }
-[data-theme="light"] .portal-shell .danger-button:hover { background: #ffe0e7; color: #8d1835; }
+[data-theme="light"] .portal-shell .danger-button:hover {
+  background: #ffe0e7;
+  color: #8d1835;
+}
 @media (max-width: 600px) {
-  .portal-shell .reports-page .card-toolbar { padding: 18px; }
-  .portal-shell .reports-page .card-toolbar-actions { flex-wrap: wrap; }
-  .portal-shell .reports-page .table-search { flex-basis: 100%; max-width: none; }
+  .portal-shell .reports-page .card-toolbar {
+    padding: 18px;
+  }
+  .portal-shell .reports-page .card-toolbar-actions {
+    flex-wrap: wrap;
+  }
+  .portal-shell .reports-page .table-search {
+    flex-basis: 100%;
+    max-width: none;
+  }
 }

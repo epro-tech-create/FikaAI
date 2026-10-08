@@ -744,3 +744,85 @@ async def clear_excuse(
         ip_address=ip_address,
     )
     return record
+
+
+async def clear_check_out(
+    db: AsyncSession,
+    *,
+    record_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    ip_address: str | None,
+) -> AttendanceRecord:
+    """Remove a student's check-out, keeping the check-in.
+
+    Status reverts to PRESENT/LATE based on minutes_late (CHECKED_OUT only).
+    Other statuses keep their value; only checkout fields are cleared.
+    """
+    record = await db.get(AttendanceRecord, record_id)
+    if record is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Attendance record not found.", 404)
+    if record.check_out_at is None and record.status != AttendanceStatus.CHECKED_OUT:
+        raise ApiError(
+            ErrorCode.VALIDATION_ERROR, "This record has no check-out to remove.", 422
+        )
+    previous_checkout = (
+        record.check_out_at.isoformat() if record.check_out_at else None
+    )
+    record.check_out_at = None
+    record.time_spent_minutes = None
+    if record.status == AttendanceStatus.CHECKED_OUT:
+        record.status = (
+            AttendanceStatus.LATE if (record.minutes_late or 0) > 0
+            else AttendanceStatus.PRESENT
+        )
+    await db.flush()
+    await db.commit()
+    await audit_detached(
+        action="attendance_checkout_cleared",
+        actor_user_id=actor_user_id,
+        entity_type="attendance_record",
+        entity_id=record.id,
+        details={
+            "session_id": str(record.session_id),
+            "student_id": str(record.student_id),
+            "previous_check_out_at": previous_checkout,
+            "status": record.status.value,
+        },
+        ip_address=ip_address,
+    )
+    return record
+
+
+async def delete_attendance_record(
+    db: AsyncSession,
+    *,
+    record_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    ip_address: str | None,
+) -> dict[str, Any]:
+    """Delete a whole attendance record (removes check-in and check-out)."""
+    record = await db.get(AttendanceRecord, record_id)
+    if record is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Attendance record not found.", 404)
+    info = {
+        "id": str(record.id),
+        "session_id": str(record.session_id),
+        "student_id": str(record.student_id),
+        "check_in_at": record.check_in_at.isoformat() if record.check_in_at else None,
+        "check_out_at": (
+            record.check_out_at.isoformat() if record.check_out_at else None
+        ),
+        "status": record.status.value if hasattr(record.status, "value") else str(record.status),
+    }
+    await db.delete(record)
+    await db.flush()
+    await db.commit()
+    await audit_detached(
+        action="attendance_record_deleted",
+        actor_user_id=actor_user_id,
+        entity_type="attendance_record",
+        entity_id=record_id,
+        details=info,
+        ip_address=ip_address,
+    )
+    return info
